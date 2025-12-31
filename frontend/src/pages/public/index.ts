@@ -1,0 +1,7 @@
+export { LandingPage } from './LandingPage'
+export { PricingPage } from './PricingPage'
+export { LoginPage } from './LoginPage'
+export { RegisterPage } from './RegisterPage'
+export { MagicLinkPage } from './MagicLinkPage'
+export { PasswordResetPage } from './PasswordResetPage'
+export { PasswordResetConfirmPage } from './PasswordResetConfirmPage'
