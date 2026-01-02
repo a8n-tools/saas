@@ -1,9 +1,20 @@
 import { Link } from 'react-router-dom'
+import { Moon, Sun } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
+import { useThemeStore } from '@/stores/themeStore'
 import { Button } from '@/components/ui/button'
 
 export function Header() {
   const { isAuthenticated, user, logout } = useAuthStore()
+  const { theme, setTheme } = useThemeStore()
+
+  const toggleTheme = () => {
+    if (theme === 'dark') {
+      setTheme('light')
+    } else {
+      setTheme('dark')
+    }
+  }
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -24,6 +35,10 @@ export function Header() {
         </div>
 
         <div className="flex items-center gap-4">
+          <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label="Toggle theme">
+            <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+            <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+          </Button>
           {isAuthenticated ? (
             <>
               <Link to="/dashboard">

@@ -1,11 +1,17 @@
 import { Outlet } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { useAuthStore } from '@/stores/authStore'
+import { useThemeStore } from '@/stores/themeStore'
 import { Button } from '@/components/ui/button'
-import { LogOut, User } from 'lucide-react'
+import { LogOut, Moon, Sun, User } from 'lucide-react'
 
 export function DashboardLayout() {
   const { user, logout } = useAuthStore()
+  const { theme, setTheme } = useThemeStore()
+
+  const toggleTheme = () => {
+    setTheme(theme === 'dark' ? 'light' : 'dark')
+  }
 
   return (
     <div className="flex min-h-screen">
@@ -18,6 +24,10 @@ export function DashboardLayout() {
               <User className="h-4 w-4" />
               <span>{user?.email}</span>
             </div>
+            <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label="Toggle theme">
+              <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+              <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+            </Button>
             <Button variant="ghost" size="sm" onClick={() => logout()}>
               <LogOut className="h-4 w-4" />
             </Button>
