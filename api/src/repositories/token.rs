@@ -77,6 +77,31 @@ impl TokenRepository {
         Ok(tokens)
     }
 
+    /// Alias for find_user_refresh_tokens
+    pub async fn find_active_refresh_tokens_for_user(
+        pool: &PgPool,
+        user_id: Uuid,
+    ) -> Result<Vec<RefreshToken>, AppError> {
+        Self::find_user_refresh_tokens(pool, user_id).await
+    }
+
+    /// Find refresh token by ID
+    pub async fn find_refresh_token_by_id(
+        pool: &PgPool,
+        token_id: Uuid,
+    ) -> Result<Option<RefreshToken>, AppError> {
+        let token = sqlx::query_as::<_, RefreshToken>(
+            r#"
+            SELECT * FROM refresh_tokens WHERE id = $1
+            "#,
+        )
+        .bind(token_id)
+        .fetch_optional(pool)
+        .await?;
+
+        Ok(token)
+    }
+
     /// Update last used time for a refresh token
     pub async fn update_refresh_token_last_used(
         pool: &PgPool,

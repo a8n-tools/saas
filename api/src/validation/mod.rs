@@ -1,5 +1,6 @@
 //! Request validation utilities
 
+use crate::errors::AppError;
 use validator::ValidationError;
 
 /// Validation rules constants
@@ -20,8 +21,8 @@ const COMMON_PASSWORDS: &[&str] = &[
     "administrator",
 ];
 
-/// Validate email format
-pub fn validate_email(email: &str) -> Result<(), ValidationError> {
+/// Validate email format (returns ValidationError)
+pub fn validate_email_format(email: &str) -> Result<(), ValidationError> {
     if email.is_empty() {
         return Err(ValidationError::new("email_required"));
     }
@@ -36,6 +37,19 @@ pub fn validate_email(email: &str) -> Result<(), ValidationError> {
     }
 
     Ok(())
+}
+
+/// Validate email format (returns AppError for use in handlers)
+pub fn validate_email(email: &str) -> Result<(), AppError> {
+    validate_email_format(email).map_err(|e| {
+        let message = match e.code.as_ref() {
+            "email_required" => "Email is required",
+            "email_too_long" => "Email is too long",
+            "invalid_email_format" => "Invalid email format",
+            _ => "Invalid email",
+        };
+        AppError::validation("email", message)
+    })
 }
 
 /// Validate password strength
@@ -119,9 +133,9 @@ mod tests {
 
     #[test]
     fn test_validate_email() {
-        assert!(validate_email("user@example.com").is_ok());
-        assert!(validate_email("invalid").is_err());
-        assert!(validate_email("").is_err());
+        assert!(validate_email_format("user@example.com").is_ok());
+        assert!(validate_email_format("invalid").is_err());
+        assert!(validate_email_format("").is_err());
     }
 
     #[test]

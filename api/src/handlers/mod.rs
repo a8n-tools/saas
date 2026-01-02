@@ -2,4 +2,28 @@
 //!
 //! This module contains all HTTP request handlers organized by domain.
 
-// Handlers will be added as features are implemented
+pub mod admin;
+pub mod application;
+pub mod auth;
+pub mod subscription;
+pub mod user;
+pub mod webhook;
+
+// Re-export handler functions for convenience
+pub use application::{get_application, list_applications};
+pub use auth::{
+    confirm_password_reset, login, logout, logout_all, refresh_token, register,
+    request_magic_link, request_password_reset, verify_magic_link, verify_password_reset_token,
+};
+pub use subscription::{
+    billing_portal, cancel_subscription, create_checkout, get_payment_history, get_subscription,
+    reactivate_subscription,
+};
+pub use user::{change_password, get_current_user, list_sessions, revoke_session};
+pub use webhook::stripe_webhook;
+
+// Admin handlers
+pub use admin::{
+    get_dashboard_stats, get_user, grant_subscription, list_all_applications, list_audit_logs,
+    list_subscriptions, list_users, revoke_subscription, update_application, update_user_status,
+};

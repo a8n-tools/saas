@@ -58,6 +58,13 @@ reqwest = { version = "0.11", features = ["json"] }
 # IP address handling
 ipnetwork = "0.20"
 
+# Stripe payments
+async-stripe = { version = "0.37", features = ["runtime-tokio-hyper"] }
+
+# HMAC for webhook verification
+hmac = "0.12"
+hex = "0.4"
+
 [dev-dependencies]
 actix-rt = "2"
 

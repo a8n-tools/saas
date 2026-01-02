@@ -14,6 +14,8 @@ import { RegisterPage } from '@/pages/public/RegisterPage'
 import { MagicLinkPage } from '@/pages/public/MagicLinkPage'
 import { PasswordResetPage } from '@/pages/public/PasswordResetPage'
 import { PasswordResetConfirmPage } from '@/pages/public/PasswordResetConfirmPage'
+import { TermsOfServicePage } from '@/pages/public/TermsOfServicePage'
+import { PrivacyPolicyPage } from '@/pages/public/PrivacyPolicyPage'
 
 // Dashboard pages
 import { DashboardPage } from '@/pages/dashboard/DashboardPage'
@@ -86,6 +88,8 @@ export default function App() {
         <Route path="/magic-link" element={<MagicLinkPage />} />
         <Route path="/password-reset" element={<PasswordResetPage />} />
         <Route path="/password-reset/confirm" element={<PasswordResetConfirmPage />} />
+        <Route path="/terms" element={<TermsOfServicePage />} />
+        <Route path="/privacy" element={<PrivacyPolicyPage />} />
       </Route>
 
       {/* Protected dashboard routes */}
