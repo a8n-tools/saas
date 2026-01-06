@@ -1,16 +1,28 @@
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { Check } from 'lucide-react'
 
-const features = [
+const personalFeatures = [
   'Access to all current applications',
   'Access to all future applications',
-  'Priority support',
+  'Community support',
   'Price locked for life',
   'No hidden fees',
   'Cancel anytime',
 ]
+
+const businessFeatures = [
+  'Everything in Personal',
+  'Priority support',
+  'Team management (coming soon)',
+  'Usage analytics (coming soon)',
+  'Invoice billing',
+  'Dedicated account manager',
+]
+
+const showBusinessPricing = import.meta.env.VITE_SHOW_BUSINESS_PRICING === 'true'
 
 export function PricingPage() {
   return (
@@ -19,16 +31,17 @@ export function PricingPage() {
         <div className="text-center">
           <h1 className="text-4xl font-bold">Simple, Transparent Pricing</h1>
           <p className="mt-4 text-lg text-muted-foreground">
-            One price. All apps. Forever.
+            Choose the plan that fits your needs. All prices locked for life.
           </p>
         </div>
 
-        <div className="mt-16 flex justify-center">
-          <Card className="w-full max-w-md border-primary">
+        <div className={`mt-16 grid gap-8 ${showBusinessPricing ? 'md:grid-cols-2 max-w-4xl' : 'max-w-md'} mx-auto`}>
+          {/* Personal Plan */}
+          <Card className="w-full border-primary">
             <CardHeader className="text-center">
-              <CardTitle className="text-2xl">All Access</CardTitle>
+              <CardTitle className="text-2xl">Personal</CardTitle>
               <CardDescription>
-                Everything you need, nothing you don't
+                Perfect for individual developers
               </CardDescription>
               <div className="mt-6">
                 <span className="text-5xl font-bold">$3</span>
@@ -40,14 +53,14 @@ export function PricingPage() {
             </CardHeader>
             <CardContent>
               <ul className="space-y-4">
-                {features.map((feature) => (
+                {personalFeatures.map((feature) => (
                   <li key={feature} className="flex items-center gap-3">
                     <Check className="h-5 w-5 text-primary flex-shrink-0" />
                     <span>{feature}</span>
                   </li>
                 ))}
               </ul>
-              <Link to="/register" className="mt-8 block">
+              <Link to="/register?tier=personal" className="mt-8 block">
                 <Button className="w-full" size="lg">
                   Get Started
                 </Button>
@@ -57,6 +70,46 @@ export function PricingPage() {
               </p>
             </CardContent>
           </Card>
+
+          {/* Business Plan */}
+          {showBusinessPricing && (
+            <Card className="w-full border-2 border-primary relative">
+              <Badge className="absolute -top-3 left-1/2 -translate-x-1/2">
+                For Teams
+              </Badge>
+              <CardHeader className="text-center">
+                <CardTitle className="text-2xl">Business</CardTitle>
+                <CardDescription>
+                  Built for teams and organizations
+                </CardDescription>
+                <div className="mt-6">
+                  <span className="text-5xl font-bold">$15</span>
+                  <span className="text-muted-foreground">/month</span>
+                </div>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Price locked for life when you subscribe
+                </p>
+              </CardHeader>
+              <CardContent>
+                <ul className="space-y-4">
+                  {businessFeatures.map((feature) => (
+                    <li key={feature} className="flex items-center gap-3">
+                      <Check className="h-5 w-5 text-primary flex-shrink-0" />
+                      <span>{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Link to="/register?tier=business" className="mt-8 block">
+                  <Button className="w-full" size="lg">
+                    Get Started
+                  </Button>
+                </Link>
+                <p className="mt-4 text-center text-sm text-muted-foreground">
+                  30-day grace period if payment fails
+                </p>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         <div className="mt-20">
@@ -69,7 +122,7 @@ export function PricingPage() {
               <p className="mt-2 text-muted-foreground">
                 When you subscribe, your monthly price is locked in forever.
                 Even if we raise prices for new subscribers, you'll always pay
-                the same $3/month.
+                the same rate you signed up for{showBusinessPricing ? ' ($3 or $15/month)' : ''}.
               </p>
             </div>
             <div>
@@ -95,6 +148,25 @@ export function PricingPage() {
                 receive a refund for the current period.
               </p>
             </div>
+            {showBusinessPricing && (
+              <div>
+                <h3 className="font-semibold">What's the difference between Personal and Business?</h3>
+                <p className="mt-2 text-muted-foreground">
+                  Both plans provide access to all applications. Business includes
+                  priority support, invoice billing, and upcoming team features
+                  like team management and usage analytics.
+                </p>
+              </div>
+            )}
+            {showBusinessPricing && (
+              <div>
+                <h3 className="font-semibold">Can I upgrade from Personal to Business?</h3>
+                <p className="mt-2 text-muted-foreground">
+                  Yes! You can upgrade at any time. The price difference will be
+                  prorated for the remainder of your billing period.
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { formatDate, formatCurrency } from '@/lib/utils'
+import type { SubscriptionTier } from '@/types'
 import {
   CreditCard,
   Loader2,
@@ -15,6 +16,21 @@ import {
   CheckCircle,
   Receipt,
 } from 'lucide-react'
+
+// Helper to get tier display name
+function getTierName(tier: SubscriptionTier | null | undefined): string {
+  if (!tier) return 'Personal'
+  return tier === 'business' ? 'Business' : 'Personal'
+}
+
+// Helper to get tier price
+function getTierPrice(tier: SubscriptionTier | null | undefined, lockedAmount: number | null | undefined): string {
+  if (lockedAmount) {
+    return `$${(lockedAmount / 100).toFixed(0)}/month`
+  }
+  if (tier === 'business') return '$15/month'
+  return '$3/month'
+}
 
 export function SubscriptionPage() {
   const { user } = useAuthStore()
@@ -25,8 +41,10 @@ export function SubscriptionPage() {
     cancel,
     reactivate,
     willCancel,
+    tier,
   } = useSubscription()
   const [actionLoading, setActionLoading] = useState(false)
+  const [selectedTier, setSelectedTier] = useState<SubscriptionTier>('personal')
 
   const { data: payments, isLoading: paymentsLoading } = useQuery({
     queryKey: ['payments'],
@@ -36,7 +54,7 @@ export function SubscriptionPage() {
   const handleCheckout = async () => {
     setActionLoading(true)
     try {
-      await startCheckout()
+      await startCheckout(selectedTier)
     } catch {
       // Error handled by hook
     } finally {
@@ -114,12 +132,17 @@ export function SubscriptionPage() {
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
                   <p className="text-sm text-muted-foreground">Plan</p>
-                  <p className="font-medium">All Access</p>
+                  <p className="font-medium">
+                    {getTierName(tier)}
+                    {tier === 'business' && (
+                      <Badge variant="secondary" className="ml-2">Business</Badge>
+                    )}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Price</p>
                   <p className="font-medium">
-                    $3/month
+                    {getTierPrice(tier, user?.locked_price_amount)}
                     {user?.price_locked && (
                       <Badge variant="outline" className="ml-2">
                         Locked
@@ -168,18 +191,53 @@ export function SubscriptionPage() {
               </div>
             </>
           ) : (
-            <div className="text-center py-8">
-              <CreditCard className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No Active Subscription</h3>
-              <p className="text-muted-foreground mb-6">
-                Subscribe to access all applications for $3/month.
-              </p>
-              <Button onClick={handleCheckout} disabled={actionLoading}>
-                {actionLoading && (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                )}
-                Subscribe Now
-              </Button>
+            <div className="py-8">
+              <div className="text-center mb-8">
+                <CreditCard className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No Active Subscription</h3>
+                <p className="text-muted-foreground">
+                  Subscribe to access all applications.
+                </p>
+              </div>
+
+              {/* Tier Selection */}
+              <div className="grid gap-4 md:grid-cols-2 mb-6">
+                <button
+                  type="button"
+                  onClick={() => setSelectedTier('personal')}
+                  className={`p-4 rounded-lg border-2 text-left transition-colors ${
+                    selectedTier === 'personal'
+                      ? 'border-primary bg-primary/5'
+                      : 'border-border hover:border-primary/50'
+                  }`}
+                >
+                  <div className="font-semibold">Personal</div>
+                  <div className="text-2xl font-bold mt-1">$3<span className="text-sm font-normal text-muted-foreground">/month</span></div>
+                  <div className="text-sm text-muted-foreground mt-1">For individual developers</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedTier('business')}
+                  className={`p-4 rounded-lg border-2 text-left transition-colors ${
+                    selectedTier === 'business'
+                      ? 'border-primary bg-primary/5'
+                      : 'border-border hover:border-primary/50'
+                  }`}
+                >
+                  <div className="font-semibold">Business</div>
+                  <div className="text-2xl font-bold mt-1">$15<span className="text-sm font-normal text-muted-foreground">/month</span></div>
+                  <div className="text-sm text-muted-foreground mt-1">For teams and organizations</div>
+                </button>
+              </div>
+
+              <div className="text-center">
+                <Button onClick={handleCheckout} disabled={actionLoading} size="lg">
+                  {actionLoading && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )}
+                  Subscribe to {selectedTier === 'business' ? 'Business' : 'Personal'}
+                </Button>
+              </div>
             </div>
           )}
         </CardContent>

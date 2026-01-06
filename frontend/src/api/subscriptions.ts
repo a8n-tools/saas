@@ -3,6 +3,8 @@ import type {
   Subscription,
   PaymentHistory,
   CheckoutSessionResponse,
+  CheckoutRequest,
+  SubscriptionTier,
   PaginatedResponse,
 } from '@/types'
 
@@ -10,8 +12,8 @@ export const subscriptionApi = {
   getCurrent: (): Promise<Subscription | null> =>
     apiClient.get('/subscriptions/me'),
 
-  createCheckout: (): Promise<CheckoutSessionResponse> =>
-    apiClient.post('/subscriptions/checkout'),
+  createCheckout: (tier: SubscriptionTier = 'personal'): Promise<CheckoutSessionResponse> =>
+    apiClient.post('/subscriptions/checkout', { tier } as CheckoutRequest),
 
   cancel: (): Promise<Subscription> =>
     apiClient.post('/subscriptions/cancel'),

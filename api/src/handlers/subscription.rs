@@ -12,7 +12,14 @@ use crate::middleware::AuthenticatedUser;
 use crate::models::{PaymentResponse, SubscriptionResponse};
 use crate::repositories::{PaymentRepository, SubscriptionRepository, UserRepository};
 use crate::responses::{get_request_id, success};
-use crate::services::StripeService;
+use crate::services::{StripeService, SubscriptionTier};
+
+/// Request for creating a checkout session
+#[derive(Debug, Deserialize)]
+pub struct CheckoutRequest {
+    #[serde(default)]
+    pub tier: SubscriptionTier,
+}
 
 /// Response for checkout session creation
 #[derive(Debug, Serialize)]
@@ -63,8 +70,10 @@ pub async fn create_checkout(
     user: AuthenticatedUser,
     pool: web::Data<PgPool>,
     stripe: web::Data<Arc<StripeService>>,
+    body: web::Json<CheckoutRequest>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
+    let tier = body.tier;
 
     // Get user from database
     let db_user = UserRepository::find_by_id(&pool, user.0.sub)
@@ -86,10 +95,16 @@ pub async fn create_checkout(
         }
     };
 
-    // Create checkout session
+    // Create checkout session for the selected tier
     let (session_id, checkout_url) = stripe
-        .create_checkout_session(&customer_id, db_user.id)
+        .create_checkout_session(&customer_id, db_user.id, tier)
         .await?;
+
+    tracing::info!(
+        user_id = %db_user.id,
+        tier = %tier.as_str(),
+        "Created checkout session for user"
+    );
 
     Ok(success(
         CheckoutResponse {

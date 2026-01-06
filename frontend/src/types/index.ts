@@ -8,14 +8,18 @@ export type SubscriptionStatus =
   | 'canceled'
   | 'incomplete'
 
+export type SubscriptionTier = 'personal' | 'business'
+
 export interface User {
   id: string
   email: string
   role: UserRole
   email_verified: boolean
   subscription_status: SubscriptionStatus
+  subscription_tier: SubscriptionTier | null
   price_locked: boolean
   locked_price_id: string | null
+  locked_price_amount: number | null
   created_at: string
   updated_at: string
 }
@@ -60,6 +64,8 @@ export interface Subscription {
   stripe_subscription_id: string
   stripe_customer_id: string
   status: SubscriptionStatus
+  tier: SubscriptionTier
+  amount_cents: number
   current_period_start: string
   current_period_end: string
   cancel_at_period_end: boolean
@@ -80,8 +86,13 @@ export interface PaymentHistory {
   created_at: string
 }
 
+export interface CheckoutRequest {
+  tier: SubscriptionTier
+}
+
 export interface CheckoutSessionResponse {
   checkout_url: string
+  session_id: string
 }
 
 // Application types

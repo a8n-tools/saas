@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useSubscriptionStore } from '@/stores/subscriptionStore'
 import { useAuthStore } from '@/stores/authStore'
+import type { SubscriptionTier } from '@/types'
 
 export function useSubscription() {
   const store = useSubscriptionStore()
@@ -12,8 +13,8 @@ export function useSubscription() {
     }
   }, [isAuthenticated])
 
-  const startCheckout = async () => {
-    const checkoutUrl = await store.createCheckout()
+  const startCheckout = async (tier: SubscriptionTier = 'personal') => {
+    const checkoutUrl = await store.createCheckout(tier)
     // Redirect to Stripe checkout
     window.location.href = checkoutUrl
   }
@@ -30,5 +31,6 @@ export function useSubscription() {
     isPastDue: store.subscription?.status === 'past_due',
     isCanceled: store.subscription?.status === 'canceled',
     willCancel: store.subscription?.cancel_at_period_end ?? false,
+    tier: store.subscription?.tier ?? null,
   }
 }

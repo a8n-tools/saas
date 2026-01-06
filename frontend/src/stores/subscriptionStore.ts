@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Subscription } from '@/types'
+import type { Subscription, SubscriptionTier } from '@/types'
 import { subscriptionApi } from '@/api'
 
 interface SubscriptionState {
@@ -9,7 +9,7 @@ interface SubscriptionState {
 
   // Actions
   fetchSubscription: () => Promise<void>
-  createCheckout: () => Promise<string>
+  createCheckout: (tier?: SubscriptionTier) => Promise<string>
   cancelSubscription: () => Promise<void>
   reactivateSubscription: () => Promise<void>
   clearError: () => void
@@ -34,10 +34,10 @@ export const useSubscriptionStore = create<SubscriptionState>((set) => ({
     }
   },
 
-  createCheckout: async () => {
+  createCheckout: async (tier: SubscriptionTier = 'personal') => {
     set({ isLoading: true, error: null })
     try {
-      const response = await subscriptionApi.createCheckout()
+      const response = await subscriptionApi.createCheckout(tier)
       set({ isLoading: false })
       return response.checkout_url
     } catch (err) {

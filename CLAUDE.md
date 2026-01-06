@@ -7,7 +7,9 @@
 
 **a8n.tools** is a SaaS platform hosting developer/productivity tools. We sell convenience and managed hosting for open-source applications.
 
-- **Business Model:** $3/month flat subscription, access to ALL apps
+- **Business Model:** Two-tier subscription model:
+  - **Personal:** $3/month — For individual developers
+  - **Business (PSA):** $15/month — For teams and organizations (priority support, invoice billing)
 - **Key Differentiator:** Fixed price for life — early adopters lock in their rate forever
 - **Target Launch:** End of January 2025 (ideal) / Late February 2025 (deadline)
 - **Team:** 3 full-stack developers
@@ -52,8 +54,11 @@
 - **Cookie flags:** HttpOnly, Secure, SameSite=Lax
 
 ### Subscription Model
-- Single flat price ($3/month) for all apps
-- `price_locked` boolean + `locked_price_id` string track fixed-price-for-life
+- Two-tier pricing:
+  - **Personal:** $3/month — All apps, community support
+  - **Business:** $15/month — All apps, priority support, invoice billing, team features (coming soon)
+- `price_locked` boolean + `locked_price_id` string + `locked_price_amount` track fixed-price-for-life
+- `subscription_tier` tracks the user's tier (personal/business)
 - Grace period: 30 days after payment failure before access revoked
 - No free tier, no trial
 
@@ -344,7 +349,8 @@ JWT_PUBLIC_KEY_PATH=/secrets/jwt_public.pem
 # Stripe
 STRIPE_SECRET_KEY=sk_live_...
 STRIPE_WEBHOOK_SECRET=whsec_...
-STRIPE_PRICE_ID=price_a8n_monthly_v1
+STRIPE_PRICE_ID=price_a8n_personal_v1
+STRIPE_BUSINESS_PRICE_ID=price_a8n_business_v1
 
 # Email
 SMTP_HOST=stalwart
