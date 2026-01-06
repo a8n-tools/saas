@@ -1,7 +1,7 @@
 # a8n.tools Implementation Status
 
 > Auto-generated checklist tracking implementation progress against specification documents in `docs/`.
-> Last updated: January 2, 2026
+> Last updated: January 6, 2026
 
 ## Summary
 
@@ -15,11 +15,11 @@
 | 06 | Frontend Foundation | Complete | 100% |
 | 07 | Frontend Auth | Needs Testing | 90% |
 | 08 | Frontend Dashboard | Needs Testing | 80% |
-| 09 | Admin Panel | Backend Done | 85% |
-| 10 | Email System | Skeleton Only | 10% |
+| 09 | Admin Panel | Complete | 100% |
+| 10 | Email System | Backend Complete | 80% |
 | 11 | Infrastructure | Dev Only | 50% |
 | 12 | Monitoring | Not Started | 0% |
-| 13 | Security | Partial | 50% |
+| 13 | Security | Headers Done | 70% |
 | 14 | Testing Strategy | Minimal | 10% |
 
 ---
@@ -252,17 +252,18 @@
 - [x] GET `/v1/admin/users`
 - [x] GET `/v1/admin/users/:id`
 - [x] PUT `/v1/admin/users/:id/status`
-- [ ] POST `/v1/admin/users/:id/reset-password`
-- [ ] POST `/v1/admin/users/:id/impersonate`
+- [x] POST `/v1/admin/users/:id/reset-password`
+- [x] POST `/v1/admin/users/:id/impersonate`
 - [x] GET `/v1/admin/subscriptions`
 - [x] POST `/v1/admin/subscriptions/grant`
 - [x] POST `/v1/admin/subscriptions/revoke`
 - [x] GET `/v1/admin/applications`
 - [x] PUT `/v1/admin/applications/:id`
 - [x] GET `/v1/admin/audit-logs`
-- [ ] GET `/v1/admin/notifications`
-- [ ] POST `/v1/admin/notifications/:id/read`
-- [ ] GET `/v1/admin/health`
+- [x] GET `/v1/admin/notifications`
+- [x] POST `/v1/admin/notifications/:id/read`
+- [x] POST `/v1/admin/notifications/read-all`
+- [x] GET `/v1/admin/health`
 
 ---
 
@@ -270,18 +271,19 @@
 
 ### Email Service
 - [x] Email service skeleton (logs only)
-- [ ] SMTP configuration with Lettre
-- [ ] Template rendering with Tera
+- [x] SMTP configuration with Lettre
+- [x] Template rendering with Tera
+- [x] Email configuration in Config
 
 ### Email Templates
-- [ ] Base template (HTML + text)
-- [ ] Magic link email
-- [ ] Password reset email
-- [ ] Welcome email
-- [ ] Payment failed email
-- [ ] Grace period reminders (Day 7, 14, 25)
-- [ ] Subscription canceled email
-- [ ] Payment succeeded (receipt)
+- [x] Base template (HTML + text)
+- [x] Magic link email
+- [x] Password reset email
+- [x] Welcome email
+- [x] Payment failed email
+- [x] Grace period reminders
+- [x] Subscription canceled email
+- [x] Payment succeeded (receipt)
 
 ### Email Infrastructure
 - [ ] Stalwart mail server in Docker
@@ -377,13 +379,16 @@
 - [ ] Filename sanitization
 
 ### Security Headers
-- [ ] X-Frame-Options: DENY
-- [ ] X-Content-Type-Options: nosniff
-- [ ] X-XSS-Protection
-- [ ] Referrer-Policy
-- [ ] HSTS with preload
-- [ ] Content-Security-Policy (for Stripe)
-- [ ] Permissions-Policy
+- [x] X-Frame-Options: DENY
+- [x] X-Content-Type-Options: nosniff
+- [x] X-XSS-Protection
+- [x] Referrer-Policy
+- [x] HSTS with preload
+- [x] Content-Security-Policy (for Stripe)
+- [x] Permissions-Policy
+- [x] Cross-Origin-Opener-Policy
+- [x] Cross-Origin-Resource-Policy
+- [x] X-DNS-Prefetch-Control
 
 ### CSRF Protection
 - [ ] CSRF token generation
@@ -465,10 +470,10 @@
 4. ~~Terms of Service & Privacy Policy pages~~
 
 ### P1 - Should Have
-5. Email system implementation (Lettre + Tera templates)
-6. ~~Admin backend endpoints~~ (mostly done)
-7. Rate limiting middleware
-8. Security headers
+5. ~~Email system implementation~~ (Lettre + Tera templates - DONE)
+6. ~~Admin backend endpoints~~ (DONE - all endpoints implemented)
+7. Rate limiting middleware (repository ready, middleware needed)
+8. ~~Security headers~~ (DONE - middleware added)
 9. Production Docker setup
 10. Real Stripe API integration (replace placeholders with async-stripe calls)
 
@@ -477,4 +482,4 @@
 12. Error tracking (GlitchTip)
 13. Comprehensive testing
 14. CSRF protection
-15. Admin impersonation
+15. ~~Admin impersonation~~ (DONE)

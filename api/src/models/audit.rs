@@ -27,6 +27,7 @@ pub enum AuditAction {
     GracePeriodStarted,
     GracePeriodEnded,
     AdminUserImpersonated,
+    AdminPasswordReset,
     AdminSubscriptionGranted,
     AdminSubscriptionRevoked,
     AdminUserDeactivated,
@@ -53,6 +54,7 @@ impl AuditAction {
             AuditAction::GracePeriodStarted => "grace_period_started",
             AuditAction::GracePeriodEnded => "grace_period_ended",
             AuditAction::AdminUserImpersonated => "admin_user_impersonated",
+            AuditAction::AdminPasswordReset => "admin_password_reset",
             AuditAction::AdminSubscriptionGranted => "admin_subscription_granted",
             AuditAction::AdminSubscriptionRevoked => "admin_subscription_revoked",
             AuditAction::AdminUserDeactivated => "admin_user_deactivated",
@@ -65,6 +67,7 @@ impl AuditAction {
         matches!(
             self,
             AuditAction::AdminUserImpersonated
+                | AuditAction::AdminPasswordReset
                 | AuditAction::AdminSubscriptionGranted
                 | AuditAction::AdminSubscriptionRevoked
                 | AuditAction::AdminUserDeactivated
