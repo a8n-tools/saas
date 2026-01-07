@@ -1,0 +1,9 @@
+a8n.tools
+=========
+
+{% block content %}{% endblock %}
+
+---
+(c) {{ year }} a8n.tools
+Privacy: {{ base_url }}/privacy
+Terms: {{ base_url }}/terms

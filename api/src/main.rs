@@ -13,7 +13,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilte
 
 use a8n_api::{
     config::Config,
-    middleware::request_id::RequestIdMiddleware,
+    middleware::{request_id::RequestIdMiddleware, SecurityHeaders},
     routes,
     services::{AuthService, EmailService, JwtConfig, JwtService, StripeConfig, StripeService},
 };
@@ -74,9 +74,15 @@ async fn main() -> anyhow::Result<()> {
     info!("Auth service initialized");
 
     // Initialize Email service
-    let email_service = Arc::new(EmailService::new());
+    let email_service = Arc::new(
+        EmailService::new(config.email.clone())
+            .unwrap_or_else(|e| {
+                tracing::warn!(error = %e, "Failed to initialize email service, using dev mode");
+                EmailService::new_dev()
+            })
+    );
 
-    info!("Email service initialized");
+    info!(enabled = config.email.enabled, "Email service initialized");
 
     // Initialize Stripe service
     let stripe_config = StripeConfig::from_env()?;
@@ -117,9 +123,10 @@ async fn main() -> anyhow::Result<()> {
             .max_age(3600);
 
         App::new()
-            // Add middleware
+            // Add middleware (order matters - executed in reverse order)
             .wrap(TracingLogger::default())
             .wrap(Logger::default())
+            .wrap(SecurityHeaders)
             .wrap(RequestIdMiddleware)
             .wrap(cors)
             // Add database pool to app state

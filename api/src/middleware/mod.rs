@@ -4,9 +4,11 @@
 
 pub mod auth;
 pub mod request_id;
+pub mod security_headers;
 
 // Re-export commonly used items
 pub use auth::{
     extract_client_ip, extract_device_info, AdminUser, AuthCookies, AuthenticatedUser,
     OptionalUser, SubscribedUser,
 };
+pub use security_headers::SecurityHeaders;

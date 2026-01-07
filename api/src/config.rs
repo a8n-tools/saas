@@ -16,6 +16,48 @@ pub struct Config {
     pub cors_origin: String,
     /// Environment (development, production)
     pub environment: String,
+    /// Email configuration
+    pub email: EmailConfig,
+}
+
+/// Email configuration
+#[derive(Debug, Clone)]
+pub struct EmailConfig {
+    /// SMTP server host
+    pub smtp_host: String,
+    /// SMTP server port
+    pub smtp_port: u16,
+    /// SMTP username
+    pub smtp_username: String,
+    /// SMTP password
+    pub smtp_password: String,
+    /// From email address
+    pub from_email: String,
+    /// From name
+    pub from_name: String,
+    /// Base URL for links in emails
+    pub base_url: String,
+    /// Whether to actually send emails (false in dev mode)
+    pub enabled: bool,
+}
+
+impl EmailConfig {
+    /// Load email configuration from environment variables
+    pub fn from_env(is_production: bool) -> Self {
+        Self {
+            smtp_host: env::var("SMTP_HOST").unwrap_or_else(|_| "localhost".to_string()),
+            smtp_port: env::var("SMTP_PORT")
+                .unwrap_or_else(|_| "587".to_string())
+                .parse()
+                .unwrap_or(587),
+            smtp_username: env::var("SMTP_USERNAME").unwrap_or_default(),
+            smtp_password: env::var("SMTP_PASSWORD").unwrap_or_default(),
+            from_email: env::var("EMAIL_FROM").unwrap_or_else(|_| "noreply@a8n.tools".to_string()),
+            from_name: env::var("EMAIL_FROM_NAME").unwrap_or_else(|_| "a8n.tools".to_string()),
+            base_url: env::var("BASE_URL").unwrap_or_else(|_| "https://app.a8n.tools".to_string()),
+            enabled: is_production && env::var("SMTP_HOST").is_ok(),
+        }
+    }
 }
 
 impl Config {
@@ -43,6 +85,8 @@ impl Config {
             .unwrap_or_else(|_| "https://app.a8n.tools".to_string());
 
         let environment = env::var("ENVIRONMENT").unwrap_or_else(|_| "development".to_string());
+        let is_production = environment == "production";
+        let email = EmailConfig::from_env(is_production);
 
         let config = Self {
             database_url,
@@ -51,6 +95,7 @@ impl Config {
             log_level,
             cors_origin,
             environment,
+            email,
         };
 
         info!(
@@ -98,6 +143,7 @@ mod tests {
         env::remove_var("RUST_LOG");
         env::remove_var("CORS_ORIGIN");
         env::remove_var("ENVIRONMENT");
+        env::remove_var("SMTP_HOST");
 
         let config = Config::from_env().unwrap();
 
@@ -106,6 +152,7 @@ mod tests {
         assert_eq!(config.log_level, "info");
         assert_eq!(config.cors_origin, "https://app.a8n.tools");
         assert_eq!(config.environment, "development");
+        assert!(!config.email.enabled);
     }
 
     #[test]

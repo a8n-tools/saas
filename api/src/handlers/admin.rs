@@ -5,14 +5,22 @@
 use actix_web::{web, HttpRequest, HttpResponse};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
+use std::sync::Arc;
+
+use chrono::{Duration, Utc};
 
 use crate::errors::AppError;
 use crate::middleware::AdminUser;
-use crate::models::{SubscriptionStatus, UserResponse};
+use crate::models::{
+    AuditAction, CreateAuditLog, CreatePasswordResetToken, CreateRefreshToken, SubscriptionStatus,
+    UserResponse,
+};
 use crate::repositories::{
-    ApplicationRepository, AuditLogRepository, SubscriptionRepository, UserRepository,
+    ApplicationRepository, AuditLogRepository, NotificationRepository, SubscriptionRepository,
+    TokenRepository, UserRepository,
 };
 use crate::responses::{get_request_id, paginated, success, success_no_data};
+use crate::services::{EmailService, JwtService};
 
 // =============================================================================
 // User Management
@@ -366,4 +374,276 @@ pub async fn get_dashboard_stats(
     };
 
     Ok(success(stats, request_id))
+}
+
+// =============================================================================
+// User Actions (Reset Password, Impersonate)
+// =============================================================================
+
+/// POST /v1/admin/users/{user_id}/reset-password
+/// Trigger a password reset email for a user
+pub async fn admin_reset_password(
+    req: HttpRequest,
+    admin: AdminUser,
+    pool: web::Data<PgPool>,
+    jwt_service: web::Data<Arc<JwtService>>,
+    email_service: web::Data<Arc<EmailService>>,
+    path: web::Path<uuid::Uuid>,
+) -> Result<HttpResponse, AppError> {
+    let request_id = get_request_id(&req);
+    let user_id = path.into_inner();
+    let admin_user_id = admin.0.sub;
+
+    // Find the user
+    let user = UserRepository::find_by_id(&pool, user_id)
+        .await?
+        .ok_or(AppError::not_found("User"))?;
+
+    // Generate password reset token
+    let raw_token = uuid::Uuid::new_v4().to_string();
+    let token_hash = jwt_service.hash_token(&raw_token);
+    let expires_at = Utc::now() + Duration::hours(1);
+
+    TokenRepository::create_password_reset_token(
+        &pool,
+        CreatePasswordResetToken {
+            user_id,
+            token_hash,
+            expires_at,
+            ip_address: None,
+        },
+    )
+    .await?;
+
+    // Send password reset email
+    email_service.send_password_reset(&user.email, &raw_token).await?;
+
+    // Log admin action
+    let audit_log = CreateAuditLog::new(AuditAction::AdminPasswordReset)
+        .with_actor(admin_user_id, &admin.0.email, &admin.0.role)
+        .with_resource("user", user_id)
+        .with_metadata(serde_json::json!({
+            "target_user_id": user_id,
+            "target_email": user.email
+        }));
+    AuditLogRepository::create(&pool, audit_log).await?;
+
+    Ok(success_no_data(request_id))
+}
+
+/// POST /v1/admin/users/{user_id}/impersonate
+/// Generate tokens to impersonate a user
+pub async fn impersonate_user(
+    req: HttpRequest,
+    admin: AdminUser,
+    pool: web::Data<PgPool>,
+    jwt_service: web::Data<Arc<JwtService>>,
+    path: web::Path<uuid::Uuid>,
+) -> Result<HttpResponse, AppError> {
+    let request_id = get_request_id(&req);
+    let target_user_id = path.into_inner();
+    let admin_user_id = admin.0.sub;
+
+    // Prevent self-impersonation
+    if admin_user_id == target_user_id {
+        return Err(AppError::validation("user_id", "Cannot impersonate yourself"));
+    }
+
+    // Find the target user
+    let target_user = UserRepository::find_by_id(&pool, target_user_id)
+        .await?
+        .ok_or(AppError::not_found("User"))?;
+
+    // Generate access token for target user
+    let access_token = jwt_service.create_access_token(&target_user)?;
+
+    // Generate refresh token
+    let (refresh_token, token_hash) = jwt_service.create_refresh_token(target_user.id)?;
+    let expires_at = Utc::now() + Duration::days(30);
+
+    TokenRepository::create_refresh_token(
+        &pool,
+        CreateRefreshToken {
+            user_id: target_user.id,
+            token_hash,
+            device_info: Some("Admin impersonation".to_string()),
+            ip_address: None,
+            expires_at,
+        },
+    )
+    .await?;
+
+    // Log admin action
+    let audit_log = CreateAuditLog::new(AuditAction::AdminUserImpersonated)
+        .with_actor(admin_user_id, &admin.0.email, &admin.0.role)
+        .with_resource("user", target_user_id)
+        .with_metadata(serde_json::json!({
+            "target_user_id": target_user_id,
+            "target_email": target_user.email,
+            "admin_id": admin_user_id
+        }));
+    AuditLogRepository::create(&pool, audit_log).await?;
+
+    Ok(success(
+        serde_json::json!({
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "user": UserResponse::from(target_user)
+        }),
+        request_id,
+    ))
+}
+
+// =============================================================================
+// Notifications
+// =============================================================================
+
+/// Query parameters for listing notifications
+#[derive(Debug, Deserialize)]
+pub struct ListNotificationsQuery {
+    pub page: Option<i32>,
+    pub per_page: Option<i32>,
+    pub unread: Option<bool>,
+}
+
+/// GET /v1/admin/notifications
+/// List admin notifications
+pub async fn list_notifications(
+    req: HttpRequest,
+    _admin: AdminUser,
+    pool: web::Data<PgPool>,
+    query: web::Query<ListNotificationsQuery>,
+) -> Result<HttpResponse, AppError> {
+    let request_id = get_request_id(&req);
+
+    if query.unread.unwrap_or(false) {
+        let notifications = NotificationRepository::list_unread(&pool).await?;
+        let total = notifications.len() as i64;
+        return Ok(paginated(notifications, total, 1, 100, request_id));
+    }
+
+    let page = query.page.unwrap_or(1).max(1);
+    let per_page = query.per_page.unwrap_or(20).min(100);
+
+    let (notifications, total) =
+        NotificationRepository::list_paginated(&pool, page, per_page).await?;
+
+    Ok(paginated(notifications, total, page, per_page, request_id))
+}
+
+/// POST /v1/admin/notifications/{notification_id}/read
+/// Mark a notification as read
+pub async fn mark_notification_read(
+    req: HttpRequest,
+    admin: AdminUser,
+    pool: web::Data<PgPool>,
+    path: web::Path<uuid::Uuid>,
+) -> Result<HttpResponse, AppError> {
+    let request_id = get_request_id(&req);
+    let notification_id = path.into_inner();
+
+    NotificationRepository::mark_as_read(&pool, notification_id, admin.0.sub).await?;
+
+    Ok(success_no_data(request_id))
+}
+
+/// POST /v1/admin/notifications/read-all
+/// Mark all notifications as read
+pub async fn mark_all_notifications_read(
+    req: HttpRequest,
+    admin: AdminUser,
+    pool: web::Data<PgPool>,
+) -> Result<HttpResponse, AppError> {
+    let request_id = get_request_id(&req);
+
+    NotificationRepository::mark_all_as_read(&pool, admin.0.sub).await?;
+
+    Ok(success_no_data(request_id))
+}
+
+// =============================================================================
+// System Health
+// =============================================================================
+
+/// System health response
+#[derive(Debug, Serialize)]
+pub struct SystemHealth {
+    pub status: String,
+    pub database: HealthStatus,
+    pub uptime_seconds: u64,
+    pub version: String,
+}
+
+/// Health status for a component
+#[derive(Debug, Serialize)]
+pub struct HealthStatus {
+    pub status: String,
+    pub latency_ms: Option<u64>,
+    pub message: Option<String>,
+}
+
+/// GET /v1/admin/health
+/// Get system health status
+pub async fn get_system_health(
+    req: HttpRequest,
+    _admin: AdminUser,
+    pool: web::Data<PgPool>,
+) -> Result<HttpResponse, AppError> {
+    let request_id = get_request_id(&req);
+
+    // Check database health
+    let db_start = std::time::Instant::now();
+    let db_health = match sqlx::query("SELECT 1").execute(pool.get_ref()).await {
+        Ok(_) => HealthStatus {
+            status: "healthy".to_string(),
+            latency_ms: Some(db_start.elapsed().as_millis() as u64),
+            message: None,
+        },
+        Err(e) => HealthStatus {
+            status: "unhealthy".to_string(),
+            latency_ms: None,
+            message: Some(e.to_string()),
+        },
+    };
+
+    // Get database stats
+    let db_stats: Option<(i64, i64, i64)> = sqlx::query_as(
+        r#"
+        SELECT
+            (SELECT COUNT(*) FROM users WHERE deleted_at IS NULL) as users,
+            (SELECT COUNT(*) FROM users WHERE subscription_status = 'active') as active_subs,
+            (SELECT COUNT(*) FROM audit_logs WHERE created_at > NOW() - INTERVAL '1 hour') as recent_logs
+        "#
+    )
+    .fetch_optional(pool.get_ref())
+    .await
+    .ok()
+    .flatten();
+
+    let overall_status = if db_health.status == "healthy" {
+        "healthy"
+    } else {
+        "degraded"
+    };
+
+    let health = SystemHealth {
+        status: overall_status.to_string(),
+        database: db_health,
+        uptime_seconds: 0, // Would need to track startup time
+        version: env!("CARGO_PKG_VERSION").to_string(),
+    };
+
+    let mut response = serde_json::json!({
+        "health": health,
+    });
+
+    if let Some((users, active_subs, recent_logs)) = db_stats {
+        response["stats"] = serde_json::json!({
+            "total_users": users,
+            "active_subscribers": active_subs,
+            "audit_logs_last_hour": recent_logs
+        });
+    }
+
+    Ok(success(response, request_id))
 }
