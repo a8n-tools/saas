@@ -13,23 +13,23 @@ A SaaS platform hosting developer and productivity tools. We sell convenience, r
 
 ### Current Applications
 
-| Application | Description | Subdomain |
-|-------------|-------------|-----------|
-| RUS | URL shortening with QR codes | `rus.a8n.tools` |
-| Rusty Links | Bookmark management | `rustylinks.a8n.tools` |
+| Application  | Description                  | Subdomain              |
+|--------------|------------------------------|------------------------|
+| RUS          | URL shortening with QR codes | `rus.a8n.tools`        |
+| Rusty Links  | Bookmark management          | `rustylinks.a8n.tools` |
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|------------|
-| Backend | Rust, Actix-Web |
-| Frontend | React 18+, Vite, TypeScript, Tailwind CSS, shadcn/ui |
-| Database | PostgreSQL 16+ |
-| Containerization | Docker, Docker Compose |
-| Reverse Proxy | Traefik |
-| Email | Stalwart (self-hosted) |
-| Monitoring | Prometheus, Grafana |
-| Error Tracking | GlitchTip (self-hosted) |
+| Layer            | Technology                                           |
+|------------------|------------------------------------------------------|
+| Backend          | Rust, Actix-Web                                      |
+| Frontend         | React 18+, Vite, TypeScript, Tailwind CSS, shadcn/ui |
+| Database         | PostgreSQL 16+                                       |
+| Containerization | Docker, Docker Compose                               |
+| Reverse Proxy    | Traefik                                              |
+| Email            | Stalwart (self-hosted)                               |
+| Monitoring       | Prometheus, Grafana                                  |
+| Error Tracking   | GlitchTip (self-hosted)                              |
 
 ## Quick Start
 
@@ -172,19 +172,19 @@ async fn get_current_user() -> HttpResponse {
 
 ## Environment Variables
 
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `DATABASE_URL` | PostgreSQL connection string | - | Yes |
-| `HOST` | API server host | `0.0.0.0` | No |
-| `PORT` | API server port | `8080` | No |
-| `RUST_LOG` | Log level | `info` | No |
-| `CORS_ORIGIN` | Allowed CORS origin | `https://app.a8n.tools` | No |
-| `ENVIRONMENT` | Environment name | `development` | No |
-| `JWT_PRIVATE_KEY_PATH` | Path to Ed25519 private key | - | Yes (prod) |
-| `JWT_PUBLIC_KEY_PATH` | Path to Ed25519 public key | - | Yes (prod) |
-| `STRIPE_SECRET_KEY` | Stripe API secret key | - | Yes (prod) |
-| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret | - | Yes (prod) |
-| `STRIPE_PRICE_ID` | Stripe price ID for subscription | - | Yes (prod) |
+| Variable                | Description                      | Default                 | Required   |
+|-------------------------|----------------------------------|-------------------------|------------|
+| `DATABASE_URL`          | PostgreSQL connection string     | -                       | Yes        |
+| `HOST`                  | API server host                  | `0.0.0.0`               | No         |
+| `PORT`                  | API server port                  | `8080`                  | No         |
+| `RUST_LOG`              | Log level                        | `info`                  | No         |
+| `CORS_ORIGIN`           | Allowed CORS origin              | `https://app.a8n.tools` | No         |
+| `ENVIRONMENT`           | Environment name                 | `development`           | No         |
+| `JWT_PRIVATE_KEY_PATH`  | Path to Ed25519 private key      | -                       | Yes (prod) |
+| `JWT_PUBLIC_KEY_PATH`   | Path to Ed25519 public key       | -                       | Yes (prod) |
+| `STRIPE_SECRET_KEY`     | Stripe API secret key            | -                       | Yes (prod) |
+| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret    | -                       | Yes (prod) |
+| `STRIPE_PRICE_ID`       | Stripe price ID for subscription | -                       | Yes (prod) |
 
 ## Architecture Decisions
 
