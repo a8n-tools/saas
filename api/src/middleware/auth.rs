@@ -190,55 +190,65 @@ pub struct AuthCookies;
 
 impl AuthCookies {
     /// Create access token cookie
-    pub fn access_token(token: &str, secure: bool) -> Cookie<'static> {
-        Cookie::build("access_token", token.to_owned())
-            .domain(".a8n.tools")
+    pub fn access_token(token: &str, secure: bool, cookie_domain: Option<&str>) -> Cookie<'static> {
+        let mut builder = Cookie::build("access_token", token.to_owned())
             .path("/")
             .http_only(true)
             .secure(secure)
             .same_site(SameSite::Lax)
-            .max_age(actix_web::cookie::time::Duration::minutes(15))
-            .finish()
+            .max_age(actix_web::cookie::time::Duration::minutes(15));
+
+        if let Some(domain) = cookie_domain {
+            builder = builder.domain(domain.to_owned());
+        }
+
+        builder.finish()
     }
 
     /// Create refresh token cookie
-    pub fn refresh_token(token: &str, secure: bool, remember: bool) -> Cookie<'static> {
+    pub fn refresh_token(token: &str, secure: bool, remember: bool, cookie_domain: Option<&str>) -> Cookie<'static> {
         let max_age = if remember {
             actix_web::cookie::time::Duration::days(30)
         } else {
             actix_web::cookie::time::Duration::days(1)
         };
 
-        Cookie::build("refresh_token", token.to_owned())
-            .domain(".a8n.tools")
+        let mut builder = Cookie::build("refresh_token", token.to_owned())
             .path("/")
             .http_only(true)
             .secure(secure)
             .same_site(SameSite::Lax)
-            .max_age(max_age)
-            .finish()
+            .max_age(max_age);
+
+        if let Some(domain) = cookie_domain {
+            builder = builder.domain(domain.to_owned());
+        }
+
+        builder.finish()
     }
 
     /// Create cookies to clear auth tokens
-    pub fn clear(secure: bool) -> Vec<Cookie<'static>> {
-        vec![
-            Cookie::build("access_token", "")
-                .domain(".a8n.tools")
-                .path("/")
-                .http_only(true)
-                .secure(secure)
-                .same_site(SameSite::Lax)
-                .max_age(actix_web::cookie::time::Duration::seconds(0))
-                .finish(),
-            Cookie::build("refresh_token", "")
-                .domain(".a8n.tools")
-                .path("/")
-                .http_only(true)
-                .secure(secure)
-                .same_site(SameSite::Lax)
-                .max_age(actix_web::cookie::time::Duration::seconds(0))
-                .finish(),
-        ]
+    pub fn clear(secure: bool, cookie_domain: Option<&str>) -> Vec<Cookie<'static>> {
+        let mut access_builder = Cookie::build("access_token", "")
+            .path("/")
+            .http_only(true)
+            .secure(secure)
+            .same_site(SameSite::Lax)
+            .max_age(actix_web::cookie::time::Duration::seconds(0));
+
+        let mut refresh_builder = Cookie::build("refresh_token", "")
+            .path("/")
+            .http_only(true)
+            .secure(secure)
+            .same_site(SameSite::Lax)
+            .max_age(actix_web::cookie::time::Duration::seconds(0));
+
+        if let Some(domain) = cookie_domain {
+            access_builder = access_builder.domain(domain.to_owned());
+            refresh_builder = refresh_builder.domain(domain.to_owned());
+        }
+
+        vec![access_builder.finish(), refresh_builder.finish()]
     }
 }
 
@@ -291,9 +301,18 @@ mod tests {
 
     #[test]
     fn test_auth_cookies_clear() {
-        let cookies = AuthCookies::clear(false);
+        let cookies = AuthCookies::clear(false, None);
         assert_eq!(cookies.len(), 2);
         assert!(cookies.iter().any(|c| c.name() == "access_token"));
         assert!(cookies.iter().any(|c| c.name() == "refresh_token"));
+    }
+
+    #[test]
+    fn test_auth_cookies_clear_with_domain() {
+        let cookies = AuthCookies::clear(true, Some(".a8n.tools"));
+        assert_eq!(cookies.len(), 2);
+        for cookie in cookies {
+            assert_eq!(cookie.domain(), Some(".a8n.tools"));
+        }
     }
 }

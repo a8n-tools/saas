@@ -14,7 +14,8 @@ export default defineConfig({
     host: true,
     proxy: {
       '/api': {
-        target: 'http://localhost:8080',
+        // Use 'api' for Docker networking, fallback to localhost for local dev
+        target: process.env.VITE_API_URL || 'http://api:8080',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, '/v1'),
       },

@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 
@@ -36,7 +37,14 @@ import { SubscriptionRequiredPage } from '@/pages/errors/SubscriptionRequiredPag
 
 // Protected route wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuthStore()
+  const { isAuthenticated, isLoading, refreshUser } = useAuthStore()
+
+  // Refresh user data on mount to get latest info from backend
+  useEffect(() => {
+    if (isAuthenticated) {
+      refreshUser()
+    }
+  }, [isAuthenticated, refreshUser])
 
   if (isLoading) {
     return (
@@ -55,7 +63,14 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 // Admin route wrapper
 function AdminRoute({ children }: { children: React.ReactNode }) {
-  const { user, isAuthenticated, isLoading } = useAuthStore()
+  const { user, isAuthenticated, isLoading, refreshUser } = useAuthStore()
+
+  // Refresh user data on mount to get latest role from backend
+  useEffect(() => {
+    if (isAuthenticated) {
+      refreshUser()
+    }
+  }, [isAuthenticated, refreshUser])
 
   if (isLoading) {
     return (
