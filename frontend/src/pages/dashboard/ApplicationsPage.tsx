@@ -55,8 +55,10 @@ export function ApplicationsPage() {
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {applications.map((app) => {
           const Icon = appIcons[app.slug] || Link2
-          const canAccess =
-            hasActiveSubscription && app.is_active && !app.is_maintenance
+          const isMaintenance = app.maintenance_mode ?? app.is_maintenance ?? false
+          const appName = app.display_name || app.name
+          const appUrl = app.subdomain || `${app.slug}.a8n.tools`
+          const canAccess = hasActiveSubscription && app.is_active && !isMaintenance
 
           return (
             <Card
@@ -69,7 +71,7 @@ export function ApplicationsPage() {
                     <Icon className="h-6 w-6 text-primary" />
                   </div>
                   <div className="flex gap-2">
-                    {app.is_maintenance && (
+                    {isMaintenance && (
                       <Badge variant="warning">Maintenance</Badge>
                     )}
                     {!app.is_active && (
@@ -77,16 +79,16 @@ export function ApplicationsPage() {
                     )}
                   </div>
                 </div>
-                <CardTitle className="mt-4">{app.name}</CardTitle>
+                <CardTitle className="mt-4">{appName}</CardTitle>
                 <CardDescription>{app.description}</CardDescription>
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground mb-4">
-                  {app.subdomain}
+                  {appUrl}
                 </p>
                 {canAccess ? (
                   <a
-                    href={`https://${app.subdomain}`}
+                    href={`https://${appUrl}`}
                     target="_blank"
                     rel="noopener noreferrer"
                   >
@@ -99,7 +101,7 @@ export function ApplicationsPage() {
                   <Button className="w-full" disabled>
                     {!hasActiveSubscription
                       ? 'Subscription Required'
-                      : app.is_maintenance
+                      : isMaintenance
                       ? 'Under Maintenance'
                       : 'Not Available'}
                   </Button>

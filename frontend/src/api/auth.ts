@@ -12,26 +12,26 @@ import type {
 
 export const authApi = {
   login: (data: LoginRequest): Promise<AuthResponse> =>
-    apiClient.post('/v1/auth/login', data),
+    apiClient.post('/auth/login', data),
 
   register: (data: RegisterRequest): Promise<AuthResponse> =>
-    apiClient.post('/v1/auth/register', data),
+    apiClient.post('/auth/register', data),
 
-  logout: (): Promise<void> => apiClient.post('/v1/auth/logout'),
+  logout: (): Promise<void> => apiClient.post('/auth/logout'),
 
-  refresh: (): Promise<AuthResponse> => apiClient.post('/v1/auth/refresh'),
+  refresh: (): Promise<AuthResponse> => apiClient.post('/auth/refresh'),
 
-  me: (): Promise<User> => apiClient.get('/v1/users/me'),
+  me: (): Promise<User> => apiClient.get('/users/me'),
 
   requestMagicLink: (data: MagicLinkRequest): Promise<{ message: string }> =>
-    apiClient.post('/v1/auth/magic-link', data),
+    apiClient.post('/auth/magic-link', data),
 
   verifyMagicLink: (data: MagicLinkVerifyRequest): Promise<AuthResponse> =>
-    apiClient.post('/v1/auth/magic-link/verify', data),
+    apiClient.post('/auth/magic-link/verify', data),
 
   requestPasswordReset: (data: PasswordResetRequest): Promise<{ message: string }> =>
-    apiClient.post('/v1/auth/password-reset', data),
+    apiClient.post('/auth/password-reset', data),
 
   confirmPasswordReset: (data: PasswordResetConfirmRequest): Promise<{ message: string }> =>
-    apiClient.post('/v1/auth/password-reset/confirm', data),
+    apiClient.post('/auth/password-reset/confirm', data),
 }

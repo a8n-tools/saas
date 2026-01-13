@@ -101,10 +101,13 @@ export interface Application {
   name: string
   slug: string
   description: string
+  display_name?: string
   icon_url: string | null
-  subdomain: string
+  subdomain?: string
+  container_name?: string
   is_active: boolean
-  is_maintenance: boolean
+  is_maintenance?: boolean
+  maintenance_mode?: boolean
   created_at: string
   updated_at: string
 }
@@ -128,7 +131,8 @@ export interface PaginatedResponse<T> {
   items: T[]
   total: number
   page: number
-  page_size: number
+  page_size?: number
+  per_page?: number
   total_pages: number
 }
 

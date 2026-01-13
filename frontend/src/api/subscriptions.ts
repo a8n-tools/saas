@@ -10,20 +10,20 @@ import type {
 
 export const subscriptionApi = {
   getCurrent: (): Promise<Subscription | null> =>
-    apiClient.get('/v1/subscriptions/me'),
+    apiClient.get('/subscriptions/me'),
 
   createCheckout: (tier: SubscriptionTier = 'personal'): Promise<CheckoutSessionResponse> =>
-    apiClient.post('/v1/subscriptions/checkout', { tier } as CheckoutRequest),
+    apiClient.post('/subscriptions/checkout', { tier } as CheckoutRequest),
 
   cancel: (): Promise<Subscription> =>
-    apiClient.post('/v1/subscriptions/cancel'),
+    apiClient.post('/subscriptions/cancel'),
 
   reactivate: (): Promise<Subscription> =>
-    apiClient.post('/v1/subscriptions/reactivate'),
+    apiClient.post('/subscriptions/reactivate'),
 
   getPaymentHistory: (
     page = 1,
     pageSize = 10
   ): Promise<PaginatedResponse<PaymentHistory>> =>
-    apiClient.get(`/v1/subscriptions/payments?page=${page}&page_size=${pageSize}`),
+    apiClient.get(`/subscriptions/payments?page=${page}&page_size=${pageSize}`),
 }

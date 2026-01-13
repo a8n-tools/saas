@@ -18,6 +18,8 @@ pub struct Config {
     pub environment: String,
     /// Email configuration
     pub email: EmailConfig,
+    /// Cookie domain (e.g., ".a8n.tools" for production, empty for localhost)
+    pub cookie_domain: Option<String>,
 }
 
 /// Email configuration
@@ -88,6 +90,14 @@ impl Config {
         let is_production = environment == "production";
         let email = EmailConfig::from_env(is_production);
 
+        // Cookie domain: use .a8n.tools in production, None for localhost in development
+        let cookie_domain = env::var("COOKIE_DOMAIN").ok().filter(|s| !s.is_empty());
+        let cookie_domain = if cookie_domain.is_none() && is_production {
+            Some(".a8n.tools".to_string())
+        } else {
+            cookie_domain
+        };
+
         let config = Self {
             database_url,
             host,
@@ -96,6 +106,7 @@ impl Config {
             cors_origin,
             environment,
             email,
+            cookie_domain,
         };
 
         info!(
@@ -144,6 +155,7 @@ mod tests {
         env::remove_var("CORS_ORIGIN");
         env::remove_var("ENVIRONMENT");
         env::remove_var("SMTP_HOST");
+        env::remove_var("COOKIE_DOMAIN");
 
         let config = Config::from_env().unwrap();
 
@@ -153,6 +165,8 @@ mod tests {
         assert_eq!(config.cors_origin, "https://app.a8n.tools");
         assert_eq!(config.environment, "development");
         assert!(!config.email.enabled);
+        // In development mode without COOKIE_DOMAIN set, it should be None (for localhost)
+        assert!(config.cookie_domain.is_none());
     }
 
     #[test]

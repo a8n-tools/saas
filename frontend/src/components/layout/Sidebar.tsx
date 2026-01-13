@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
+import { useAuthStore } from '@/stores/authStore'
 import {
   LayoutDashboard,
   AppWindow,
@@ -7,6 +8,7 @@ import {
   Settings,
   Users,
   FileText,
+  Shield,
 } from 'lucide-react'
 
 interface SidebarItem {
@@ -36,7 +38,9 @@ interface SidebarProps {
 
 export function Sidebar({ variant = 'dashboard' }: SidebarProps) {
   const location = useLocation()
+  const { user } = useAuthStore()
   const items = variant === 'admin' ? adminItems : dashboardItems
+  const isAdmin = user?.role === 'admin'
 
   return (
     <aside className="hidden md:flex w-64 flex-col border-r bg-background">
@@ -70,6 +74,36 @@ export function Sidebar({ variant = 'dashboard' }: SidebarProps) {
             </Link>
           )
         })}
+        {variant === 'dashboard' && isAdmin && (
+          <>
+            <div className="my-4 border-t" />
+            <Link
+              to="/admin"
+              className={cn(
+                'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+              )}
+            >
+              <Shield className="h-4 w-4" />
+              Admin Panel
+            </Link>
+          </>
+        )}
+        {variant === 'admin' && (
+          <>
+            <div className="my-4 border-t" />
+            <Link
+              to="/dashboard"
+              className={cn(
+                'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+              )}
+            >
+              <LayoutDashboard className="h-4 w-4" />
+              User Dashboard
+            </Link>
+          </>
+        )}
       </nav>
     </aside>
   )

@@ -79,45 +79,50 @@ export function DashboardPage() {
           </div>
         ) : (
           <div className="grid gap-4 md:grid-cols-2">
-            {applications.map((app) => (
-              <Card key={app.id}>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg">{app.name}</CardTitle>
-                    {app.is_maintenance ? (
-                      <Badge variant="warning">Maintenance</Badge>
-                    ) : app.is_active ? (
-                      <Badge variant="success">Active</Badge>
+            {applications.map((app) => {
+              const appName = app.display_name || app.name
+              const isMaintenance = app.maintenance_mode ?? app.is_maintenance ?? false
+              const appUrl = app.subdomain || `${app.slug}.a8n.tools`
+              return (
+                <Card key={app.id}>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-lg">{appName}</CardTitle>
+                      {isMaintenance ? (
+                        <Badge variant="warning">Maintenance</Badge>
+                      ) : app.is_active ? (
+                        <Badge variant="success">Active</Badge>
+                      ) : (
+                        <Badge variant="secondary">Inactive</Badge>
+                      )}
+                    </div>
+                    <CardDescription>{app.description}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {hasActiveSubscription && app.is_active && !isMaintenance ? (
+                      <a
+                        href={`https://${appUrl}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <Button className="w-full">
+                          Open {appName}
+                          <ExternalLink className="ml-2 h-4 w-4" />
+                        </Button>
+                      </a>
                     ) : (
-                      <Badge variant="secondary">Inactive</Badge>
-                    )}
-                  </div>
-                  <CardDescription>{app.description}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {hasActiveSubscription && app.is_active && !app.is_maintenance ? (
-                    <a
-                      href={`https://${app.subdomain}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <Button className="w-full">
-                        Open {app.name}
-                        <ExternalLink className="ml-2 h-4 w-4" />
+                      <Button className="w-full" disabled>
+                        {!hasActiveSubscription
+                          ? 'Subscription Required'
+                          : isMaintenance
+                          ? 'Under Maintenance'
+                          : 'Not Available'}
                       </Button>
-                    </a>
-                  ) : (
-                    <Button className="w-full" disabled>
-                      {!hasActiveSubscription
-                        ? 'Subscription Required'
-                        : app.is_maintenance
-                        ? 'Under Maintenance'
-                        : 'Not Available'}
-                    </Button>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
+                    )}
+                  </CardContent>
+                </Card>
+              )
+            })}
           </div>
         )}
       </div>

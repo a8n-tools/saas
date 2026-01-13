@@ -104,6 +104,7 @@ pub async fn login(
         .await?;
 
     let secure = config.is_production();
+    let cookie_domain = config.cookie_domain.as_deref();
 
     let response = AuthResponse {
         user,
@@ -111,11 +112,12 @@ pub async fn login(
     };
 
     Ok(HttpResponse::Ok()
-        .cookie(AuthCookies::access_token(&tokens.access_token, secure))
+        .cookie(AuthCookies::access_token(&tokens.access_token, secure, cookie_domain))
         .cookie(AuthCookies::refresh_token(
             &tokens.refresh_token,
             secure,
             body.remember,
+            cookie_domain,
         ))
         .json(crate::responses::ApiResponse {
             success: true,
@@ -177,6 +179,7 @@ pub async fn verify_magic_link(
         .await?;
 
     let secure = config.is_production();
+    let cookie_domain = config.cookie_domain.as_deref();
 
     let response = AuthResponse {
         user,
@@ -184,8 +187,8 @@ pub async fn verify_magic_link(
     };
 
     Ok(HttpResponse::Ok()
-        .cookie(AuthCookies::access_token(&tokens.access_token, secure))
-        .cookie(AuthCookies::refresh_token(&tokens.refresh_token, secure, true))
+        .cookie(AuthCookies::access_token(&tokens.access_token, secure, cookie_domain))
+        .cookie(AuthCookies::refresh_token(&tokens.refresh_token, secure, true, cookie_domain))
         .json(crate::responses::ApiResponse {
             success: true,
             data: Some(response),
@@ -215,10 +218,11 @@ pub async fn refresh_token(
         .await?;
 
     let secure = config.is_production();
+    let cookie_domain = config.cookie_domain.as_deref();
 
     Ok(HttpResponse::Ok()
-        .cookie(AuthCookies::access_token(&tokens.access_token, secure))
-        .cookie(AuthCookies::refresh_token(&tokens.refresh_token, secure, true))
+        .cookie(AuthCookies::access_token(&tokens.access_token, secure, cookie_domain))
+        .cookie(AuthCookies::refresh_token(&tokens.refresh_token, secure, true, cookie_domain))
         .json(crate::responses::ApiResponse {
             success: true,
             data: Some(serde_json::json!({ "expires_in": tokens.expires_in })),
@@ -245,6 +249,7 @@ pub async fn logout(
     }
 
     let secure = config.is_production();
+    let cookie_domain = config.cookie_domain.as_deref();
 
     // Clear cookies
     let mut response = HttpResponse::Ok().json(crate::responses::ApiResponse::<()> {
@@ -253,7 +258,7 @@ pub async fn logout(
         meta: crate::responses::ResponseMeta::new(request_id),
     });
 
-    for cookie in AuthCookies::clear(secure) {
+    for cookie in AuthCookies::clear(secure, cookie_domain) {
         response.add_cookie(&cookie).ok();
     }
 
@@ -274,6 +279,7 @@ pub async fn logout_all(
     auth_service.logout_all(user.0.sub, ip_address).await?;
 
     let secure = config.is_production();
+    let cookie_domain = config.cookie_domain.as_deref();
 
     let mut response = HttpResponse::Ok().json(crate::responses::ApiResponse::<()> {
         success: true,
@@ -281,7 +287,7 @@ pub async fn logout_all(
         meta: crate::responses::ResponseMeta::new(request_id),
     });
 
-    for cookie in AuthCookies::clear(secure) {
+    for cookie in AuthCookies::clear(secure, cookie_domain) {
         response.add_cookie(&cookie).ok();
     }
 
