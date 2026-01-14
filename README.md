@@ -111,6 +111,38 @@ a8n-tools/
 └── .env.example            # Environment template
 ```
 
+## Test Structure
+
+```
+frontend/src/
+  ├── test/
+  │   ├── setup.ts          # Test setup (jest-dom, MSW server)
+  │   ├── utils.tsx          # Custom render with providers
+  │   └── mocks/
+  │       ├── handlers.ts    # MSW API mock handlers
+  │       └── server.ts      # MSW server instance
+  ├── api/
+  │   └── auth.test.ts       # Auth API tests
+  └── stores/
+      └── authStore.test.ts  # Auth store tests
+```
+
+### Navigate to frontend directory
+cd frontend
+
+#### Run tests in watch mode (re-runs on file changes)
+npm test
+
+#### Run tests once (CI mode)
+npm run test:run
+
+#### Run tests with coverage report
+npm run test:coverage
+
+## Current Test Coverage
+auth.test.ts - 13 tests (login, register, logout, magic link, password reset)
+authStore.test.ts - 17 tests (state management, login/logout flow, error handling)
+
 ## Development
 
 ### Available Commands
