@@ -15,7 +15,9 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             // User management
             .route("/users", web::get().to(handlers::list_users))
             .route("/users/{user_id}", web::get().to(handlers::get_user))
+            .route("/users/{user_id}", web::delete().to(handlers::delete_user))
             .route("/users/{user_id}/status", web::put().to(handlers::update_user_status))
+            .route("/users/{user_id}/role", web::put().to(handlers::update_user_role))
             .route("/users/{user_id}/reset-password", web::post().to(handlers::admin_reset_password))
             .route("/users/{user_id}/impersonate", web::post().to(handlers::impersonate_user))
             // Subscription management

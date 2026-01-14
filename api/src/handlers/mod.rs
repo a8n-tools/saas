@@ -24,8 +24,9 @@ pub use webhook::stripe_webhook;
 
 // Admin handlers
 pub use admin::{
-    admin_reset_password, get_dashboard_stats, get_system_health, get_user, grant_subscription,
-    impersonate_user, list_all_applications, list_audit_logs, list_notifications,
-    list_subscriptions, list_users, mark_all_notifications_read, mark_notification_read,
-    revoke_subscription, update_application, update_user_status,
+    admin_reset_password, delete_user, get_dashboard_stats, get_system_health, get_user,
+    grant_subscription, impersonate_user, list_all_applications, list_audit_logs,
+    list_notifications, list_subscriptions, list_users, mark_all_notifications_read,
+    mark_notification_read, revoke_subscription, update_application, update_user_role,
+    update_user_status,
 };

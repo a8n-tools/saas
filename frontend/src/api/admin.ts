@@ -58,6 +58,10 @@ export interface UpdateUserStatusRequest {
   is_active: boolean
 }
 
+export interface UpdateUserRoleRequest {
+  role: 'subscriber' | 'admin'
+}
+
 export interface UpdateApplicationRequest {
   is_active?: boolean
   is_maintenance?: boolean
@@ -90,6 +94,12 @@ export const adminApi = {
 
   updateUserStatus: (userId: string, data: UpdateUserStatusRequest): Promise<AdminUser> =>
     apiClient.put(`/admin/users/${userId}/status`, data),
+
+  deleteUser: (userId: string): Promise<void> =>
+    apiClient.delete(`/admin/users/${userId}`),
+
+  updateUserRole: (userId: string, data: UpdateUserRoleRequest): Promise<AdminUser> =>
+    apiClient.put(`/admin/users/${userId}/role`, data),
 
   resetUserPassword: (userId: string): Promise<{ message: string; temporary_password: string }> =>
     apiClient.post(`/admin/users/${userId}/reset-password`),

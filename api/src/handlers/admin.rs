@@ -113,6 +113,85 @@ pub async fn update_user_status(
     Ok(success_no_data(request_id))
 }
 
+/// DELETE /v1/admin/users/{user_id}
+/// Delete a user (soft delete)
+pub async fn delete_user(
+    req: HttpRequest,
+    admin: AdminUser,
+    pool: web::Data<PgPool>,
+    path: web::Path<uuid::Uuid>,
+) -> Result<HttpResponse, AppError> {
+    let request_id = get_request_id(&req);
+    let user_id = path.into_inner();
+
+    // Prevent self-deletion
+    if admin.0.sub == user_id {
+        return Err(AppError::validation("user_id", "Cannot delete your own account"));
+    }
+
+    // Check if user exists
+    let target_user = UserRepository::find_by_id(&pool, user_id)
+        .await?
+        .ok_or_else(|| AppError::not_found("User"))?;
+
+    // Prevent deleting other admins (optional safety measure)
+    if target_user.role == "admin" {
+        return Err(AppError::validation("user_id", "Cannot delete admin users"));
+    }
+
+    UserRepository::soft_delete(&pool, user_id).await?;
+
+    tracing::info!(
+        admin_id = %admin.0.sub,
+        deleted_user_id = %user_id,
+        deleted_user_email = %target_user.email,
+        "Admin deleted user"
+    );
+
+    Ok(success_no_data(request_id))
+}
+
+/// Request body for updating user role
+#[derive(Debug, Deserialize)]
+pub struct UpdateUserRoleRequest {
+    pub role: String,
+}
+
+/// PUT /v1/admin/users/{user_id}/role
+/// Change a user's role
+pub async fn update_user_role(
+    req: HttpRequest,
+    admin: AdminUser,
+    pool: web::Data<PgPool>,
+    path: web::Path<uuid::Uuid>,
+    body: web::Json<UpdateUserRoleRequest>,
+) -> Result<HttpResponse, AppError> {
+    let request_id = get_request_id(&req);
+    let user_id = path.into_inner();
+
+    // Validate role
+    let valid_roles = ["subscriber", "admin"];
+    if !valid_roles.contains(&body.role.as_str()) {
+        return Err(AppError::validation("role", "Invalid role. Must be 'subscriber' or 'admin'"));
+    }
+
+    // Prevent changing own role
+    if admin.0.sub == user_id {
+        return Err(AppError::validation("user_id", "Cannot change your own role"));
+    }
+
+    let updated_user = UserRepository::update_role(&pool, user_id, &body.role).await?;
+
+    tracing::info!(
+        admin_id = %admin.0.sub,
+        target_user_id = %user_id,
+        new_role = %body.role,
+        "Admin changed user role"
+    );
+
+    Ok(success(UserResponse::from(updated_user), request_id))
+}
+
 // =============================================================================
 // Subscription Management
 // =============================================================================
