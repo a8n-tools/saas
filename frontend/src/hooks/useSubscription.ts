@@ -5,7 +5,7 @@ import type { SubscriptionTier } from '@/types'
 
 export function useSubscription() {
   const store = useSubscriptionStore()
-  const { isAuthenticated } = useAuthStore()
+  const { isAuthenticated, user } = useAuthStore()
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -31,6 +31,6 @@ export function useSubscription() {
     isPastDue: store.subscription?.status === 'past_due',
     isCanceled: store.subscription?.status === 'canceled',
     willCancel: store.subscription?.cancel_at_period_end ?? false,
-    tier: store.subscription?.tier ?? null,
+    tier: user?.subscription_tier ?? null,
   }
 }
