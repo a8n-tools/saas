@@ -54,7 +54,7 @@ impl EmailConfig {
                 .unwrap_or(587),
             smtp_username: env::var("SMTP_USERNAME").unwrap_or_default(),
             smtp_password: env::var("SMTP_PASSWORD").unwrap_or_default(),
-            from_email: env::var("EMAIL_FROM").unwrap_or_else(|_| "noreply@a8n.tools".to_string()),
+            from_email: env::var("SMTP_FROM").unwrap_or_else(|_| "noreply@a8n.tools".to_string()),
             from_name: env::var("EMAIL_FROM_NAME").unwrap_or_else(|_| "a8n.tools".to_string()),
             base_url: env::var("BASE_URL").unwrap_or_else(|_| "https://app.a8n.tools".to_string()),
             enabled: is_production && env::var("SMTP_HOST").is_ok(),
