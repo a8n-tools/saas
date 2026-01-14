@@ -143,6 +143,15 @@ npm run test:coverage
 auth.test.ts - 13 tests (login, register, logout, magic link, password reset)
 authStore.test.ts - 17 tests (state management, login/logout flow, error handling)
 
+
+## Check if migrations are in sync
+Run this command if the _sqlx_migrations table was emptied on accident
+If this returns 0 but tables exist, you know there's a problem before the API crashes.
+```
+docker exec a8n-postgres psql -U a8n -d a8n_platform -c \
+   "SELECT COUNT(*) FROM _sqlx_migrations;"
+```
+
 ## Development
 
 ### Available Commands
