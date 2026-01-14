@@ -91,7 +91,8 @@ export function SubscriptionPage() {
     )
   }
 
-  const hasSubscription = subscription && subscription.status !== 'canceled'
+  const hasSubscription = subscription &&
+    (subscription.status === 'active' || subscription.status === 'past_due')
   const isPastDue = subscription?.status === 'past_due'
 
   return (
