@@ -1,4 +1,4 @@
-version: '3.8'
+---
 
 services:
   # PostgreSQL Database
@@ -35,7 +35,7 @@ services:
       CORS_ORIGIN: http://localhost:5173
       ENVIRONMENT: development
     ports:
-      - "8080:8080"
+      - "18080:8080"
     volumes:
       - ./api/src:/app/src:ro
       - ./api/Cargo.toml:/app/Cargo.toml:ro
@@ -74,23 +74,23 @@ services:
       - "traefik.http.routers.frontend.rule=Host(`localhost`)"
       - "traefik.http.services.frontend.loadbalancer.server.port=5173"
 
-  # Traefik Reverse Proxy
+ # Traefik Reverse Proxy
   traefik:
-    image: traefik:v3.0
-    container_name: a8n-traefik
-    restart: unless-stopped
-    command:
-      - "--api.dashboard=true"
-      - "--api.insecure=true"
-      - "--providers.docker=true"
-      - "--providers.docker.exposedbydefault=false"
-      - "--entrypoints.web.address=:80"
-      - "--log.level=DEBUG"
-    ports:
-      - "80:80"
-      - "8081:8080"  # Traefik dashboard
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+   image: traefik:v3.0
+   container_name: a8n-traefik
+   restart: unless-stopped
+   command:
+     - "--api.dashboard=true"
+     - "--api.insecure=true"
+     - "--providers.docker=true"
+     - "--providers.docker.exposedbydefault=false"
+     - "--entrypoints.web.address=:80"
+     - "--log.level=DEBUG"
+   ports:
+     - "18880:80"
+     - "18081:8080"  # Traefik dashboard
+   volumes:
+     - /var/run/docker.sock:/var/run/docker.sock:ro
 
 volumes:
   postgres_data:

@@ -1,0 +1,146 @@
+---
+
+services:
+  # Traefik Reverse Proxy
+  traefik:
+    image: traefik:v3.0
+    container_name: a8n-traefik
+    restart: unless-stopped
+    command:
+      - "--api.dashboard=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=a8n-tools-private"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.web-secure.address=:443"
+      - "--entrypoints.web.http.redirections.entrypoint.to=web-secure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      - "--log.level=INFO"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - letsencrypt:/letsencrypt
+    networks:
+      - a8n-tools-private
+    labels:
+      traefik.enable: true
+      # Dashboard
+      traefik.http.routers.traefik-dashboard.rule: Host(`traefik.a8n.tools`)
+      traefik.http.routers.traefik-dashboard.entrypoints: web-secure
+      traefik.http.routers.traefik-dashboard.tls.certresolver: letsencrypt
+      traefik.http.routers.traefik-dashboard.service: api@internal
+      traefik.http.routers.traefik-dashboard.middlewares: traefik-auth
+      traefik.http.middlewares.traefik-auth.basicauth.users: ${TRAEFIK_DASHBOARD_AUTH}
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: a8n-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: a8n
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: a8n_platform
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - a8n-tools-private
+    # healthcheck:
+    #   test: [ "CMD-SHELL", "pg_isready -U a8n -d a8n_platform" ]
+    #   interval: 10s
+    #   timeout: 5s
+    #   retries: 5
+    labels:
+      traefik.enable: false
+
+  # Rust API Backend
+  api:
+    image: codeberg.org/a8n-tools/saas-api:${API_VERSION:-latest}
+    container_name: a8n-api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://a8n:${POSTGRES_PASSWORD}@postgres:5432/a8n_platform
+      HOST: 0.0.0.0
+      PORT: 8080
+      RUST_LOG: ${RUST_LOG:-info}
+      ENVIRONMENT: production
+      JWT_SECRET: ${JWT_SECRET}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      STRIPE_PRICE_ID: ${STRIPE_PRICE_ID}
+      STRIPE_BUSINESS_PRICE_ID: ${STRIPE_BUSINESS_PRICE_ID}
+      SMTP_HOST: ${SMTP_HOST:-stalwart}
+      SMTP_PORT: ${SMTP_PORT:-25}
+      SMTP_FROM: ${SMTP_FROM:-noreply@a8n.tools}
+    volumes:
+      - ./secrets:/secrets:ro
+    networks:
+      - a8n-tools-private
+    expose:
+      - 8080
+    depends_on:
+      postgres:
+        condition: service_healthy
+    labels:
+      traefik.enable: true
+      traefik.http.routers.api-a8n-tools.rule: Host(`api.a8n.tools`)
+      traefik.http.routers.api-a8n-tools.entrypoints: web-secure
+      traefik.http.routers.api-a8n-tools.tls.certresolver: letsencrypt
+      traefik.http.services.api-a8n-tools.loadbalancer.server.port: 8080
+      # Security headers
+      #traefik.http.middlewares.api-headers.headers.stsSeconds: 31536000
+      #traefik.http.middlewares.api-headers.headers.stsIncludeSubdomains: true
+      #traefik.http.middlewares.api-headers.headers.stsPreload: true
+      #traefik.http.middlewares.api-headers.headers.frameDeny: true
+      #traefik.http.middlewares.api-headers.headers.contentTypeNosniff: true
+      #traefik.http.routers.api.middlewares: api-headers
+
+  # React Frontend (Landing + Dashboard)
+  frontend:
+    image: codeberg.org/a8n-tools/saas-frontend:${FRONTEND_VERSION:-latest}
+    container_name: a8n-frontend
+    restart: unless-stopped
+    networks:
+      - a8n-tools-private
+    expose:
+      - 80
+    labels:
+      traefik.enable: true
+      # Main site
+      traefik.http.routers.frontend-a8n-tools.rule: Host(`a8n.tools`)
+      traefik.http.routers.frontend-a8n-tools.entrypoints: web-secure
+      traefik.http.routers.frontend-a8n-tools.tls.certresolver: letsencrypt
+      traefik.http.services.frontend-a8n-tools.loadbalancer.server.port: 80
+      # App dashboard
+      #traefik.http.routers.app.rule: Host(`app.a8n.tools`)
+      #traefik.http.routers.app.entrypoints: web-secure
+      #traefik.http.routers.app.tls.certresolver: acme-http
+      #traefik.http.routers.app.service: frontend
+      # Admin panel
+      #traefik.http.routers.admin.rule: Host(`admin.a8n.tools`)
+      #traefik.http.routers.admin.entrypoints: web-secure
+      #traefik.http.routers.admin.tls.certresolver: acme-http
+      #traefik.http.routers.admin.service: frontend
+      # Security headers
+      #traefik.http.middlewares.frontend-headers.headers.stsSeconds: 31536000
+      #traefik.http.middlewares.frontend-headers.headers.stsIncludeSubdomains: true
+      #traefik.http.middlewares.frontend-headers.headers.stsPreload: true
+      #traefik.http.middlewares.frontend-headers.headers.frameDeny: true
+      #traefik.http.middlewares.frontend-headers.headers.contentTypeNosniff: true
+
+networks:
+  a8n-tools-private:
+    external: true
+
+volumes:
+  postgres_data:
+    name: a8n-tools-postgres-data
+    external: true
+  letsencrypt:
+    name: a8n-tools-letsencrypt

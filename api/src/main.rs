@@ -45,6 +45,18 @@ async fn main() -> anyhow::Result<()> {
 
     info!("Database connection pool established");
 
+    // Run database migrations
+    info!("Running database migrations...");
+    sqlx::migrate!("./migrations")
+        .run(&pool)
+        .await
+        .map_err(|e| {
+            error!(error = %e, "Failed to run database migrations");
+            e
+        })?;
+
+    info!("Database migrations completed successfully");
+
     // Test database connection
     sqlx::query("SELECT 1")
         .execute(&pool)
