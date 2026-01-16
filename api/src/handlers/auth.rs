@@ -67,6 +67,7 @@ pub struct AuthResponse {
 pub async fn register(
     req: HttpRequest,
     auth_service: web::Data<Arc<AuthService>>,
+    email_service: web::Data<Arc<crate::services::EmailService>>,
     body: web::Json<RegisterRequest>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
@@ -78,6 +79,15 @@ pub async fn register(
     let user = auth_service
         .register(body.email.clone(), body.password.clone(), ip_address)
         .await?;
+
+    // Send welcome email (in background, don't wait)
+    let email = body.email.clone();
+    let email_svc = email_service.get_ref().clone();
+    tokio::spawn(async move {
+        if let Err(e) = email_svc.send_account_created(&email).await {
+            tracing::error!(error = %e, email = %email, "Failed to send account created email");
+        }
+    });
 
     Ok(crate::responses::created(user, request_id))
 }

@@ -30,11 +30,26 @@ impl EmailService {
                 config.smtp_password.clone(),
             );
 
-            let transport = AsyncSmtpTransport::<Tokio1Executor>::relay(&config.smtp_host)
-                .map_err(|e| AppError::internal(format!("SMTP connection error: {}", e)))?
-                .port(config.smtp_port)
-                .credentials(creds)
-                .build();
+            // Port 465 uses implicit TLS (SMTPS), port 587 uses STARTTLS
+            let transport = if config.smtp_port == 465 {
+                // Use SMTPS (implicit TLS) for port 465
+                AsyncSmtpTransport::<Tokio1Executor>::relay(&config.smtp_host)
+                    .map_err(|e| AppError::internal(format!("SMTP connection error: {}", e)))?
+                    .port(config.smtp_port)
+                    .credentials(creds)
+                    .tls(lettre::transport::smtp::client::Tls::Wrapper(
+                        lettre::transport::smtp::client::TlsParameters::new(config.smtp_host.clone())
+                            .map_err(|e| AppError::internal(format!("TLS error: {}", e)))?,
+                    ))
+                    .build()
+            } else {
+                // Use STARTTLS for other ports (587, 25, etc.)
+                AsyncSmtpTransport::<Tokio1Executor>::relay(&config.smtp_host)
+                    .map_err(|e| AppError::internal(format!("SMTP connection error: {}", e)))?
+                    .port(config.smtp_port)
+                    .credentials(creds)
+                    .build()
+            };
 
             Some(transport)
         } else {
@@ -64,6 +79,11 @@ impl EmailService {
         templates.add_raw_template("welcome.html", include_str!("../../templates/emails/welcome.html"))
             .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
         templates.add_raw_template("welcome.txt", include_str!("../../templates/emails/welcome.txt"))
+            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
+
+        templates.add_raw_template("account_created.html", include_str!("../../templates/emails/account_created.html"))
+            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
+        templates.add_raw_template("account_created.txt", include_str!("../../templates/emails/account_created.txt"))
             .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
 
         templates.add_raw_template("payment_failed.html", include_str!("../../templates/emails/payment_failed.html"))
@@ -226,6 +246,20 @@ impl EmailService {
 
         let (html, text) = self.render_template("password_reset", &context)?;
         self.send_email(email, "Reset your a8n.tools password", html, text).await
+    }
+
+    /// Send account creation email
+    pub async fn send_account_created(&self, email: &str) -> Result<(), AppError> {
+        if !self.config.enabled {
+            tracing::info!(email = %email, "Account created email (dev mode - not sending)");
+            return Ok(());
+        }
+
+        let mut context = self.base_context();
+        context.insert("dashboard_url", &format!("{}/dashboard", self.config.base_url));
+
+        let (html, text) = self.render_template("account_created", &context)?;
+        self.send_email(email, "Welcome to a8n.tools!", html, text).await
     }
 
     /// Send welcome email after subscription

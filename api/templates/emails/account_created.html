@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Welcome to a8n.tools!{% endblock %}
+{% block content %}
+<h1>Welcome to a8n.tools!</h1>
+<p>Thanks for creating your account! We're excited to have you on board.</p>
+
+<h2 style="font-size: 18px; margin-top: 24px;">What's next?</h2>
+<p>To access our developer tools, you'll need to subscribe to one of our plans:</p>
+
+<ul>
+  <li><strong>Personal</strong> - $3/month - Perfect for individual developers</li>
+  <li><strong>Business</strong> - $15/month - For teams with priority support</li>
+</ul>
+
+<p>Your subscription price is <strong>locked for life</strong> - early adopters keep their rate forever!</p>
+
+<h2 style="font-size: 18px; margin-top: 24px;">Available Tools:</h2>
+<ul>
+  <li><strong>RUS</strong> - Fast URL shortening with QR codes</li>
+  <li><strong>Rusty Links</strong> - Bookmark management</li>
+  <li>All future applications at no extra cost</li>
+</ul>
+
+<div class="button-container">
+  <a href="{{ dashboard_url }}" class="button">Go to Dashboard</a>
+</div>
+
+<p class="muted">If you have any questions, just reply to this email and we'll be happy to help.</p>
+{% endblock %}
