@@ -249,6 +249,25 @@ impl UserRepository {
         Ok(())
     }
 
+    /// Update user role
+    pub async fn update_role(pool: &PgPool, user_id: Uuid, role: &str) -> Result<User, AppError> {
+        let user = sqlx::query_as::<_, User>(
+            r#"
+            UPDATE users
+            SET role = $2, updated_at = NOW()
+            WHERE id = $1 AND deleted_at IS NULL
+            RETURNING *
+            "#,
+        )
+        .bind(user_id)
+        .bind(role)
+        .fetch_optional(pool)
+        .await?
+        .ok_or_else(|| AppError::not_found("User"))?;
+
+        Ok(user)
+    }
+
     /// List users with pagination
     pub async fn list_paginated(
         pool: &PgPool,

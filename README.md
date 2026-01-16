@@ -111,6 +111,47 @@ a8n-tools/
 └── .env.example            # Environment template
 ```
 
+## Test Structure
+
+```
+frontend/src/
+  ├── test/
+  │   ├── setup.ts          # Test setup (jest-dom, MSW server)
+  │   ├── utils.tsx          # Custom render with providers
+  │   └── mocks/
+  │       ├── handlers.ts    # MSW API mock handlers
+  │       └── server.ts      # MSW server instance
+  ├── api/
+  │   └── auth.test.ts       # Auth API tests
+  └── stores/
+      └── authStore.test.ts  # Auth store tests
+```
+
+### Navigate to frontend directory
+cd frontend
+
+#### Run tests in watch mode (re-runs on file changes)
+npm test
+
+#### Run tests once (CI mode)
+npm run test:run
+
+#### Run tests with coverage report
+npm run test:coverage
+
+## Current Test Coverage
+auth.test.ts - 13 tests (login, register, logout, magic link, password reset)
+authStore.test.ts - 17 tests (state management, login/logout flow, error handling)
+
+
+## Check if migrations are in sync
+Run this command if the _sqlx_migrations table was emptied on accident
+If this returns 0 but tables exist, you know there's a problem before the API crashes.
+```
+docker exec a8n-postgres psql -U a8n -d a8n_platform -c \
+   "SELECT COUNT(*) FROM _sqlx_migrations;"
+```
+
 ## Development
 
 ### Available Commands

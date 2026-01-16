@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useAuthStore } from '@/stores/authStore'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,17 +20,20 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Search, MoreVertical, User, Loader2, UserX, UserCheck, KeyRound, UserCog } from 'lucide-react'
+import { Search, MoreVertical, User, Loader2, KeyRound, Shield, ShieldOff, Trash2 } from 'lucide-react'
 import { adminApi, type AdminUser } from '@/api/admin'
 import { formatRelativeTime } from '@/lib/utils'
+
+type DialogAction = 'deactivate' | 'activate' | 'reset' | 'delete' | 'makeAdmin' | 'removeAdmin' | null
 
 export function AdminUsersPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [page, setPage] = useState(1)
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null)
-  const [dialogType, setDialogType] = useState<'deactivate' | 'activate' | 'reset' | null>(null)
+  const [dialogType, setDialogType] = useState<DialogAction>(null)
   const [tempPassword, setTempPassword] = useState<string | null>(null)
 
+  const { user: currentUser } = useAuthStore()
   const queryClient = useQueryClient()
 
   const { data, isLoading } = useQuery({
@@ -54,7 +58,26 @@ export function AdminUsersPage() {
     },
   })
 
-  const handleAction = (user: AdminUser, action: 'deactivate' | 'activate' | 'reset') => {
+  const deleteUserMutation = useMutation({
+    mutationFn: (userId: string) => adminApi.deleteUser(userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
+      setDialogType(null)
+      setSelectedUser(null)
+    },
+  })
+
+  const updateRoleMutation = useMutation({
+    mutationFn: ({ userId, role }: { userId: string; role: 'subscriber' | 'admin' }) =>
+      adminApi.updateUserRole(userId, { role }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
+      setDialogType(null)
+      setSelectedUser(null)
+    },
+  })
+
+  const handleAction = (user: AdminUser, action: DialogAction) => {
     setSelectedUser(user)
     setDialogType(action)
     setTempPassword(null)
@@ -69,8 +92,19 @@ export function AdminUsersPage() {
       updateStatusMutation.mutate({ userId: selectedUser.id, isActive: true })
     } else if (dialogType === 'reset') {
       resetPasswordMutation.mutate(selectedUser.id)
+    } else if (dialogType === 'delete') {
+      deleteUserMutation.mutate(selectedUser.id)
+    } else if (dialogType === 'makeAdmin') {
+      updateRoleMutation.mutate({ userId: selectedUser.id, role: 'admin' })
+    } else if (dialogType === 'removeAdmin') {
+      updateRoleMutation.mutate({ userId: selectedUser.id, role: 'subscriber' })
     }
   }
+
+  const isActionPending = updateStatusMutation.isPending ||
+    resetPasswordMutation.isPending ||
+    deleteUserMutation.isPending ||
+    updateRoleMutation.isPending
 
   return (
     <div className="space-y-6">
@@ -146,17 +180,33 @@ export function AdminUsersPage() {
                             <KeyRound className="h-4 w-4 mr-2" />
                             Reset Password
                           </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          {user.subscription_status !== 'none' ? (
-                            <DropdownMenuItem onClick={() => handleAction(user, 'deactivate')}>
-                              <UserX className="h-4 w-4 mr-2" />
-                              Deactivate User
-                            </DropdownMenuItem>
-                          ) : (
-                            <DropdownMenuItem onClick={() => handleAction(user, 'activate')}>
-                              <UserCheck className="h-4 w-4 mr-2" />
-                              Activate User
-                            </DropdownMenuItem>
+                          {currentUser?.id !== user.id && (
+                            <>
+                              <DropdownMenuSeparator />
+                              {user.role === 'admin' ? (
+                                <DropdownMenuItem onClick={() => handleAction(user, 'removeAdmin')}>
+                                  <ShieldOff className="h-4 w-4 mr-2" />
+                                  Remove Admin
+                                </DropdownMenuItem>
+                              ) : (
+                                <DropdownMenuItem onClick={() => handleAction(user, 'makeAdmin')}>
+                                  <Shield className="h-4 w-4 mr-2" />
+                                  Make Admin
+                                </DropdownMenuItem>
+                              )}
+                              {user.role !== 'admin' && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    onClick={() => handleAction(user, 'delete')}
+                                    className="text-destructive focus:text-destructive"
+                                  >
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Delete User
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+                            </>
                           )}
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -209,6 +259,9 @@ export function AdminUsersPage() {
               {dialogType === 'deactivate' && 'Deactivate User'}
               {dialogType === 'activate' && 'Activate User'}
               {dialogType === 'reset' && 'Reset Password'}
+              {dialogType === 'delete' && 'Delete User'}
+              {dialogType === 'makeAdmin' && 'Make Admin'}
+              {dialogType === 'removeAdmin' && 'Remove Admin'}
             </DialogTitle>
             <DialogDescription>
               {dialogType === 'deactivate' && `Are you sure you want to deactivate ${selectedUser?.email}? They will lose access to all applications.`}
@@ -218,6 +271,9 @@ export function AdminUsersPage() {
                   ? 'Password has been reset. Share this temporary password with the user:'
                   : `Are you sure you want to reset the password for ${selectedUser?.email}?`
               )}
+              {dialogType === 'delete' && `Are you sure you want to delete ${selectedUser?.email}? This action cannot be undone.`}
+              {dialogType === 'makeAdmin' && `Are you sure you want to make ${selectedUser?.email} an admin? They will have full access to the admin panel.`}
+              {dialogType === 'removeAdmin' && `Are you sure you want to remove admin privileges from ${selectedUser?.email}?`}
             </DialogDescription>
           </DialogHeader>
 
@@ -245,11 +301,11 @@ export function AdminUsersPage() {
                   Cancel
                 </Button>
                 <Button
-                  variant={dialogType === 'deactivate' ? 'destructive' : 'default'}
+                  variant={dialogType === 'deactivate' || dialogType === 'delete' || dialogType === 'removeAdmin' ? 'destructive' : 'default'}
                   onClick={confirmAction}
-                  disabled={updateStatusMutation.isPending || resetPasswordMutation.isPending}
+                  disabled={isActionPending}
                 >
-                  {(updateStatusMutation.isPending || resetPasswordMutation.isPending) && (
+                  {isActionPending && (
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   )}
                   Confirm

@@ -53,7 +53,9 @@ export const useSubscriptionStore = create<SubscriptionState>((set) => ({
   cancelSubscription: async () => {
     set({ isLoading: true, error: null })
     try {
-      const subscription = await subscriptionApi.cancel()
+      await subscriptionApi.cancel()
+      // Refetch subscription to get updated state
+      const subscription = await subscriptionApi.getCurrent()
       set({ subscription, isLoading: false })
     } catch (err) {
       const error = err as { error?: { message?: string } }
@@ -68,7 +70,9 @@ export const useSubscriptionStore = create<SubscriptionState>((set) => ({
   reactivateSubscription: async () => {
     set({ isLoading: true, error: null })
     try {
-      const subscription = await subscriptionApi.reactivate()
+      await subscriptionApi.reactivate()
+      // Refetch subscription to get updated state
+      const subscription = await subscriptionApi.getCurrent()
       set({ subscription, isLoading: false })
     } catch (err) {
       const error = err as { error?: { message?: string } }

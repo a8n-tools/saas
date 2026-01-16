@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useAuthStore } from '@/stores/authStore'
 import { useSubscription } from '@/hooks/useSubscription'
 import { subscriptionApi } from '@/api'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -24,16 +23,15 @@ function getTierName(tier: SubscriptionTier | null | undefined): string {
 }
 
 // Helper to get tier price
-function getTierPrice(tier: SubscriptionTier | null | undefined, lockedAmount: number | null | undefined): string {
-  if (lockedAmount) {
-    return `$${(lockedAmount / 100).toFixed(0)}/month`
+function getTierPrice(tier: SubscriptionTier | null | undefined, subscription: { price_locked?: boolean, locked_price_amount?: number | null } | null): string {
+  if (subscription?.price_locked && subscription?.locked_price_amount) {
+    return `$${(subscription.locked_price_amount / 100).toFixed(0)}/month`
   }
   if (tier === 'business') return '$15/month'
   return '$3/month'
 }
 
 export function SubscriptionPage() {
-  const { user } = useAuthStore()
   const {
     subscription,
     isLoading,
@@ -93,7 +91,8 @@ export function SubscriptionPage() {
     )
   }
 
-  const hasSubscription = subscription && subscription.status !== 'canceled'
+  const hasSubscription = subscription &&
+    (subscription.status === 'active' || subscription.status === 'past_due')
   const isPastDue = subscription?.status === 'past_due'
 
   return (
@@ -142,8 +141,8 @@ export function SubscriptionPage() {
                 <div>
                   <p className="text-sm text-muted-foreground">Price</p>
                   <p className="font-medium">
-                    {getTierPrice(tier, user?.locked_price_amount)}
-                    {user?.price_locked && (
+                    {getTierPrice(tier, subscription)}
+                    {subscription?.price_locked && (
                       <Badge variant="outline" className="ml-2">
                         Locked
                       </Badge>
@@ -151,19 +150,16 @@ export function SubscriptionPage() {
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Current Period</p>
-                  <p className="font-medium">
-                    {formatDate(subscription.current_period_start)} -{' '}
-                    {formatDate(subscription.current_period_end)}
-                  </p>
+                  <p className="text-sm text-muted-foreground">Status</p>
+                  <p className="font-medium capitalize">{subscription.status}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Next Billing</p>
                   <p className="font-medium">
                     {willCancel
                       ? 'Canceled - ends ' +
-                        formatDate(subscription.current_period_end)
-                      : formatDate(subscription.current_period_end)}
+                        (subscription.current_period_end ? formatDate(subscription.current_period_end) : 'N/A')
+                      : subscription.current_period_end ? formatDate(subscription.current_period_end) : 'N/A'}
                   </p>
                 </div>
               </div>

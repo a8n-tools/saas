@@ -15,10 +15,10 @@ export const subscriptionApi = {
   createCheckout: (tier: SubscriptionTier = 'personal'): Promise<CheckoutSessionResponse> =>
     apiClient.post('/subscriptions/checkout', { tier } as CheckoutRequest),
 
-  cancel: (): Promise<Subscription> =>
+  cancel: (): Promise<void> =>
     apiClient.post('/subscriptions/cancel'),
 
-  reactivate: (): Promise<Subscription> =>
+  reactivate: (): Promise<void> =>
     apiClient.post('/subscriptions/reactivate'),
 
   getPaymentHistory: (

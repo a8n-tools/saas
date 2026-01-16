@@ -57,21 +57,14 @@ export interface AuthResponse {
   access_token: string
 }
 
-// Subscription types
+// Subscription types - matches API's SubscriptionResponse
 export interface Subscription {
-  id: string
-  user_id: string
-  stripe_subscription_id: string
-  stripe_customer_id: string
   status: SubscriptionStatus
-  tier: SubscriptionTier
-  amount_cents: number
-  current_period_start: string
-  current_period_end: string
+  price_locked: boolean
+  locked_price_amount: number | null
+  current_period_end: string | null
   cancel_at_period_end: boolean
-  canceled_at: string | null
-  created_at: string
-  updated_at: string
+  grace_period_end: string | null
 }
 
 export interface PaymentHistory {
