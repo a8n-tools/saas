@@ -6,7 +6,7 @@ pub mod admin;
 pub mod application;
 pub mod auth;
 pub mod health;
-pub mod subscription;
+pub mod membership;
 pub mod user;
 pub mod webhook;
 
@@ -21,7 +21,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .configure(auth::configure)
             .configure(user::configure)
             .configure(application::configure)
-            .configure(subscription::configure)
+            .configure(membership::configure)
             .configure(webhook::configure)
             .configure(admin::configure),
     );

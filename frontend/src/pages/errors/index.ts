@@ -1,2 +1,2 @@
 export { NotFoundPage } from './NotFoundPage'
-export { SubscriptionRequiredPage } from './SubscriptionRequiredPage'
+export { MembershipRequiredPage } from './MembershipRequiredPage'

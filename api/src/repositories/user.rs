@@ -5,7 +5,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::errors::AppError;
-use crate::models::{CreateUser, SubscriptionStatus, User, UserRole};
+use crate::models::{CreateUser, MembershipStatus, User, UserRole};
 
 pub struct UserRepository;
 
@@ -113,11 +113,11 @@ impl UserRepository {
         Ok(())
     }
 
-    /// Update subscription status
-    pub async fn update_subscription_status(
+    /// Update membership status
+    pub async fn update_membership_status(
         pool: &PgPool,
         user_id: Uuid,
-        status: SubscriptionStatus,
+        status: MembershipStatus,
     ) -> Result<(), AppError> {
         sqlx::query(
             r#"
@@ -274,7 +274,7 @@ impl UserRepository {
         page: i32,
         per_page: i32,
         search: Option<&str>,
-        status_filter: Option<SubscriptionStatus>,
+        status_filter: Option<MembershipStatus>,
     ) -> Result<(Vec<User>, i64), AppError> {
         let offset = (page - 1) * per_page;
 

@@ -1,6 +1,6 @@
-//! Subscription handlers
+//! Membership handlers
 //!
-//! This module contains HTTP handlers for subscription management endpoints.
+//! This module contains HTTP handlers for membership management endpoints.
 
 use actix_web::{web, HttpRequest, HttpResponse};
 use serde::{Deserialize, Serialize};
@@ -9,16 +9,16 @@ use std::sync::Arc;
 
 use crate::errors::AppError;
 use crate::middleware::AuthenticatedUser;
-use crate::models::{PaymentResponse, SubscriptionResponse};
-use crate::repositories::{PaymentRepository, SubscriptionRepository, UserRepository};
+use crate::models::{PaymentResponse, MembershipResponse};
+use crate::repositories::{PaymentRepository, MembershipRepository, UserRepository};
 use crate::responses::{get_request_id, success};
-use crate::services::{StripeService, SubscriptionTier};
+use crate::services::{StripeService, MembershipTier};
 
 /// Request for creating a checkout session
 #[derive(Debug, Deserialize)]
 pub struct CheckoutRequest {
     #[serde(default)]
-    pub tier: SubscriptionTier,
+    pub tier: MembershipTier,
 }
 
 /// Response for checkout session creation
@@ -34,9 +34,9 @@ pub struct PortalResponse {
     pub url: String,
 }
 
-/// GET /v1/subscriptions/me
-/// Get current user's subscription status
-pub async fn get_subscription(
+/// GET /v1/memberships/me
+/// Get current user's membership status
+pub async fn get_membership(
     req: HttpRequest,
     user: AuthenticatedUser,
     pool: web::Data<PgPool>,
@@ -48,22 +48,22 @@ pub async fn get_subscription(
         .await?
         .ok_or(AppError::not_found("User"))?;
 
-    // Get active subscription if any
-    let subscription = SubscriptionRepository::find_by_user_id(&pool, user.0.sub).await?;
+    // Get active membership if any
+    let membership = MembershipRepository::find_by_user_id(&pool, user.0.sub).await?;
 
-    let response = SubscriptionResponse {
-        status: db_user.subscription_status.clone(),
+    let response = MembershipResponse {
+        status: db_user.membership_status.clone(),
         price_locked: db_user.price_locked,
         locked_price_amount: db_user.locked_price_amount,
-        current_period_end: subscription.as_ref().map(|s| s.current_period_end),
-        cancel_at_period_end: subscription.as_ref().map(|s| s.cancel_at_period_end).unwrap_or(false),
+        current_period_end: membership.as_ref().map(|s| s.current_period_end),
+        cancel_at_period_end: membership.as_ref().map(|s| s.cancel_at_period_end).unwrap_or(false),
         grace_period_end: db_user.grace_period_end,
     };
 
     Ok(success(response, request_id))
 }
 
-/// POST /v1/subscriptions/checkout
+/// POST /v1/memberships/checkout
 /// Create a Stripe checkout session
 pub async fn create_checkout(
     req: HttpRequest,
@@ -80,9 +80,9 @@ pub async fn create_checkout(
         .await?
         .ok_or(AppError::not_found("User"))?;
 
-    // Check if user already has active subscription
-    if db_user.subscription_status == "active" {
-        return Err(AppError::conflict("You already have an active subscription"));
+    // Check if user already has active membership
+    if db_user.membership_status == "active" {
+        return Err(AppError::conflict("You already have an active membership"));
     }
 
     // Get or create Stripe customer
@@ -115,9 +115,9 @@ pub async fn create_checkout(
     ))
 }
 
-/// POST /v1/subscriptions/cancel
-/// Cancel subscription at period end
-pub async fn cancel_subscription(
+/// POST /v1/memberships/cancel
+/// Cancel membership at period end
+pub async fn cancel_membership(
     req: HttpRequest,
     user: AuthenticatedUser,
     pool: web::Data<PgPool>,
@@ -125,29 +125,29 @@ pub async fn cancel_subscription(
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
 
-    // Get user's subscription
-    let subscription = SubscriptionRepository::find_by_user_id(&pool, user.0.sub)
+    // Get user's membership
+    let membership = MembershipRepository::find_by_user_id(&pool, user.0.sub)
         .await?
-        .ok_or(AppError::not_found("Subscription"))?;
+        .ok_or(AppError::not_found("Membership"))?;
 
-    if subscription.cancel_at_period_end {
-        return Err(AppError::conflict("Subscription is already scheduled for cancellation"));
+    if membership.cancel_at_period_end {
+        return Err(AppError::conflict("Membership is already scheduled for cancellation"));
     }
 
     // Cancel at period end in Stripe
     stripe
-        .cancel_subscription(&subscription.stripe_subscription_id, true)
+        .cancel_subscription(&membership.stripe_subscription_id, true)
         .await?;
 
     // Update local database
-    SubscriptionRepository::set_cancel_at_period_end(&pool, subscription.id, true).await?;
+    MembershipRepository::set_cancel_at_period_end(&pool, membership.id, true).await?;
 
     Ok(crate::responses::success_no_data(request_id))
 }
 
-/// POST /v1/subscriptions/reactivate
-/// Reactivate a subscription that's scheduled for cancellation
-pub async fn reactivate_subscription(
+/// POST /v1/memberships/reactivate
+/// Reactivate a membership that's scheduled for cancellation
+pub async fn reactivate_membership(
     req: HttpRequest,
     user: AuthenticatedUser,
     pool: web::Data<PgPool>,
@@ -155,27 +155,27 @@ pub async fn reactivate_subscription(
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
 
-    // Get user's subscription
-    let subscription = SubscriptionRepository::find_by_user_id(&pool, user.0.sub)
+    // Get user's membership
+    let membership = MembershipRepository::find_by_user_id(&pool, user.0.sub)
         .await?
-        .ok_or(AppError::not_found("Subscription"))?;
+        .ok_or(AppError::not_found("Membership"))?;
 
-    if !subscription.cancel_at_period_end {
-        return Err(AppError::conflict("Subscription is not scheduled for cancellation"));
+    if !membership.cancel_at_period_end {
+        return Err(AppError::conflict("Membership is not scheduled for cancellation"));
     }
 
     // Reactivate in Stripe
     stripe
-        .reactivate_subscription(&subscription.stripe_subscription_id)
+        .reactivate_subscription(&membership.stripe_subscription_id)
         .await?;
 
     // Update local database
-    SubscriptionRepository::set_cancel_at_period_end(&pool, subscription.id, false).await?;
+    MembershipRepository::set_cancel_at_period_end(&pool, membership.id, false).await?;
 
     Ok(crate::responses::success_no_data(request_id))
 }
 
-/// POST /v1/subscriptions/billing-portal
+/// POST /v1/memberships/billing-portal
 /// Get a link to the Stripe billing portal
 pub async fn billing_portal(
     req: HttpRequest,
@@ -199,7 +199,7 @@ pub async fn billing_portal(
     Ok(success(PortalResponse { url }, request_id))
 }
 
-/// GET /v1/subscriptions/payments
+/// GET /v1/memberships/payments
 /// Get payment history
 pub async fn get_payment_history(
     req: HttpRequest,

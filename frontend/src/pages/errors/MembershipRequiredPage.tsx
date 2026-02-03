@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { CreditCard, ArrowLeft } from 'lucide-react'
 
-export function SubscriptionRequiredPage() {
+export function MembershipRequiredPage() {
   return (
     <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center px-4">
       <Card className="w-full max-w-md">
@@ -11,9 +11,9 @@ export function SubscriptionRequiredPage() {
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
             <CreditCard className="h-8 w-8 text-primary" />
           </div>
-          <CardTitle className="text-2xl">Subscription Required</CardTitle>
+          <CardTitle className="text-2xl">Membership Required</CardTitle>
           <CardDescription>
-            You need an active subscription to access this content.
+            You need an active membership to access this content.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -22,7 +22,7 @@ export function SubscriptionRequiredPage() {
             Lock in your price forever.
           </p>
           <div className="flex flex-col gap-4">
-            <Link to="/subscription">
+            <Link to="/membership">
               <Button className="w-full">Subscribe Now</Button>
             </Link>
             <Link to="/dashboard">

@@ -20,14 +20,14 @@ interface SidebarItem {
 const dashboardItems: SidebarItem[] = [
   { title: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { title: 'Applications', href: '/applications', icon: AppWindow },
-  { title: 'Subscription', href: '/subscription', icon: CreditCard },
+  { title: 'Membership', href: '/membership', icon: CreditCard },
   { title: 'Settings', href: '/settings', icon: Settings },
 ]
 
 const adminItems: SidebarItem[] = [
   { title: 'Overview', href: '/admin', icon: LayoutDashboard },
   { title: 'Users', href: '/admin/users', icon: Users },
-  { title: 'Subscriptions', href: '/admin/subscriptions', icon: CreditCard },
+  { title: 'Memberships', href: '/admin/memberships', icon: CreditCard },
   { title: 'Applications', href: '/admin/applications', icon: AppWindow },
   { title: 'Audit Logs', href: '/admin/audit-logs', icon: FileText },
 ]

@@ -1,7 +1,7 @@
 //! a8n-api - Backend API for a8n.tools SaaS platform
 //!
 //! This crate provides the core API functionality for the a8n.tools platform,
-//! including authentication, subscription management, and application access.
+//! including authentication, membership management, and application access.
 
 pub mod config;
 pub mod errors;

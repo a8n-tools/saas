@@ -96,9 +96,9 @@ impl EmailService {
         templates.add_raw_template("grace_period_reminder.txt", include_str!("../../templates/emails/grace_period_reminder.txt"))
             .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
 
-        templates.add_raw_template("subscription_canceled.html", include_str!("../../templates/emails/subscription_canceled.html"))
+        templates.add_raw_template("membership_canceled.html", include_str!("../../templates/emails/membership_canceled.html"))
             .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
-        templates.add_raw_template("subscription_canceled.txt", include_str!("../../templates/emails/subscription_canceled.txt"))
+        templates.add_raw_template("membership_canceled.txt", include_str!("../../templates/emails/membership_canceled.txt"))
             .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
 
         templates.add_raw_template("payment_succeeded.html", include_str!("../../templates/emails/payment_succeeded.html"))
@@ -262,7 +262,7 @@ impl EmailService {
         self.send_email(email, "Welcome to a8n.tools!", html, text).await
     }
 
-    /// Send welcome email after subscription
+    /// Send welcome email after membership activation
     pub async fn send_welcome(&self, email: &str, price_cents: i32) -> Result<(), AppError> {
         if !self.config.enabled {
             tracing::info!(email = %email, price = price_cents, "Welcome email (dev mode)");
@@ -289,7 +289,7 @@ impl EmailService {
         }
 
         let mut context = self.base_context();
-        context.insert("billing_url", &format!("{}/dashboard/subscription", self.config.base_url));
+        context.insert("billing_url", &format!("{}/dashboard/membership", self.config.base_url));
         context.insert("days_remaining", &days_remaining);
 
         let (html, text) = self.render_template("payment_failed", &context)?;
@@ -308,7 +308,7 @@ impl EmailService {
         }
 
         let mut context = self.base_context();
-        context.insert("billing_url", &format!("{}/dashboard/subscription", self.config.base_url));
+        context.insert("billing_url", &format!("{}/dashboard/membership", self.config.base_url));
         context.insert("days_remaining", &days_remaining);
 
         let (html, text) = self.render_template("grace_period_reminder", &context)?;
@@ -320,10 +320,10 @@ impl EmailService {
         ).await
     }
 
-    /// Send subscription canceled email
-    pub async fn send_subscription_canceled(&self, email: &str, end_date: DateTime<Utc>) -> Result<(), AppError> {
+    /// Send membership canceled email
+    pub async fn send_membership_canceled(&self, email: &str, end_date: DateTime<Utc>) -> Result<(), AppError> {
         if !self.config.enabled {
-            tracing::info!(email = %email, end_date = %end_date, "Subscription canceled email (dev mode)");
+            tracing::info!(email = %email, end_date = %end_date, "Membership canceled email (dev mode)");
             return Ok(());
         }
 
@@ -331,8 +331,8 @@ impl EmailService {
         context.insert("end_date", &end_date.format("%B %d, %Y").to_string());
         context.insert("resubscribe_url", &format!("{}/pricing", self.config.base_url));
 
-        let (html, text) = self.render_template("subscription_canceled", &context)?;
-        self.send_email(email, "Your a8n.tools subscription has been canceled", html, text).await
+        let (html, text) = self.render_template("membership_canceled", &context)?;
+        self.send_email(email, "Your a8n.tools membership has been canceled", html, text).await
     }
 
     /// Send payment succeeded (receipt) email

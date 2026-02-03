@@ -40,10 +40,10 @@ impl From<&str> for UserRole {
     }
 }
 
-/// Subscription status for users
+/// Membership status for users
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum SubscriptionStatus {
+pub enum MembershipStatus {
     None,
     Active,
     PastDue,
@@ -51,43 +51,43 @@ pub enum SubscriptionStatus {
     GracePeriod,
 }
 
-impl SubscriptionStatus {
+impl MembershipStatus {
     pub fn as_str(&self) -> &'static str {
         match self {
-            SubscriptionStatus::None => "none",
-            SubscriptionStatus::Active => "active",
-            SubscriptionStatus::PastDue => "past_due",
-            SubscriptionStatus::Canceled => "canceled",
-            SubscriptionStatus::GracePeriod => "grace_period",
+            MembershipStatus::None => "none",
+            MembershipStatus::Active => "active",
+            MembershipStatus::PastDue => "past_due",
+            MembershipStatus::Canceled => "canceled",
+            MembershipStatus::GracePeriod => "grace_period",
         }
     }
 
     /// Check if the user has access to paid features
     pub fn has_access(&self) -> bool {
-        matches!(self, SubscriptionStatus::Active | SubscriptionStatus::GracePeriod)
+        matches!(self, MembershipStatus::Active | MembershipStatus::GracePeriod)
     }
 }
 
-impl From<String> for SubscriptionStatus {
+impl From<String> for MembershipStatus {
     fn from(s: String) -> Self {
         match s.as_str() {
-            "active" => SubscriptionStatus::Active,
-            "past_due" => SubscriptionStatus::PastDue,
-            "canceled" => SubscriptionStatus::Canceled,
-            "grace_period" => SubscriptionStatus::GracePeriod,
-            _ => SubscriptionStatus::None,
+            "active" => MembershipStatus::Active,
+            "past_due" => MembershipStatus::PastDue,
+            "canceled" => MembershipStatus::Canceled,
+            "grace_period" => MembershipStatus::GracePeriod,
+            _ => MembershipStatus::None,
         }
     }
 }
 
-impl From<&str> for SubscriptionStatus {
+impl From<&str> for MembershipStatus {
     fn from(s: &str) -> Self {
         match s {
-            "active" => SubscriptionStatus::Active,
-            "past_due" => SubscriptionStatus::PastDue,
-            "canceled" => SubscriptionStatus::Canceled,
-            "grace_period" => SubscriptionStatus::GracePeriod,
-            _ => SubscriptionStatus::None,
+            "active" => MembershipStatus::Active,
+            "past_due" => MembershipStatus::PastDue,
+            "canceled" => MembershipStatus::Canceled,
+            "grace_period" => MembershipStatus::GracePeriod,
+            _ => MembershipStatus::None,
         }
     }
 }
@@ -102,7 +102,9 @@ pub struct User {
     pub password_hash: Option<String>,
     pub role: String,
     pub stripe_customer_id: Option<String>,
-    pub subscription_status: String,
+    #[sqlx(rename = "subscription_status")]
+    #[serde(rename = "membership_status")]
+    pub membership_status: String,
     pub price_locked: bool,
     pub locked_price_id: Option<String>,
     pub locked_price_amount: Option<i32>,
@@ -120,9 +122,9 @@ impl User {
         UserRole::from(self.role.as_str())
     }
 
-    /// Get the user's subscription status as enum
-    pub fn subscription_status_enum(&self) -> SubscriptionStatus {
-        SubscriptionStatus::from(self.subscription_status.as_str())
+    /// Get the user's membership status as enum
+    pub fn membership_status_enum(&self) -> MembershipStatus {
+        MembershipStatus::from(self.membership_status.as_str())
     }
 
     /// Check if user is admin
@@ -130,9 +132,9 @@ impl User {
         self.role == "admin"
     }
 
-    /// Check if user has active subscription
-    pub fn has_active_subscription(&self) -> bool {
-        self.subscription_status_enum().has_access()
+    /// Check if user has active membership
+    pub fn has_active_membership(&self) -> bool {
+        self.membership_status_enum().has_access()
     }
 
     /// Check if user is soft deleted
@@ -156,7 +158,7 @@ pub struct UserResponse {
     pub email: String,
     pub email_verified: bool,
     pub role: String,
-    pub subscription_status: String,
+    pub membership_status: String,
     pub price_locked: bool,
     pub locked_price_amount: Option<i32>,
     pub grace_period_end: Option<DateTime<Utc>>,
@@ -171,7 +173,7 @@ impl From<User> for UserResponse {
             email: user.email,
             email_verified: user.email_verified,
             role: user.role,
-            subscription_status: user.subscription_status,
+            membership_status: user.membership_status,
             price_locked: user.price_locked,
             locked_price_amount: user.locked_price_amount,
             grace_period_end: user.grace_period_end,

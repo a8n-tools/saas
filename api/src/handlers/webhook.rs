@@ -8,8 +8,8 @@ use sqlx::PgPool;
 use std::sync::Arc;
 
 use crate::errors::AppError;
-use crate::models::{CreatePayment, CreateSubscription, PaymentStatus, SubscriptionStatus};
-use crate::repositories::{PaymentRepository, SubscriptionRepository, UserRepository};
+use crate::models::{CreatePayment, CreateMembership, PaymentStatus, MembershipStatus};
+use crate::repositories::{PaymentRepository, MembershipRepository, UserRepository};
 use crate::services::StripeService;
 
 /// POST /v1/webhooks/stripe
@@ -91,8 +91,8 @@ async fn handle_checkout_completed(
         .as_i64()
         .unwrap_or(300) as i32;
 
-    // Update user subscription status and lock price
-    UserRepository::update_subscription_status(pool, user_id, SubscriptionStatus::Active).await?;
+    // Update user membership status and lock price
+    UserRepository::update_membership_status(pool, user_id, MembershipStatus::Active).await?;
 
     // Lock the price for life
     let price_id = session["subscription"]
@@ -102,7 +102,7 @@ async fn handle_checkout_completed(
 
     UserRepository::lock_price(pool, user_id, &price_id, amount).await?;
 
-    tracing::info!(user_id = %user_id, "Checkout completed, subscription activated");
+    tracing::info!(user_id = %user_id, "Checkout completed, membership activated");
 
     Ok(())
 }
@@ -149,10 +149,10 @@ async fn handle_subscription_created(
         .as_str()
         .unwrap_or("active");
 
-    // Create subscription record
-    SubscriptionRepository::create(
+    // Create membership record
+    MembershipRepository::create(
         pool,
-        CreateSubscription {
+        CreateMembership {
             user_id: user.id,
             stripe_subscription_id: stripe_subscription_id.to_string(),
             stripe_price_id: price_id.to_string(),
@@ -167,8 +167,8 @@ async fn handle_subscription_created(
 
     tracing::info!(
         user_id = %user.id,
-        subscription_id = %stripe_subscription_id,
-        "Subscription created"
+        membership_id = %stripe_subscription_id,
+        "Membership created"
     );
 
     Ok(())
@@ -192,27 +192,27 @@ async fn handle_subscription_updated(
         .as_bool()
         .unwrap_or(false);
 
-    // Find subscription by Stripe ID
-    if let Some(sub) = SubscriptionRepository::find_by_stripe_subscription_id(pool, stripe_subscription_id).await? {
+    // Find membership by Stripe ID
+    if let Some(membership) = MembershipRepository::find_by_stripe_subscription_id(pool, stripe_subscription_id).await? {
         // Update status
-        SubscriptionRepository::update_status(pool, sub.id, status).await?;
+        MembershipRepository::update_status(pool, membership.id, status).await?;
 
         // Update cancel_at_period_end
-        SubscriptionRepository::set_cancel_at_period_end(pool, sub.id, cancel_at_period_end).await?;
+        MembershipRepository::set_cancel_at_period_end(pool, membership.id, cancel_at_period_end).await?;
 
-        // Update user subscription status
+        // Update user membership status
         let user_status = match status {
-            "active" => SubscriptionStatus::Active,
-            "past_due" => SubscriptionStatus::PastDue,
-            "canceled" => SubscriptionStatus::Canceled,
-            _ => SubscriptionStatus::Active,
+            "active" => MembershipStatus::Active,
+            "past_due" => MembershipStatus::PastDue,
+            "canceled" => MembershipStatus::Canceled,
+            _ => MembershipStatus::Active,
         };
-        UserRepository::update_subscription_status(pool, sub.user_id, user_status).await?;
+        UserRepository::update_membership_status(pool, membership.user_id, user_status).await?;
 
         tracing::info!(
-            subscription_id = %stripe_subscription_id,
+            membership_id = %stripe_subscription_id,
             status = %status,
-            "Subscription updated"
+            "Membership updated"
         );
     }
 
@@ -229,21 +229,21 @@ async fn handle_subscription_deleted(
         .as_str()
         .ok_or(AppError::validation("id", "Missing subscription ID"))?;
 
-    // Find subscription by Stripe ID
-    if let Some(sub) = SubscriptionRepository::find_by_stripe_subscription_id(pool, stripe_subscription_id).await? {
+    // Find membership by Stripe ID
+    if let Some(membership) = MembershipRepository::find_by_stripe_subscription_id(pool, stripe_subscription_id).await? {
         // Update status to canceled
-        SubscriptionRepository::update_status(pool, sub.id, "canceled").await?;
+        MembershipRepository::update_status(pool, membership.id, "canceled").await?;
 
-        // Update user subscription status
-        UserRepository::update_subscription_status(pool, sub.user_id, SubscriptionStatus::Canceled).await?;
+        // Update user membership status
+        UserRepository::update_membership_status(pool, membership.user_id, MembershipStatus::Canceled).await?;
 
         // Clear any grace period
-        UserRepository::clear_grace_period(pool, sub.user_id).await?;
+        UserRepository::clear_grace_period(pool, membership.user_id).await?;
 
         tracing::info!(
-            user_id = %sub.user_id,
-            subscription_id = %stripe_subscription_id,
-            "Subscription deleted"
+            user_id = %membership.user_id,
+            membership_id = %stripe_subscription_id,
+            "Membership deleted"
         );
     }
 
@@ -281,11 +281,11 @@ async fn handle_payment_succeeded(
         .as_str()
         .map(|s| s.to_string());
 
-    // Get subscription ID if available
+    // Get membership ID if available
     let subscription_id = if let Some(stripe_sub_id) = invoice["subscription"].as_str() {
-        SubscriptionRepository::find_by_stripe_subscription_id(pool, stripe_sub_id)
+        MembershipRepository::find_by_stripe_subscription_id(pool, stripe_sub_id)
             .await?
-            .map(|s| s.id)
+            .map(|m| m.id)
     } else {
         None
     };
@@ -309,7 +309,7 @@ async fn handle_payment_succeeded(
     // Clear any grace period if exists
     if user.grace_period_start.is_some() {
         UserRepository::clear_grace_period(pool, user.id).await?;
-        UserRepository::update_subscription_status(pool, user.id, SubscriptionStatus::Active).await?;
+        UserRepository::update_membership_status(pool, user.id, MembershipStatus::Active).await?;
     }
 
     tracing::info!(
@@ -348,11 +348,11 @@ async fn handle_payment_failed(
         .as_str()
         .map(|s| s.to_string());
 
-    // Get subscription ID if available
+    // Get membership ID if available
     let subscription_id = if let Some(stripe_sub_id) = invoice["subscription"].as_str() {
-        SubscriptionRepository::find_by_stripe_subscription_id(pool, stripe_sub_id)
+        MembershipRepository::find_by_stripe_subscription_id(pool, stripe_sub_id)
             .await?
-            .map(|s| s.id)
+            .map(|m| m.id)
     } else {
         None
     };
@@ -379,7 +379,7 @@ async fn handle_payment_failed(
         let grace_end = now + Duration::days(30);
 
         UserRepository::set_grace_period(pool, user.id, now, grace_end).await?;
-        UserRepository::update_subscription_status(pool, user.id, SubscriptionStatus::GracePeriod).await?;
+        UserRepository::update_membership_status(pool, user.id, MembershipStatus::GracePeriod).await?;
 
         tracing::info!(
             user_id = %user.id,

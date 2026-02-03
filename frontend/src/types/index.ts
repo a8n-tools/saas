@@ -1,22 +1,22 @@
 // User types
 export type UserRole = 'subscriber' | 'admin'
 
-export type SubscriptionStatus =
+export type MembershipStatus =
   | 'none'
   | 'active'
   | 'past_due'
   | 'canceled'
   | 'incomplete'
 
-export type SubscriptionTier = 'personal' | 'business'
+export type MembershipTier = 'personal' | 'business'
 
 export interface User {
   id: string
   email: string
   role: UserRole
   email_verified: boolean
-  subscription_status: SubscriptionStatus
-  subscription_tier: SubscriptionTier | null
+  membership_status: MembershipStatus
+  membership_tier: MembershipTier | null
   price_locked: boolean
   locked_price_id: string | null
   locked_price_amount: number | null
@@ -57,9 +57,9 @@ export interface AuthResponse {
   access_token: string
 }
 
-// Subscription types - matches API's SubscriptionResponse
-export interface Subscription {
-  status: SubscriptionStatus
+// Membership types - matches API's MembershipResponse
+export interface Membership {
+  status: MembershipStatus
   price_locked: boolean
   locked_price_amount: number | null
   current_period_end: string | null
@@ -80,7 +80,7 @@ export interface PaymentHistory {
 }
 
 export interface CheckoutRequest {
-  tier: SubscriptionTier
+  tier: MembershipTier
 }
 
 export interface CheckoutSessionResponse {
@@ -154,7 +154,7 @@ export interface AdminNotification {
 
 export interface AdminStats {
   total_users: number
-  active_subscriptions: number
+  active_memberships: number
   monthly_revenue: number
   past_due_count: number
 }

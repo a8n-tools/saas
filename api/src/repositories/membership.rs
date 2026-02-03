@@ -1,18 +1,18 @@
-//! Subscription repository
+//! Membership repository
 
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::errors::AppError;
-use crate::models::{CreateSubscription, Subscription};
+use crate::models::{CreateMembership, Membership};
 
-pub struct SubscriptionRepository;
+pub struct MembershipRepository;
 
-impl SubscriptionRepository {
-    /// Create a new subscription
-    pub async fn create(pool: &PgPool, data: CreateSubscription) -> Result<Subscription, AppError> {
-        let subscription = sqlx::query_as::<_, Subscription>(
+impl MembershipRepository {
+    /// Create a new membership
+    pub async fn create(pool: &PgPool, data: CreateMembership) -> Result<Membership, AppError> {
+        let membership = sqlx::query_as::<_, Membership>(
             r#"
             INSERT INTO subscriptions (
                 user_id, stripe_subscription_id, stripe_price_id, status,
@@ -33,12 +33,12 @@ impl SubscriptionRepository {
         .fetch_one(pool)
         .await?;
 
-        Ok(subscription)
+        Ok(membership)
     }
 
-    /// Find subscription by ID
-    pub async fn find_by_id(pool: &PgPool, id: Uuid) -> Result<Option<Subscription>, AppError> {
-        let subscription = sqlx::query_as::<_, Subscription>(
+    /// Find membership by ID
+    pub async fn find_by_id(pool: &PgPool, id: Uuid) -> Result<Option<Membership>, AppError> {
+        let membership = sqlx::query_as::<_, Membership>(
             r#"
             SELECT * FROM subscriptions WHERE id = $1
             "#,
@@ -47,15 +47,15 @@ impl SubscriptionRepository {
         .fetch_optional(pool)
         .await?;
 
-        Ok(subscription)
+        Ok(membership)
     }
 
-    /// Find subscription by user ID
+    /// Find membership by user ID
     pub async fn find_by_user_id(
         pool: &PgPool,
         user_id: Uuid,
-    ) -> Result<Option<Subscription>, AppError> {
-        let subscription = sqlx::query_as::<_, Subscription>(
+    ) -> Result<Option<Membership>, AppError> {
+        let membership = sqlx::query_as::<_, Membership>(
             r#"
             SELECT * FROM subscriptions WHERE user_id = $1
             ORDER BY created_at DESC
@@ -66,15 +66,15 @@ impl SubscriptionRepository {
         .fetch_optional(pool)
         .await?;
 
-        Ok(subscription)
+        Ok(membership)
     }
 
-    /// Find subscription by Stripe subscription ID
+    /// Find membership by Stripe subscription ID
     pub async fn find_by_stripe_subscription_id(
         pool: &PgPool,
         stripe_subscription_id: &str,
-    ) -> Result<Option<Subscription>, AppError> {
-        let subscription = sqlx::query_as::<_, Subscription>(
+    ) -> Result<Option<Membership>, AppError> {
+        let membership = sqlx::query_as::<_, Membership>(
             r#"
             SELECT * FROM subscriptions WHERE stripe_subscription_id = $1
             "#,
@@ -83,13 +83,13 @@ impl SubscriptionRepository {
         .fetch_optional(pool)
         .await?;
 
-        Ok(subscription)
+        Ok(membership)
     }
 
-    /// Update subscription status
+    /// Update membership status
     pub async fn update_status(
         pool: &PgPool,
-        subscription_id: Uuid,
+        membership_id: Uuid,
         status: &str,
     ) -> Result<(), AppError> {
         sqlx::query(
@@ -100,17 +100,17 @@ impl SubscriptionRepository {
             "#,
         )
         .bind(status)
-        .bind(subscription_id)
+        .bind(membership_id)
         .execute(pool)
         .await?;
 
         Ok(())
     }
 
-    /// Update subscription period
+    /// Update membership period
     pub async fn update_period(
         pool: &PgPool,
-        subscription_id: Uuid,
+        membership_id: Uuid,
         period_start: DateTime<Utc>,
         period_end: DateTime<Utc>,
     ) -> Result<(), AppError> {
@@ -123,7 +123,7 @@ impl SubscriptionRepository {
         )
         .bind(period_start)
         .bind(period_end)
-        .bind(subscription_id)
+        .bind(membership_id)
         .execute(pool)
         .await?;
 
@@ -133,7 +133,7 @@ impl SubscriptionRepository {
     /// Set cancel at period end
     pub async fn set_cancel_at_period_end(
         pool: &PgPool,
-        subscription_id: Uuid,
+        membership_id: Uuid,
         cancel: bool,
     ) -> Result<(), AppError> {
         let canceled_at = if cancel { Some(Utc::now()) } else { None };
@@ -147,24 +147,24 @@ impl SubscriptionRepository {
         )
         .bind(cancel)
         .bind(canceled_at)
-        .bind(subscription_id)
+        .bind(membership_id)
         .execute(pool)
         .await?;
 
         Ok(())
     }
 
-    /// List subscriptions with pagination
+    /// List memberships with pagination
     pub async fn list_paginated(
         pool: &PgPool,
         page: i32,
         per_page: i32,
         status_filter: Option<&str>,
-    ) -> Result<(Vec<Subscription>, i64), AppError> {
+    ) -> Result<(Vec<Membership>, i64), AppError> {
         let offset = (page - 1) * per_page;
 
-        let (subscriptions, total): (Vec<Subscription>, i64) = if let Some(status) = status_filter {
-            let subscriptions = sqlx::query_as::<_, Subscription>(
+        let (memberships, total): (Vec<Membership>, i64) = if let Some(status) = status_filter {
+            let memberships = sqlx::query_as::<_, Membership>(
                 r#"
                 SELECT * FROM subscriptions
                 WHERE status = $3
@@ -185,9 +185,9 @@ impl SubscriptionRepository {
             .fetch_one(pool)
             .await?;
 
-            (subscriptions, total.0)
+            (memberships, total.0)
         } else {
-            let subscriptions = sqlx::query_as::<_, Subscription>(
+            let memberships = sqlx::query_as::<_, Membership>(
                 r#"
                 SELECT * FROM subscriptions
                 ORDER BY created_at DESC
@@ -203,9 +203,9 @@ impl SubscriptionRepository {
                 .fetch_one(pool)
                 .await?;
 
-            (subscriptions, total.0)
+            (memberships, total.0)
         };
 
-        Ok((subscriptions, total))
+        Ok((memberships, total))
     }
 }

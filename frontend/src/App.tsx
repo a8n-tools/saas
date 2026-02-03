@@ -21,19 +21,19 @@ import { PrivacyPolicyPage } from '@/pages/public/PrivacyPolicyPage'
 // Dashboard pages
 import { DashboardPage } from '@/pages/dashboard/DashboardPage'
 import { ApplicationsPage } from '@/pages/dashboard/ApplicationsPage'
-import { SubscriptionPage } from '@/pages/dashboard/SubscriptionPage'
+import { MembershipPage } from '@/pages/dashboard/MembershipPage'
 import { SettingsPage } from '@/pages/dashboard/SettingsPage'
 
 // Admin pages
 import { AdminDashboardPage } from '@/pages/admin/AdminDashboardPage'
 import { AdminUsersPage } from '@/pages/admin/AdminUsersPage'
-import { AdminSubscriptionsPage } from '@/pages/admin/AdminSubscriptionsPage'
+import { AdminMembershipsPage } from '@/pages/admin/AdminMembershipsPage'
 import { AdminApplicationsPage } from '@/pages/admin/AdminApplicationsPage'
 import { AdminAuditLogsPage } from '@/pages/admin/AdminAuditLogsPage'
 
 // Error pages
 import { NotFoundPage } from '@/pages/errors/NotFoundPage'
-import { SubscriptionRequiredPage } from '@/pages/errors/SubscriptionRequiredPage'
+import { MembershipRequiredPage } from '@/pages/errors/MembershipRequiredPage'
 
 // Protected route wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -117,9 +117,9 @@ export default function App() {
       >
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/applications" element={<ApplicationsPage />} />
-        <Route path="/subscription" element={<SubscriptionPage />} />
+        <Route path="/membership" element={<MembershipPage />} />
         <Route path="/settings" element={<SettingsPage />} />
-        <Route path="/subscription-required" element={<SubscriptionRequiredPage />} />
+        <Route path="/membership-required" element={<MembershipRequiredPage />} />
       </Route>
 
       {/* Admin routes */}
@@ -132,7 +132,7 @@ export default function App() {
       >
         <Route path="/admin" element={<AdminDashboardPage />} />
         <Route path="/admin/users" element={<AdminUsersPage />} />
-        <Route path="/admin/subscriptions" element={<AdminSubscriptionsPage />} />
+        <Route path="/admin/memberships" element={<AdminMembershipsPage />} />
         <Route path="/admin/applications" element={<AdminApplicationsPage />} />
         <Route path="/admin/audit-logs" element={<AdminAuditLogsPage />} />
       </Route>

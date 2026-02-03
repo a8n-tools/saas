@@ -1,11 +1,11 @@
-//! Subscription and payment models
+//! Membership and payment models
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
 
-/// Stripe subscription status
+/// Stripe subscription status (kept as Stripe terminology since it's Stripe's API)
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum StripeSubscriptionStatus {
@@ -50,9 +50,9 @@ impl From<String> for StripeSubscriptionStatus {
     }
 }
 
-/// Subscription database model
+/// Membership database model (maps to subscriptions table)
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
-pub struct Subscription {
+pub struct Membership {
     pub id: Uuid,
     pub user_id: Uuid,
     pub stripe_subscription_id: String,
@@ -68,21 +68,21 @@ pub struct Subscription {
     pub updated_at: DateTime<Utc>,
 }
 
-impl Subscription {
+impl Membership {
     /// Get status as enum
     pub fn status_enum(&self) -> StripeSubscriptionStatus {
         StripeSubscriptionStatus::from(self.status.clone())
     }
 
-    /// Check if subscription is active
+    /// Check if membership is active
     pub fn is_active(&self) -> bool {
         self.status == "active"
     }
 }
 
-/// Data for creating a new subscription
+/// Data for creating a new membership
 #[derive(Debug, Clone)]
-pub struct CreateSubscription {
+pub struct CreateMembership {
     pub user_id: Uuid,
     pub stripe_subscription_id: String,
     pub stripe_price_id: String,
@@ -93,9 +93,9 @@ pub struct CreateSubscription {
     pub currency: String,
 }
 
-/// Subscription response for API
+/// Membership response for API
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SubscriptionResponse {
+pub struct MembershipResponse {
     pub status: String,
     pub price_locked: bool,
     pub locked_price_amount: Option<i32>,

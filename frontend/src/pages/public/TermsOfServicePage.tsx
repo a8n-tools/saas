@@ -16,19 +16,19 @@ export function TermsOfServicePage() {
         <section>
           <h2 className="text-2xl font-semibold mb-4">2. Description of Service</h2>
           <p className="text-muted-foreground">
-            a8n.tools provides a subscription-based platform offering access to developer productivity tools,
+            a8n.tools provides a membership-based platform offering access to developer productivity tools,
             including but not limited to RUS (URL Shortener) and Rusty Links (Bookmark Management).
           </p>
         </section>
 
         <section>
-          <h2 className="text-2xl font-semibold mb-4">3. Subscription and Payment</h2>
+          <h2 className="text-2xl font-semibold mb-4">3. Membership and Payment</h2>
           <ul className="list-disc pl-6 space-y-2 text-muted-foreground">
             <li>The Service is offered at a flat rate of $3/month for all applications.</li>
-            <li>Early adopters who subscribe at this rate will have their price locked for life.</li>
-            <li>Payments are processed through Stripe. By subscribing, you also agree to Stripe's terms of service.</li>
-            <li>Subscriptions renew automatically each month unless cancelled.</li>
-            <li>You may cancel your subscription at any time through your account settings.</li>
+            <li>Early adopters who join at this rate will have their price locked for life.</li>
+            <li>Payments are processed through Stripe. By joining, you also agree to Stripe's terms of service.</li>
+            <li>Memberships renew automatically each month unless cancelled.</li>
+            <li>You may cancel your membership at any time through your account settings.</li>
             <li>Upon cancellation, you retain access until the end of your current billing period.</li>
           </ul>
         </section>
@@ -37,7 +37,7 @@ export function TermsOfServicePage() {
           <h2 className="text-2xl font-semibold mb-4">4. Grace Period</h2>
           <p className="text-muted-foreground">
             If a payment fails, you will be granted a 30-day grace period during which you retain full access
-            to the Service. If payment is not resolved within this period, your subscription will be cancelled
+            to the Service. If payment is not resolved within this period, your membership will be cancelled
             and access will be revoked.
           </p>
         </section>
@@ -48,7 +48,7 @@ export function TermsOfServicePage() {
             <li>You must provide accurate and complete information when creating an account.</li>
             <li>You are responsible for maintaining the security of your account credentials.</li>
             <li>You must notify us immediately of any unauthorized use of your account.</li>
-            <li>One subscription per individual. Account sharing is not permitted.</li>
+            <li>One membership per individual. Account sharing is not permitted.</li>
           </ul>
         </section>
 

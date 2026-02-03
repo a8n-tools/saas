@@ -1,9 +1,8 @@
 import { apiClient } from './client'
 import type {
   User,
-  Subscription,
+  Membership,
   Application,
-  AuditLog,
   AdminNotification,
   PaginatedResponse,
 } from '@/types'
@@ -11,9 +10,9 @@ import type {
 // Actual stats response from API
 export interface AdminStatsResponse {
   total_users: number
-  active_subscribers: number
-  past_due_subscribers: number
-  grace_period_subscribers: number
+  active_members: number
+  past_due_members: number
+  grace_period_members: number
   total_applications: number
   active_applications: number
 }
@@ -23,7 +22,7 @@ export interface AdminUser extends User {
   grace_period_end: string | null
 }
 
-export interface AdminSubscription {
+export interface AdminMembership {
   id: string
   user_id: string
   user_email: string
@@ -67,13 +66,13 @@ export interface UpdateApplicationRequest {
   is_maintenance?: boolean
 }
 
-export interface GrantSubscriptionRequest {
+export interface GrantMembershipRequest {
   user_id: string
   tier: 'personal' | 'business'
   months?: number
 }
 
-export interface RevokeSubscriptionRequest {
+export interface RevokeMembershipRequest {
   user_id: string
 }
 
@@ -107,18 +106,18 @@ export const adminApi = {
   impersonateUser: (userId: string): Promise<{ message: string }> =>
     apiClient.post(`/admin/users/${userId}/impersonate`),
 
-  // Subscriptions
-  getSubscriptions: (page = 1, pageSize = 20, status?: string): Promise<PaginatedResponse<AdminSubscription>> => {
+  // Memberships
+  getMemberships: (page = 1, pageSize = 20, status?: string): Promise<PaginatedResponse<AdminMembership>> => {
     const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) })
     if (status) params.append('status', status)
-    return apiClient.get(`/admin/subscriptions?${params}`)
+    return apiClient.get(`/admin/memberships?${params}`)
   },
 
-  grantSubscription: (data: GrantSubscriptionRequest): Promise<Subscription> =>
-    apiClient.post('/admin/subscriptions/grant', data),
+  grantMembership: (data: GrantMembershipRequest): Promise<Membership> =>
+    apiClient.post('/admin/memberships/grant', data),
 
-  revokeSubscription: (data: RevokeSubscriptionRequest): Promise<{ message: string }> =>
-    apiClient.post('/admin/subscriptions/revoke', data),
+  revokeMembership: (data: RevokeMembershipRequest): Promise<{ message: string }> =>
+    apiClient.post('/admin/memberships/revoke', data),
 
   // Applications
   getApplications: async (): Promise<Application[]> => {

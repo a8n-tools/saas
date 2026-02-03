@@ -19,17 +19,17 @@ pub enum AuditAction {
     PasswordResetRequested,
     PasswordResetCompleted,
     PasswordChanged,
-    SubscriptionCreated,
-    SubscriptionCanceled,
-    SubscriptionReactivated,
+    MembershipCreated,
+    MembershipCanceled,
+    MembershipReactivated,
     PaymentSucceeded,
     PaymentFailed,
     GracePeriodStarted,
     GracePeriodEnded,
     AdminUserImpersonated,
     AdminPasswordReset,
-    AdminSubscriptionGranted,
-    AdminSubscriptionRevoked,
+    AdminMembershipGranted,
+    AdminMembershipRevoked,
     AdminUserDeactivated,
     AdminUserActivated,
     ApplicationMaintenanceToggled,
@@ -46,17 +46,17 @@ impl AuditAction {
             AuditAction::PasswordResetRequested => "password_reset_requested",
             AuditAction::PasswordResetCompleted => "password_reset_completed",
             AuditAction::PasswordChanged => "password_changed",
-            AuditAction::SubscriptionCreated => "subscription_created",
-            AuditAction::SubscriptionCanceled => "subscription_canceled",
-            AuditAction::SubscriptionReactivated => "subscription_reactivated",
+            AuditAction::MembershipCreated => "membership_created",
+            AuditAction::MembershipCanceled => "membership_canceled",
+            AuditAction::MembershipReactivated => "membership_reactivated",
             AuditAction::PaymentSucceeded => "payment_succeeded",
             AuditAction::PaymentFailed => "payment_failed",
             AuditAction::GracePeriodStarted => "grace_period_started",
             AuditAction::GracePeriodEnded => "grace_period_ended",
             AuditAction::AdminUserImpersonated => "admin_user_impersonated",
             AuditAction::AdminPasswordReset => "admin_password_reset",
-            AuditAction::AdminSubscriptionGranted => "admin_subscription_granted",
-            AuditAction::AdminSubscriptionRevoked => "admin_subscription_revoked",
+            AuditAction::AdminMembershipGranted => "admin_membership_granted",
+            AuditAction::AdminMembershipRevoked => "admin_membership_revoked",
             AuditAction::AdminUserDeactivated => "admin_user_deactivated",
             AuditAction::AdminUserActivated => "admin_user_activated",
             AuditAction::ApplicationMaintenanceToggled => "application_maintenance_toggled",
@@ -68,8 +68,8 @@ impl AuditAction {
             self,
             AuditAction::AdminUserImpersonated
                 | AuditAction::AdminPasswordReset
-                | AuditAction::AdminSubscriptionGranted
-                | AuditAction::AdminSubscriptionRevoked
+                | AuditAction::AdminMembershipGranted
+                | AuditAction::AdminMembershipRevoked
                 | AuditAction::AdminUserDeactivated
                 | AuditAction::AdminUserActivated
                 | AuditAction::ApplicationMaintenanceToggled
@@ -191,7 +191,7 @@ impl CreateAuditLog {
 pub enum NotificationType {
     NewSignup,
     PaymentFailed,
-    SubscriptionCanceled,
+    MembershipCanceled,
     GracePeriodExpiring,
     SystemAlert,
 }
@@ -201,7 +201,7 @@ impl NotificationType {
         match self {
             NotificationType::NewSignup => "new_signup",
             NotificationType::PaymentFailed => "payment_failed",
-            NotificationType::SubscriptionCanceled => "subscription_canceled",
+            NotificationType::MembershipCanceled => "membership_canceled",
             NotificationType::GracePeriodExpiring => "grace_period_expiring",
             NotificationType::SystemAlert => "system_alert",
         }
