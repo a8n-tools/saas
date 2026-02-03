@@ -262,3 +262,5 @@ Traefik handles routing based on subdomain:
 ## License
 
 Proprietary - All Rights Reserved
+
+- https://en.wikipedia.org/wiki/Business_models_for_open-source_software
