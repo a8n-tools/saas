@@ -38,7 +38,8 @@ pub struct AccessTokenClaims {
     pub sub: Uuid,
     pub email: String,
     pub role: String,
-    pub subscription_status: String,
+    pub membership_status: String,
+    pub membership_tier: String,
     pub price_locked: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub price_id: Option<String>,
@@ -73,11 +74,18 @@ impl JwtService {
         let now = Utc::now();
         let exp = now + self.config.access_token_expiry;
 
+        // Get membership tier, defaulting to "personal" if not set
+        let membership_tier = user
+            .membership_tier
+            .clone()
+            .unwrap_or_else(|| "personal".to_string());
+
         let claims = AccessTokenClaims {
             sub: user.id,
             email: user.email.clone(),
             role: user.role.clone(),
-            subscription_status: user.subscription_status.clone(),
+            membership_status: user.membership_status.clone(),
+            membership_tier,
             price_locked: user.price_locked,
             price_id: user.locked_price_id.clone(),
             iat: now.timestamp(),
@@ -180,7 +188,8 @@ mod tests {
             password_hash: None,
             role: "subscriber".to_string(),
             stripe_customer_id: None,
-            subscription_status: "active".to_string(),
+            membership_status: "active".to_string(),
+            membership_tier: Some("personal".to_string()),
             price_locked: false,
             locked_price_id: None,
             locked_price_amount: None,

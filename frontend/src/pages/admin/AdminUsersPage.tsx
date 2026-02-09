@@ -112,7 +112,7 @@ export function AdminUsersPage() {
         <div>
           <h1 className="text-3xl font-bold">Users</h1>
           <p className="mt-2 text-muted-foreground">
-            Manage user accounts and subscriptions.
+            Manage user accounts and memberships.
           </p>
         </div>
       </div>
@@ -168,7 +168,7 @@ export function AdminUsersPage() {
                       <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>
                         {user.role}
                       </Badge>
-                      <SubscriptionBadge status={user.subscription_status} />
+                      <MembershipBadge status={user.membership_status} />
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="icon">
@@ -319,7 +319,7 @@ export function AdminUsersPage() {
   )
 }
 
-function SubscriptionBadge({ status }: { status: string }) {
+function MembershipBadge({ status }: { status: string }) {
   switch (status) {
     case 'active':
       return <Badge variant="success">Active</Badge>

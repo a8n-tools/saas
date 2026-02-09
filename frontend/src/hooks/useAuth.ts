@@ -39,9 +39,9 @@ export function useAuth() {
     register: registerAndRedirect,
     logout: logoutAndRedirect,
     clearError: store.clearError,
-    hasActiveSubscription:
-      store.user?.subscription_status === 'active' ||
-      store.user?.subscription_status === 'past_due',
+    hasActiveMembership:
+      store.user?.membership_status === 'active' ||
+      store.user?.membership_status === 'past_due',
     isAdmin: store.user?.role === 'admin',
   }
 }

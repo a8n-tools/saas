@@ -4,8 +4,8 @@
 
 pub mod application;
 pub mod audit;
+pub mod membership;
 pub mod rate_limit;
-pub mod subscription;
 pub mod token;
 pub mod user;
 
@@ -16,12 +16,12 @@ pub use audit::{
     CreateAuditLog, NotificationType,
 };
 pub use rate_limit::{RateLimit, RateLimitConfig};
-pub use subscription::{
-    CreatePayment, CreateSubscription, PaymentHistory, PaymentResponse, PaymentStatus,
-    StripeSubscriptionStatus, Subscription, SubscriptionResponse,
+pub use membership::{
+    CreatePayment, CreateMembership, PaymentHistory, PaymentResponse, PaymentStatus,
+    StripeSubscriptionStatus, Membership, MembershipResponse,
 };
 pub use token::{
     CreateMagicLinkToken, CreatePasswordResetToken, CreateRefreshToken, MagicLinkToken,
     PasswordResetToken, RefreshToken, SessionInfo,
 };
-pub use user::{CreateUser, SubscriptionStatus, User, UserResponse, UserRole};
+pub use user::{CreateUser, MembershipStatus, User, UserResponse, UserRole};

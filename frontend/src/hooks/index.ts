@@ -1,3 +1,3 @@
 export { useAuth } from './useAuth'
-export { useSubscription } from './useSubscription'
+export { useMembership } from './useMembership'
 export { useApplications, useApplication } from './useApplications'

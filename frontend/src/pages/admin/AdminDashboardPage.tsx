@@ -48,7 +48,7 @@ export function AdminDashboardPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Active Subscriptions</CardTitle>
+            <CardTitle className="text-sm font-medium">Active Memberships</CardTitle>
             <CreditCard className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -56,7 +56,7 @@ export function AdminDashboardPage() {
               <Loader2 className="h-6 w-6 animate-spin" />
             ) : (
               <>
-                <div className="text-2xl font-bold">{stats?.active_subscribers ?? 0}</div>
+                <div className="text-2xl font-bold">{stats?.active_members ?? 0}</div>
                 <p className="text-xs text-muted-foreground">Paying customers</p>
               </>
             )}
@@ -90,7 +90,7 @@ export function AdminDashboardPage() {
               <Loader2 className="h-6 w-6 animate-spin" />
             ) : (
               <>
-                <div className="text-2xl font-bold">{stats?.past_due_subscribers ?? 0}</div>
+                <div className="text-2xl font-bold">{stats?.past_due_members ?? 0}</div>
                 <p className="text-xs text-muted-foreground">In grace period</p>
               </>
             )}

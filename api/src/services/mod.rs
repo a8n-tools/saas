@@ -13,4 +13,4 @@ pub use auth::{AuthService, AuthTokens};
 pub use email::EmailService;
 pub use jwt::{AccessTokenClaims, JwtConfig, JwtService, RefreshTokenClaims};
 pub use password::PasswordService;
-pub use stripe::{StripeConfig, StripeService, SubscriptionTier};
+pub use stripe::{StripeConfig, StripeService, MembershipTier};

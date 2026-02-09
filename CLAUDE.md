@@ -7,9 +7,9 @@
 
 **a8n.tools** is a SaaS platform hosting developer/productivity tools. We sell convenience and managed hosting for open-source applications.
 
-- **Business Model:** Two-tier subscription model:
-  - **Personal:** $3/month — For individual developers
-  - **Business (PSA):** $15/month — For teams and organizations (priority support, invoice billing)
+- **Business Model:** Two-tier membership model:
+  - **Personal:** $3/month — All apps, documentation access, community support
+  - **Business (PSA):** $15/month — All apps, documentation access, priority support, invoice billing, team features (coming soon)
 - **Key Differentiator:** Fixed price for life — early adopters lock in their rate forever
 - **Target Launch:** End of January 2025 (ideal) / Late February 2025 (deadline)
 - **Team:** 3 full-stack developers
@@ -53,31 +53,97 @@
 - **Auth methods:** Email/password (Argon2id) + Magic links (passwordless)
 - **Cookie flags:** HttpOnly, Secure, SameSite=Lax
 
-### Subscription Model
+### Membership Model
 - Two-tier pricing:
-  - **Personal:** $3/month — All apps, community support
-  - **Business:** $15/month — All apps, priority support, invoice billing, team features (coming soon)
+  - **Personal:** $3/month — All apps, documentation access, community support
+  - **Business:** $15/month — All apps, documentation access, priority support, invoice billing, team features (coming soon)
 - `price_locked` boolean + `locked_price_id` string + `locked_price_amount` track fixed-price-for-life
-- `subscription_tier` tracks the user's tier (personal/business)
+- `membership_tier` tracks the user's tier (personal/business)
+- **Documentation behind paywall:** All app docs, tutorials, and guides require active membership
 - Grace period: 30 days after payment failure before access revoked
 - No free tier, no trial
 
 ### User Roles
-- **Subscriber:** Access apps (if active), manage own account
+- **Member:** Access apps and documentation (if active), manage own account
 - **Admin:** Full system access, user management, impersonation
 
 ### Data Isolation
-- Platform DB: users, subscriptions, audit logs
+- Platform DB: users, memberships, audit logs
 - Each app has its own isolated PostgreSQL database
 - Apps receive user ID from JWT, manage own user data
 
+### JWT Authentication for Child Apps
+
+Child applications (RUS, Rusty Links, etc.) authenticate users via shared JWT tokens:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     .a8n.tools domain                           │
+│                                                                 │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐      │
+│  │ app.a8n.tools│    │ rus.a8n.tools│    │rustylinks.   │      │
+│  │  (Dashboard) │    │    (RUS)     │    │  a8n.tools   │      │
+│  └──────────────┘    └──────────────┘    └──────────────┘      │
+│         │                   │                   │               │
+│         └───────────────────┼───────────────────┘               │
+│                             │                                   │
+│              HTTP-only cookie: access_token                     │
+│              (automatically sent to all subdomains)             │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**How it works:**
+1. User logs in at `app.a8n.tools` → JWT cookie set on `.a8n.tools` domain
+2. User visits `rus.a8n.tools` → browser automatically sends the cookie
+3. Child app validates JWT locally using shared `JWT_SECRET` (no API call needed)
+4. Child app extracts claims: `user_id`, `email`, `membership_status`, `membership_tier`
+
+**Security factors at play here:**
+1. HTTP-only cookies - JavaScript can't read the token
+2. Secure flag - Cookie only sent over HTTPS
+3. SameSite=Lax - Protects against CSRF
+4. 15-minute expiry - Short window if anything goes wrong
+
+**JWT Claims available to child apps:**
+```json
+{
+  "sub": "user-uuid",              // User ID - use this to scope all data
+  "email": "user@example.com",
+  "role": "member",
+  "membership_status": "active",   // "active", "grace_period", "canceled", etc.
+  "membership_tier": "personal",   // "personal" or "business"
+  "exp": 1704068100                // Expiration (15 min)
+}
+```
+
+**Shared Auth Library (`apps/shared/a8n-auth/`):**
+- `AuthenticatedUser` — Requires valid JWT, returns 401 if missing
+- `MemberUser` — Requires valid JWT + active membership, returns 403 if no membership
+- `OptionalUser` — Returns `None` for guests, never fails
+
+**Usage in child apps:**
+```rust
+use a8n_auth::MemberUser;
+
+async fn create_item(user: MemberUser, body: web::Json<CreateItem>) -> HttpResponse {
+    // user.user_id() - UUID to scope data
+    // user.membership_tier_enum() - Personal or Business
+    sqlx::query("INSERT INTO items (user_id, ...) VALUES ($1, ...)")
+        .bind(user.user_id())
+        .execute(&pool)
+        .await?;
+}
+```
+
+**Important:** All child apps must use the same `JWT_SECRET` environment variable as the main platform.
+
 ## Database Tables
 
-1. `users` — accounts, subscription status, price locking
+1. `users` — accounts, membership status, price locking
 2. `refresh_tokens` — multi-device session tracking
 3. `magic_link_tokens` — passwordless auth
 4. `password_reset_tokens` — password recovery
-5. `subscriptions` — Stripe subscription data
+5. `subscriptions` — Stripe membership data (table name kept for Stripe compatibility)
 6. `payment_history` — payment records
 7. `applications` — registered apps metadata
 8. `audit_logs` — security event logging
@@ -98,24 +164,24 @@ Base URL: `https://api.a8n.tools/v1`
 - `POST /auth/password-reset` — Request reset
 - `POST /auth/password-reset/confirm` — Complete reset
 - `GET /users/me` — Current user
-- `GET /subscriptions/me` — Current subscription
-- `POST /subscriptions/checkout` — Create Stripe checkout
-- `POST /subscriptions/cancel` — Cancel subscription
+- `GET /memberships/me` — Current membership
+- `POST /memberships/checkout` — Create Stripe checkout
+- `POST /memberships/cancel` — Cancel membership
 - `GET /applications` — List available apps
 - `POST /webhooks/stripe` — Stripe webhook handler
 
 ### Admin Endpoints (`/admin/*`)
 - User management (list, view, activate, deactivate, impersonate)
-- Subscription management (grant, revoke, extend grace period)
+- Membership management (grant, revoke, extend grace period)
 - Application management (toggle active, maintenance mode)
 - Audit logs, notifications, system health
 
 ## Stripe Integration
 
 ### Webhook Events to Handle
-- `checkout.session.completed` — New subscription
-- `customer.subscription.updated` — Status changes
-- `customer.subscription.deleted` — Cancellation
+- `checkout.session.completed` — New membership
+- `customer.subscription.updated` — Status changes (Stripe event name)
+- `customer.subscription.deleted` — Cancellation (Stripe event name)
 - `invoice.payment_succeeded` — Successful payment
 - `invoice.payment_failed` — Start grace period
 
@@ -128,10 +194,10 @@ Base URL: `https://api.a8n.tools/v1`
 
 1. Magic link (15 min expiry)
 2. Password reset (1 hour expiry)
-3. Welcome (subscription confirmed)
+3. Welcome (membership confirmed)
 4. Payment failed (grace period notice)
 5. Grace period warnings (Day 7, 14, 25)
-6. Subscription canceled
+6. Membership canceled
 7. Payment succeeded (receipt)
 
 ## Security Requirements
@@ -164,14 +230,14 @@ frontend/
 │   │   ├── ui/        # shadcn/ui components
 │   │   ├── layout/    # Header, Footer, Sidebar
 │   │   ├── auth/      # Login, Register forms
-│   │   ├── dashboard/ # App cards, subscription status
+│   │   ├── dashboard/ # App cards, membership status
 │   │   └── admin/     # Admin components
 │   ├── pages/
 │   │   ├── public/    # Landing, Pricing, Auth pages
 │   │   ├── dashboard/ # Protected user pages
 │   │   ├── admin/     # Admin pages
-│   │   └── errors/    # 404, 500, 403, SubscriptionRequired
-│   ├── hooks/         # useAuth, useSubscription, etc.
+│   │   └── errors/    # 404, 500, 403, MembershipRequired
+│   ├── hooks/         # useAuth, useMembership, etc.
 │   ├── stores/        # Zustand stores
 │   ├── lib/           # Utilities
 │   └── types/         # TypeScript types
@@ -231,6 +297,8 @@ a8n-tools/
 │   ├── package.json
 │   └── Dockerfile
 ├── apps/
+│   ├── shared/
+│   │   └── a8n-auth/      # Shared JWT auth library for child apps
 │   ├── rus/               # RUS application
 │   └── rustylinks/        # Rusty Links application
 ├── monitoring/
@@ -254,9 +322,10 @@ a8n-tools/
 - [ ] Magic link authentication
 - [ ] JWT auth system with refresh tokens
 - [ ] Password reset flow
-- [ ] Stripe checkout integration
-- [ ] Subscription management (view, cancel, reactivate)
+- [ ] Stripe checkout integration (both tiers)
+- [ ] Membership management (view, cancel, reactivate)
 - [ ] Fixed price for life tracking
+- [ ] Documentation paywall
 - [ ] User dashboard
 - [ ] Application listing with status
 - [ ] RUS integration
@@ -270,7 +339,7 @@ a8n-tools/
 - [ ] Grace period handling (30 days)
 - [ ] All email templates
 - [ ] Full admin user management
-- [ ] Admin subscription management
+- [ ] Admin membership management
 - [ ] Audit logging
 - [ ] Admin notifications dashboard
 - [ ] Rate limiting
@@ -339,12 +408,15 @@ anyhow = "1"
 ## Environment Variables
 
 ```bash
-# Database
+# Database (Main Platform)
 DATABASE_URL=postgres://a8n:password@localhost:5432/a8n_platform
 
-# JWT
-JWT_PRIVATE_KEY_PATH=/secrets/jwt_private.pem
-JWT_PUBLIC_KEY_PATH=/secrets/jwt_public.pem
+# Child App Databases
+RUS_DB_PASSWORD=rus_password
+RUSTYLINKS_DB_PASSWORD=rustylinks_password
+
+# JWT (shared across platform and all child apps)
+JWT_SECRET=your-secret-key-at-least-32-characters
 
 # Stripe
 STRIPE_SECRET_KEY=sk_live_...
@@ -370,7 +442,7 @@ ENVIRONMENT=production
 4. **Test Stripe webhooks locally** — use Stripe CLI: `stripe listen --forward-to localhost:8080/v1/webhooks/stripe`
 5. **JWT public key shared with apps** — mount as read-only volume
 6. **Cookie domain is `.a8n.tools`** — enables SSO across subdomains
-7. **Validate subscription status on every app request** — check JWT claims
+7. **Validate membership status on every app request** — check JWT claims
 8. **Admin actions require extra logging** — set `is_admin_action = true` in audit logs
 
 ## Tagline Options
@@ -383,4 +455,4 @@ ENVIRONMENT=production
 
 ---
 
-*Last updated: December 30, 2024*
+*Last updated: February 3, 2026*

@@ -19,7 +19,7 @@ export function AdminAuditLogsPage() {
 
   const getActionIcon = (action: string) => {
     if (action.includes('login')) return LogIn
-    if (action.includes('subscription') || action.includes('payment')) return CreditCard
+    if (action.includes('membership') || action.includes('payment')) return CreditCard
     if (action.includes('password')) return KeyRound
     if (action.includes('magic_link')) return Mail
     if (action.includes('register')) return UserPlus

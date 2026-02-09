@@ -1,5 +1,5 @@
 export { AdminDashboardPage } from './AdminDashboardPage'
 export { AdminUsersPage } from './AdminUsersPage'
-export { AdminSubscriptionsPage } from './AdminSubscriptionsPage'
+export { AdminMembershipsPage } from './AdminMembershipsPage'
 export { AdminApplicationsPage } from './AdminApplicationsPage'
 export { AdminAuditLogsPage } from './AdminAuditLogsPage'

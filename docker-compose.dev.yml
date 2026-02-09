@@ -34,10 +34,20 @@ services:
       RUST_LOG: ${RUST_LOG:-debug}
       CORS_ORIGIN: http://localhost:5173
       ENVIRONMENT: development
+      # Email configuration
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_FROM: ${SMTP_FROM:-noreply@a8n.tools}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      EMAIL_ENABLED: ${EMAIL_ENABLED:-false}
+      BASE_URL: ${BASE_URL:-http://localhost:5173}
     ports:
       - "18080:8080"
     volumes:
       - ./api/src:/app/src:ro
+      - ./api/migrations:/app/migrations:ro
+      - ./api/templates:/app/templates:ro
       - ./api/Cargo.toml:/app/Cargo.toml:ro
       - ./api/Cargo.lock:/app/Cargo.lock:ro
       - api_target:/app/target

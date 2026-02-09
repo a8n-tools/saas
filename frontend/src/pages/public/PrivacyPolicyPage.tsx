@@ -37,7 +37,7 @@ export function PrivacyPolicyPage() {
           <h2 className="text-2xl font-semibold mb-4">3. How We Use Your Information</h2>
           <ul className="list-disc pl-6 space-y-2 text-muted-foreground">
             <li>To provide and maintain our services.</li>
-            <li>To process payments and manage subscriptions.</li>
+            <li>To process payments and manage memberships.</li>
             <li>To communicate with you about your account and services.</li>
             <li>To send important updates and security notices.</li>
             <li>To improve our services and develop new features.</li>

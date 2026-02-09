@@ -1,4 +1,4 @@
 export { DashboardPage } from './DashboardPage'
 export { ApplicationsPage } from './ApplicationsPage'
-export { SubscriptionPage } from './SubscriptionPage'
+export { MembershipPage } from './MembershipPage'
 export { SettingsPage } from './SettingsPage'

@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useSubscription } from '@/hooks/useSubscription'
-import { subscriptionApi } from '@/api'
+import { useMembership } from '@/hooks/useMembership'
+import { membershipApi } from '@/api'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { formatDate, formatCurrency } from '@/lib/utils'
-import type { SubscriptionTier } from '@/types'
+import type { MembershipTier } from '@/types'
 import {
   CreditCard,
   Loader2,
@@ -17,42 +17,42 @@ import {
 } from 'lucide-react'
 
 // Helper to get tier display name
-function getTierName(tier: SubscriptionTier | null | undefined): string {
+function getTierName(tier: MembershipTier | null | undefined): string {
   if (!tier) return 'Personal'
   return tier === 'business' ? 'Business' : 'Personal'
 }
 
 // Helper to get tier price
-function getTierPrice(tier: SubscriptionTier | null | undefined, subscription: { price_locked?: boolean, locked_price_amount?: number | null } | null): string {
-  if (subscription?.price_locked && subscription?.locked_price_amount) {
-    return `$${(subscription.locked_price_amount / 100).toFixed(0)}/month`
+function getTierPrice(tier: MembershipTier | null | undefined, membership: { price_locked?: boolean, locked_price_amount?: number | null } | null): string {
+  if (membership?.price_locked && membership?.locked_price_amount) {
+    return `$${(membership.locked_price_amount / 100).toFixed(0)}/month`
   }
   if (tier === 'business') return '$15/month'
   return '$3/month'
 }
 
-export function SubscriptionPage() {
+export function MembershipPage() {
   const {
-    subscription,
+    membership,
     isLoading,
-    startCheckout,
+    subscribe,
     cancel,
     reactivate,
     willCancel,
     tier,
-  } = useSubscription()
+  } = useMembership()
   const [actionLoading, setActionLoading] = useState(false)
-  const [selectedTier, setSelectedTier] = useState<SubscriptionTier>('personal')
+  const [selectedTier, setSelectedTier] = useState<MembershipTier>('personal')
 
   const { data: payments, isLoading: paymentsLoading } = useQuery({
     queryKey: ['payments'],
-    queryFn: () => subscriptionApi.getPaymentHistory(),
+    queryFn: () => membershipApi.getPaymentHistory(),
   })
 
-  const handleCheckout = async () => {
+  const handleSubscribe = async () => {
     setActionLoading(true)
     try {
-      await startCheckout(selectedTier)
+      await subscribe(selectedTier)
     } catch {
       // Error handled by hook
     } finally {
@@ -61,7 +61,7 @@ export function SubscriptionPage() {
   }
 
   const handleCancel = async () => {
-    if (!confirm('Are you sure you want to cancel your subscription?')) return
+    if (!confirm('Are you sure you want to cancel your membership?')) return
     setActionLoading(true)
     try {
       await cancel()
@@ -91,16 +91,16 @@ export function SubscriptionPage() {
     )
   }
 
-  const hasSubscription = subscription &&
-    (subscription.status === 'active' || subscription.status === 'past_due')
-  const isPastDue = subscription?.status === 'past_due'
+  const hasMembership = membership &&
+    (membership.status === 'active' || membership.status === 'past_due')
+  const isPastDue = membership?.status === 'past_due'
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Subscription</h1>
+        <h1 className="text-3xl font-bold">Membership</h1>
         <p className="mt-2 text-muted-foreground">
-          Manage your subscription and billing.
+          Manage your membership and billing.
         </p>
       </div>
 
@@ -122,11 +122,11 @@ export function SubscriptionPage() {
               <CreditCard className="h-5 w-5 text-primary" />
               <CardTitle>Current Plan</CardTitle>
             </div>
-            <SubscriptionBadge status={subscription?.status} />
+            <MembershipBadge status={membership?.status} />
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {hasSubscription ? (
+          {hasMembership ? (
             <>
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
@@ -141,8 +141,8 @@ export function SubscriptionPage() {
                 <div>
                   <p className="text-sm text-muted-foreground">Price</p>
                   <p className="font-medium">
-                    {getTierPrice(tier, subscription)}
-                    {subscription?.price_locked && (
+                    {getTierPrice(tier, membership)}
+                    {membership?.price_locked && (
                       <Badge variant="outline" className="ml-2">
                         Locked
                       </Badge>
@@ -151,15 +151,15 @@ export function SubscriptionPage() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Status</p>
-                  <p className="font-medium capitalize">{subscription.status}</p>
+                  <p className="font-medium capitalize">{membership.status}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Next Billing</p>
                   <p className="font-medium">
                     {willCancel
                       ? 'Canceled - ends ' +
-                        (subscription.current_period_end ? formatDate(subscription.current_period_end) : 'N/A')
-                      : subscription.current_period_end ? formatDate(subscription.current_period_end) : 'N/A'}
+                        (membership.current_period_end ? formatDate(membership.current_period_end) : 'N/A')
+                      : membership.current_period_end ? formatDate(membership.current_period_end) : 'N/A'}
                   </p>
                 </div>
               </div>
@@ -170,7 +170,7 @@ export function SubscriptionPage() {
                     {actionLoading && (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     )}
-                    Reactivate Subscription
+                    Reactivate Membership
                   </Button>
                 ) : (
                   <Button
@@ -181,7 +181,7 @@ export function SubscriptionPage() {
                     {actionLoading && (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     )}
-                    Cancel Subscription
+                    Cancel Membership
                   </Button>
                 )}
               </div>
@@ -190,7 +190,7 @@ export function SubscriptionPage() {
             <div className="py-8">
               <div className="text-center mb-8">
                 <CreditCard className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No Active Subscription</h3>
+                <h3 className="text-lg font-semibold mb-2">No Active Membership</h3>
                 <p className="text-muted-foreground">
                   Subscribe to access all applications.
                 </p>
@@ -227,7 +227,7 @@ export function SubscriptionPage() {
               </div>
 
               <div className="text-center">
-                <Button onClick={handleCheckout} disabled={actionLoading} size="lg">
+                <Button onClick={handleSubscribe} disabled={actionLoading} size="lg">
                   {actionLoading && (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   )}
@@ -298,7 +298,7 @@ export function SubscriptionPage() {
   )
 }
 
-function SubscriptionBadge({ status }: { status?: string }) {
+function MembershipBadge({ status }: { status?: string }) {
   switch (status) {
     case 'active':
       return <Badge variant="success">Active</Badge>

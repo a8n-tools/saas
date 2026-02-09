@@ -15,9 +15,9 @@ export function ApplicationsPage() {
   const { user } = useAuthStore()
   const { applications, isLoading } = useApplications()
 
-  const hasActiveSubscription =
-    user?.subscription_status === 'active' ||
-    user?.subscription_status === 'past_due'
+  const hasActiveMembership =
+    user?.membership_status === 'active' ||
+    user?.membership_status === 'past_due'
 
   if (isLoading) {
     return (
@@ -36,16 +36,16 @@ export function ApplicationsPage() {
         </p>
       </div>
 
-      {!hasActiveSubscription && (
+      {!hasActiveMembership && (
         <Card className="border-primary bg-primary/5">
           <CardContent className="flex items-center justify-between py-4">
             <div>
-              <p className="font-medium">Subscription required</p>
+              <p className="font-medium">Membership required</p>
               <p className="text-sm text-muted-foreground">
                 Subscribe to access all applications.
               </p>
             </div>
-            <Link to="/subscription">
+            <Link to="/membership">
               <Button>Subscribe Now</Button>
             </Link>
           </CardContent>
@@ -58,7 +58,7 @@ export function ApplicationsPage() {
           const isMaintenance = app.maintenance_mode ?? app.is_maintenance ?? false
           const appName = app.display_name || app.name
           const appUrl = app.subdomain || `${app.slug}.a8n.tools`
-          const canAccess = hasActiveSubscription && app.is_active && !isMaintenance
+          const canAccess = hasActiveMembership && app.is_active && !isMaintenance
 
           return (
             <Card
@@ -99,8 +99,8 @@ export function ApplicationsPage() {
                   </a>
                 ) : (
                   <Button className="w-full" disabled>
-                    {!hasActiveSubscription
-                      ? 'Subscription Required'
+                    {!hasActiveMembership
+                      ? 'Membership Required'
                       : isMaintenance
                       ? 'Under Maintenance'
                       : 'Not Available'}
