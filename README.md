@@ -259,6 +259,52 @@ Traefik handles routing based on subdomain:
 - `admin.a8n.tools` -> Admin panel
 - `*.a8n.tools` -> Individual applications
 
+
+Will this work on any machine?                                                                                                                                        
+                                                                                                                                                                        
+  Almost — the only manual step is each developer needs to add the /etc/hosts entries:                                                                                  
+   
+  127.0.0.1 a8n.test                                                                                                                                                    
+  127.0.0.1 app.a8n.test                                                           
+  127.0.0.1 api.a8n.test
+  127.0.0.1 rus.a8n.test
+
+  Everything else (Traefik routing, cookie domain, CORS) is baked into the compose files and code. So for any new dev machine it's: clone, add hosts entries, docker
+  compose up.
+
+  You could automate the hosts step with a Makefile target or a setup script if you wanted to reduce friction for the other two devs.
+
+  The Firefox proxy method
+
+  That approach involves configuring Firefox (or a PAC file) to route *.a8n.test traffic through a local proxy. It avoids touching /etc/hosts but adds complexity. With
+  your current setup — /etc/hosts + Traefik — you get the same result more simply. No need for it.
+
+  What changes for production?
+
+  Almost nothing — your production docker-compose.yml is already set up correctly:
+  ┌────────────────────┬──────────────────────────────┬───────────────────────────────────────────────────┐
+  │      Concern       │        Dev (current)         │           Production (already handled)            │
+  ├────────────────────┼──────────────────────────────┼───────────────────────────────────────────────────┤
+  │ DNS                │ /etc/hosts → 127.0.0.1       │ Real DNS records for *.a8n.tools                  │
+  ├────────────────────┼──────────────────────────────┼───────────────────────────────────────────────────┤
+  │ TLS                │ None (HTTP)                  │ Let's Encrypt via Traefik (already configured)    │
+  ├────────────────────┼──────────────────────────────┼───────────────────────────────────────────────────┤
+  │ Cookie domain      │ .a8n.test (explicit env var) │ .a8n.tools (auto-set when ENVIRONMENT=production) │
+  ├────────────────────┼──────────────────────────────┼───────────────────────────────────────────────────┤
+  │ Cookie Secure flag │ false                        │ true (from config.is_production())                │
+  ├────────────────────┼──────────────────────────────┼───────────────────────────────────────────────────┤
+  │ CORS               │ .a8n.test + .a8n.tools       │ .a8n.tools (already in code)                      │
+  ├────────────────────┼──────────────────────────────┼───────────────────────────────────────────────────┤
+  │ Vite allowedHosts  │ Needed for dev server        │ N/A — production serves static files via nginx    │
+  └────────────────────┴──────────────────────────────┴───────────────────────────────────────────────────┘
+  The only thing to confirm is that each child app in production shares the same JWT_SECRET env var as the main API. Your production compose already has JWT_SECRET:
+  ${JWT_SECRET} on the API — just make sure RUS and any other child apps get the same value.
+
+
+
+
+
+
 ## License
 
 Proprietary - All Rights Reserved
