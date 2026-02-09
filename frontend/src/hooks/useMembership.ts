@@ -19,11 +19,16 @@ export function useMembership() {
     window.location.href = checkoutUrl
   }
 
+  const subscribe = async (tier: MembershipTier = 'personal') => {
+    await store.subscribe(tier)
+  }
+
   return {
     membership: store.membership,
     isLoading: store.isLoading,
     error: store.error,
     startCheckout,
+    subscribe,
     cancel: store.cancelMembership,
     reactivate: store.reactivateMembership,
     clearError: store.clearError,

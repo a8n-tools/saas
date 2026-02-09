@@ -17,7 +17,7 @@ pub use auth::{
 };
 pub use membership::{
     billing_portal, cancel_membership, create_checkout, get_payment_history, get_membership,
-    reactivate_membership,
+    reactivate_membership, subscribe,
 };
 pub use user::{change_password, get_current_user, list_sessions, revoke_session};
 pub use webhook::stripe_webhook;

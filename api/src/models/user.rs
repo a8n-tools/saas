@@ -92,6 +92,41 @@ impl From<&str> for MembershipStatus {
     }
 }
 
+/// Membership tier for users
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MembershipTier {
+    Personal,
+    Business,
+}
+
+impl MembershipTier {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            MembershipTier::Personal => "personal",
+            MembershipTier::Business => "business",
+        }
+    }
+}
+
+impl From<String> for MembershipTier {
+    fn from(s: String) -> Self {
+        match s.as_str() {
+            "business" => MembershipTier::Business,
+            _ => MembershipTier::Personal,
+        }
+    }
+}
+
+impl From<&str> for MembershipTier {
+    fn from(s: &str) -> Self {
+        match s {
+            "business" => MembershipTier::Business,
+            _ => MembershipTier::Personal,
+        }
+    }
+}
+
 /// User database model
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct User {
@@ -105,6 +140,7 @@ pub struct User {
     #[sqlx(rename = "subscription_status")]
     #[serde(rename = "membership_status")]
     pub membership_status: String,
+    pub membership_tier: Option<String>,
     pub price_locked: bool,
     pub locked_price_id: Option<String>,
     pub locked_price_amount: Option<i32>,
@@ -125,6 +161,14 @@ impl User {
     /// Get the user's membership status as enum
     pub fn membership_status_enum(&self) -> MembershipStatus {
         MembershipStatus::from(self.membership_status.as_str())
+    }
+
+    /// Get the user's membership tier as enum
+    pub fn membership_tier_enum(&self) -> MembershipTier {
+        self.membership_tier
+            .as_ref()
+            .map(|t| MembershipTier::from(t.as_str()))
+            .unwrap_or(MembershipTier::Personal)
     }
 
     /// Check if user is admin
@@ -159,6 +203,7 @@ pub struct UserResponse {
     pub email_verified: bool,
     pub role: String,
     pub membership_status: String,
+    pub membership_tier: Option<String>,
     pub price_locked: bool,
     pub locked_price_amount: Option<i32>,
     pub grace_period_end: Option<DateTime<Utc>>,
@@ -174,6 +219,7 @@ impl From<User> for UserResponse {
             email_verified: user.email_verified,
             role: user.role,
             membership_status: user.membership_status,
+            membership_tier: user.membership_tier,
             price_locked: user.price_locked,
             locked_price_amount: user.locked_price_amount,
             grace_period_end: user.grace_period_end,

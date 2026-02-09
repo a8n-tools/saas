@@ -35,7 +35,7 @@ export function MembershipPage() {
   const {
     membership,
     isLoading,
-    startCheckout,
+    subscribe,
     cancel,
     reactivate,
     willCancel,
@@ -49,10 +49,10 @@ export function MembershipPage() {
     queryFn: () => membershipApi.getPaymentHistory(),
   })
 
-  const handleCheckout = async () => {
+  const handleSubscribe = async () => {
     setActionLoading(true)
     try {
-      await startCheckout(selectedTier)
+      await subscribe(selectedTier)
     } catch {
       // Error handled by hook
     } finally {
@@ -227,7 +227,7 @@ export function MembershipPage() {
               </div>
 
               <div className="text-center">
-                <Button onClick={handleCheckout} disabled={actionLoading} size="lg">
+                <Button onClick={handleSubscribe} disabled={actionLoading} size="lg">
                   {actionLoading && (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   )}

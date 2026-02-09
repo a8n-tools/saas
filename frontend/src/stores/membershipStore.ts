@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { Membership, MembershipTier } from '@/types'
 import { membershipApi } from '@/api'
+import { useAuthStore } from './authStore'
 
 interface MembershipState {
   membership: Membership | null
@@ -10,6 +11,7 @@ interface MembershipState {
   // Actions
   fetchMembership: () => Promise<void>
   createCheckout: (tier?: MembershipTier) => Promise<string>
+  subscribe: (tier?: MembershipTier) => Promise<void>
   cancelMembership: () => Promise<void>
   reactivateMembership: () => Promise<void>
   clearError: () => void
@@ -50,6 +52,25 @@ export const useMembershipStore = create<MembershipState>((set) => ({
     }
   },
 
+  subscribe: async (tier: MembershipTier = 'personal') => {
+    set({ isLoading: true, error: null })
+    try {
+      await membershipApi.subscribe(tier)
+      // Refetch membership to get updated state
+      const membership = await membershipApi.getCurrent()
+      set({ membership, isLoading: false })
+      // Also refresh user data since JWT claims changed
+      await useAuthStore.getState().refreshUser()
+    } catch (err) {
+      const error = err as { error?: { message?: string } }
+      set({
+        error: error.error?.message || 'Failed to subscribe',
+        isLoading: false,
+      })
+      throw err
+    }
+  },
+
   cancelMembership: async () => {
     set({ isLoading: true, error: null })
     try {
@@ -57,6 +78,8 @@ export const useMembershipStore = create<MembershipState>((set) => ({
       // Refetch membership to get updated state
       const membership = await membershipApi.getCurrent()
       set({ membership, isLoading: false })
+      // Also refresh user data since JWT claims changed
+      await useAuthStore.getState().refreshUser()
     } catch (err) {
       const error = err as { error?: { message?: string } }
       set({

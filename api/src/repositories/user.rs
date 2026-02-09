@@ -134,6 +134,31 @@ impl UserRepository {
         Ok(())
     }
 
+    /// Update membership status and tier together (for subscription activation)
+    pub async fn activate_membership(
+        pool: &PgPool,
+        user_id: Uuid,
+        tier: &str,
+    ) -> Result<User, AppError> {
+        let user = sqlx::query_as::<_, User>(
+            r#"
+            UPDATE users
+            SET subscription_status = 'active',
+                membership_tier = $1,
+                updated_at = NOW()
+            WHERE id = $2 AND deleted_at IS NULL
+            RETURNING *
+            "#,
+        )
+        .bind(tier)
+        .bind(user_id)
+        .fetch_optional(pool)
+        .await?
+        .ok_or_else(|| AppError::not_found("User"))?;
+
+        Ok(user)
+    }
+
     /// Update Stripe customer ID
     pub async fn update_stripe_customer_id(
         pool: &PgPool,

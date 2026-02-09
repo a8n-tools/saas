@@ -4,15 +4,17 @@
 
 use actix_web::{web, HttpRequest, HttpResponse};
 use serde::{Deserialize, Serialize};
+use serde_json;
 use sqlx::PgPool;
 use std::sync::Arc;
 
+use crate::config::Config;
 use crate::errors::AppError;
-use crate::middleware::AuthenticatedUser;
+use crate::middleware::{AuthCookies, AuthenticatedUser};
 use crate::models::{PaymentResponse, MembershipResponse};
 use crate::repositories::{PaymentRepository, MembershipRepository, UserRepository};
 use crate::responses::{get_request_id, success};
-use crate::services::{StripeService, MembershipTier};
+use crate::services::{JwtService, MembershipTier, StripeService};
 
 /// Request for creating a checkout session
 #[derive(Debug, Deserialize)]
@@ -116,33 +118,59 @@ pub async fn create_checkout(
 }
 
 /// POST /v1/memberships/cancel
-/// Cancel membership at period end
+/// Cancel membership immediately
 pub async fn cancel_membership(
     req: HttpRequest,
     user: AuthenticatedUser,
     pool: web::Data<PgPool>,
-    stripe: web::Data<Arc<StripeService>>,
+    config: web::Data<Config>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
 
-    // Get user's membership
-    let membership = MembershipRepository::find_by_user_id(&pool, user.0.sub)
-        .await?
-        .ok_or(AppError::not_found("Membership"))?;
+    // Get jwt_service from app data
+    let jwt_service = req
+        .app_data::<Arc<JwtService>>()
+        .ok_or_else(|| AppError::internal("JWT service not configured"))?;
 
-    if membership.cancel_at_period_end {
-        return Err(AppError::conflict("Membership is already scheduled for cancellation"));
+    // Get current user to check status
+    let db_user = UserRepository::find_by_id(&pool, user.0.sub)
+        .await?
+        .ok_or(AppError::not_found("User"))?;
+
+    if db_user.membership_status == "canceled" || db_user.membership_status == "none" {
+        return Err(AppError::conflict("No active membership to cancel"));
     }
 
-    // Cancel at period end in Stripe
-    stripe
-        .cancel_subscription(&membership.stripe_subscription_id, true)
-        .await?;
+    // Update membership status to canceled
+    UserRepository::update_membership_status(&pool, user.0.sub, crate::models::MembershipStatus::Canceled).await?;
 
-    // Update local database
-    MembershipRepository::set_cancel_at_period_end(&pool, membership.id, true).await?;
+    // Fetch updated user
+    let updated_user = UserRepository::find_by_id(&pool, user.0.sub)
+        .await?
+        .ok_or(AppError::not_found("User"))?;
 
-    Ok(crate::responses::success_no_data(request_id))
+    tracing::info!(
+        user_id = %updated_user.id,
+        "User canceled membership"
+    );
+
+    // Create new access token with updated claims
+    let access_token = jwt_service.create_access_token(&updated_user)?;
+
+    // Determine if we should use secure cookies
+    let secure = config.is_production();
+    let cookie_domain = config.cookie_domain.as_deref();
+
+    Ok(HttpResponse::Ok()
+        .cookie(AuthCookies::access_token(&access_token, secure, cookie_domain))
+        .json(crate::responses::ApiResponse {
+            success: true,
+            data: Some(serde_json::json!({
+                "message": "Membership canceled successfully",
+                "membership_status": "canceled"
+            })),
+            meta: crate::responses::ResponseMeta::new(request_id),
+        }))
 }
 
 /// POST /v1/memberships/reactivate
@@ -229,4 +257,67 @@ pub async fn get_payment_history(
 pub struct PaginationQuery {
     pub page: Option<i32>,
     pub per_page: Option<i32>,
+}
+
+/// Request for subscribing to a membership tier
+#[derive(Debug, Deserialize)]
+pub struct SubscribeRequest {
+    pub tier: MembershipTier,
+}
+
+/// Response for subscription activation
+#[derive(Debug, Serialize)]
+pub struct SubscribeResponse {
+    pub message: String,
+    pub membership_status: String,
+    pub membership_tier: String,
+}
+
+/// POST /v1/memberships/subscribe
+/// Subscribe to a membership tier (temporary endpoint for development)
+/// In production, this would be triggered by Stripe webhook after successful payment
+pub async fn subscribe(
+    req: HttpRequest,
+    user: AuthenticatedUser,
+    pool: web::Data<PgPool>,
+    config: web::Data<Config>,
+    body: web::Json<SubscribeRequest>,
+) -> Result<HttpResponse, AppError> {
+    // Get jwt_service from app data (it's registered as Arc<JwtService>)
+    let jwt_service = req
+        .app_data::<Arc<JwtService>>()
+        .ok_or_else(|| AppError::internal("JWT service not configured"))?;
+    let request_id = get_request_id(&req);
+    let tier = body.tier;
+
+    // Activate membership in database
+    let updated_user = UserRepository::activate_membership(&pool, user.0.sub, tier.as_str()).await?;
+
+    tracing::info!(
+        user_id = %updated_user.id,
+        tier = %tier.as_str(),
+        "User subscribed to membership"
+    );
+
+    // Create new access token with updated claims
+    let access_token = jwt_service.create_access_token(&updated_user)?;
+
+    // Determine if we should use secure cookies
+    let secure = config.is_production();
+    let cookie_domain = config.cookie_domain.as_deref();
+
+    // Build response with the cookie
+    let response_data = SubscribeResponse {
+        message: format!("Successfully subscribed to {} tier", tier.as_str()),
+        membership_status: updated_user.membership_status,
+        membership_tier: tier.as_str().to_string(),
+    };
+
+    Ok(HttpResponse::Ok()
+        .cookie(AuthCookies::access_token(&access_token, secure, cookie_domain))
+        .json(crate::responses::ApiResponse {
+            success: true,
+            data: Some(response_data),
+            meta: crate::responses::ResponseMeta::new(request_id),
+        }))
 }
