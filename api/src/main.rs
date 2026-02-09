@@ -114,11 +114,13 @@ async fn main() -> anyhow::Result<()> {
         let cors = Cors::default()
             .allowed_origin(&cors_origin)
             .allowed_origin_fn(|origin, _req_head| {
-                // Allow all subdomains of a8n.tools
+                // Allow all subdomains of a8n.tools and a8n.test (dev)
                 origin
                     .as_bytes()
                     .ends_with(b".a8n.tools")
                     || origin.as_bytes() == b"https://a8n.tools"
+                    || origin.as_bytes().ends_with(b".a8n.test")
+                    || origin.as_bytes() == b"http://a8n.test"
                     || origin.as_bytes().starts_with(b"http://localhost")
             })
             .allowed_methods(vec!["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
