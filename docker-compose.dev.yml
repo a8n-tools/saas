@@ -29,14 +29,15 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: postgres://a8n:${POSTGRES_PASSWORD:-devpassword}@postgres:5432/a8n_platform
+      #             scheme://username:password@host:port/path/file.ext
       HOST: 0.0.0.0
       PORT: 8080
       RUST_LOG: ${RUST_LOG:-debug}
       # CORS_ORIGIN: http://localhost:5173
-      CORS_ORIGIN: http://app.a8n.test
+      CORS_ORIGIN: http://app.a8n.run
       ENVIRONMENT: development
       JWT_SECRET: ${JWT_SECRET:-s3cr3tK3yAtL34st32Ch4r4ct3rsL0ng!}
-      COOKIE_DOMAIN: .a8n.test
+      COOKIE_DOMAIN: .a8n.run
       # Email configuration
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
@@ -58,10 +59,11 @@ services:
       postgres:
         condition: service_healthy
     labels:
-      - "traefik.enable=true"
-      # - "traefik.http.routers.api.rule=Host(`api.localhost`)"
-      - "traefik.http.routers.api.rule=Host(`api.a8n.test`)"
-      - "traefik.http.services.api.loadbalancer.server.port=8080"
+      traefik.enable: true
+      traefik.http.routers.api-saas.rule: Host(`api.a8n.run`)
+      traefik.http.routers.api-saas.service: api-saas@docker
+      traefik.http.routers.api-saas.tls.certresolver: cert-cloudflare
+      traefik.http.services.api-saas.loadbalancer.server.port: 8080
 
   # React Frontend
   frontend:
@@ -72,9 +74,12 @@ services:
     restart: unless-stopped
     environment:
       # Use Docker service name for internal proxy requests
-      VITE_API_URL: http://api:8080
+      VITE_API_URL: http://api.a8n.run:8080
+    # TODO: Once port 443 is working through Traefik, this is not needed.
     ports:
       - "5173:5173"
+    networks:
+      - traefik-public
     volumes:
       - ./frontend/src:/app/src:ro
       - ./frontend/public:/app/public:ro
@@ -84,29 +89,34 @@ services:
       - ./frontend/tailwind.config.js:/app/tailwind.config.js:ro
       - ./frontend/postcss.config.js:/app/postcss.config.js:ro
     labels:
-      - "traefik.enable=true"
-      # - "traefik.http.routers.frontend.rule=Host(`localhost`)"
-      - "traefik.http.routers.frontend.rule=Host(`app.a8n.test`)"
-      - "traefik.http.services.frontend.loadbalancer.server.port=5173"
+      traefik.enable: true
+      traefik.http.routers.frontend-saas.rule: Host(`app.a8n.run`)
+      traefik.http.routers.frontend-saas.service: frontend-saas@docker
+      traefik.http.routers.frontend-saas.tls.certresolver: cert-cloudflare
+      traefik.http.services.frontend-saas.loadbalancer.server.port: 5173
 
- # Traefik Reverse Proxy
-  traefik:
-   image: traefik:v3.0
-   container_name: a8n-traefik
-   restart: unless-stopped
-   command:
-     - "--api.dashboard=true"
-     - "--api.insecure=true"
-     - "--providers.docker=true"
-     - "--providers.docker.exposedbydefault=false"
-     - "--entrypoints.web.address=:80"
-     - "--log.level=DEBUG"
-   ports:
-     - "18880:80"
-     - "18081:8080"  # Traefik dashboard
-   volumes:
-     - /var/run/docker.sock:/var/run/docker.sock:ro
+  # Traefik Reverse Proxy
+  # traefik:
+  #  image: traefik:v3.0
+  #  container_name: a8n-traefik
+  #  restart: unless-stopped
+  #  command:
+  #    - "--api.dashboard=true"
+  #    - "--api.insecure=true"
+  #    - "--providers.docker=true"
+  #    - "--providers.docker.exposedbydefault=false"
+  #    - "--entrypoints.web.address=:80"
+  #    - "--log.level=DEBUG"
+  #  ports:
+  #    - "18880:80"
+  #    - "18081:8080"  # Traefik dashboard
+  #  volumes:
+  #    - /var/run/docker.sock:/var/run/docker.sock:ro
 
 volumes:
   postgres_data:
   api_target:
+
+networks:
+  traefik-public:
+    external: true
