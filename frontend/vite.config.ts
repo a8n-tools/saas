@@ -12,7 +12,7 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true,
-    allowedHosts: ['app.a8n.test'],
+    allowedHosts: ['app.a8n.run'],
     proxy: {
       '/api': {
         target: process.env.VITE_API_URL || 'http://localhost:8080',
