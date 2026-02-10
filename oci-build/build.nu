@@ -2,6 +2,9 @@
 
 # Build script for Rust applications using buildah and Alpine
 
+# TODO: Fix this script
+#		- Make script aware that the Rust stuff is in the saas/api files, not the saas/saas files
+
 export-env {
     # Set the log level and file.
     $env.NU_LOG_LEVEL = "DEBUG"
