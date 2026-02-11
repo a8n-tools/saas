@@ -67,7 +67,7 @@ def build-stage []: any -> any {
     ^buildah copy $builder ($project_api | path join "src") ($build_dir | path join "src")
 
     # Copy additional files if they exist
-    ["build.rs", ".cargo", "benches", "examples", "tests", "templates"]
+    ["build.rs", ".cargo", "benches", "examples", "tests", "templates", "migrations"]
     | each {|it|
         let item_path = ($project_api | path join $it)
         if ($item_path | path exists) {
