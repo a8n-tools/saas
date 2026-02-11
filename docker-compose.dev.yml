@@ -65,8 +65,9 @@ services:
         condition: service_healthy
     labels:
       traefik.enable: true
+      traefik.docker.network: network-traefik-public
       traefik.http.routers.api-saas.rule: Host(`api.a8n.run`)
-      traefik.http.routers.api-saas.service: api-saas@docker # 
+      traefik.http.routers.api-saas.service: api-saas@docker
       traefik.http.routers.api-saas.entrypoints: web-secure
       traefik.http.routers.api-saas.tls.certresolver: cert-cloudflare
       traefik.http.services.api-saas.loadbalancer.server.port: 8080
@@ -97,6 +98,7 @@ services:
       - ./frontend/postcss.config.js:/app/postcss.config.js:ro
     labels:
       traefik.enable: true
+      traefik.docker.network: network-traefik-public
       traefik.http.routers.frontend-saas.rule: Host(`app.a8n.run`)
       traefik.http.routers.frontend-saas.service: frontend-saas@docker
       traefik.http.routers.frontend-saas.entrypoints: web-secure
