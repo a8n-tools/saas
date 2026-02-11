@@ -43,13 +43,15 @@ def build-stage []: any -> any {
     ^buildah run $builder -- apk add --no-cache musl-dev pkgconfig openssl-dev openssl-libs-static
 
     # Copy source files into builder
-    let project_root = ($env.FILE_PWD | path dirname | path join "api")
+    let project_root = ($env.FILE_PWD | path dirname)
+    let project_api = (project_root | path join "api")
     log info $"[build-stage] Project root: ($project_root)"
+    log info $"[build-stage] Project API: ($project_api)"
 
     # Copy Cargo files first for better layer caching
-    ^buildah copy $builder ($project_root | path join "Cargo.toml") ($build_dir | path join "Cargo.toml")
+    ^buildah copy $builder ($project_api | path join "Cargo.toml") ($build_dir | path join "Cargo.toml")
 
-    let cargo_lock_path = ($project_root | path join "Cargo.lock")
+    let cargo_lock_path = ($project_api | path join "Cargo.lock")
     if ($cargo_lock_path | path exists) {
         log info "[build-stage] Found Cargo.lock"
         ^buildah copy $builder $cargo_lock_path ($build_dir | path join "Cargo.lock")
@@ -62,12 +64,12 @@ def build-stage []: any -> any {
     ^buildah run $builder -- rm -rf $"($build_dir)/src"
 
     # Copy the actual source code
-    ^buildah copy $builder ($project_root | path join "src") ($build_dir | path join "src")
+    ^buildah copy $builder ($project_api | path join "src") ($build_dir | path join "src")
 
     # Copy additional files if they exist
-    ["build.rs", ".cargo", "benches", "examples", "tests"]
+    ["build.rs", ".cargo", "benches", "examples", "tests", "templates"]
     | each {|it|
-        let item_path = ($project_root | path join $it)
+        let item_path = ($project_api | path join $it)
         if ($item_path | path exists) {
             log info $"[build-stage] Copying: ($it)"
             ^buildah copy $builder $item_path ($build_dir | path join $it)
@@ -87,7 +89,8 @@ def runtime-stage []: any -> any {
     use std log
     mut config = $in
     let builder = $config.builder.id
-    let project_root = ($env.FILE_PWD | path dirname | path join "api")
+    let project_root = ($env.FILE_PWD | path dirname)
+    let project_api = (project_root | path join "api")
     let app_dir = $config.runtime.dir
 
     log info "========================================\n"
@@ -121,7 +124,7 @@ def runtime-stage []: any -> any {
     mkdir $runtime_dir
 
     # Get the binary name from Cargo.toml
-    let cargo_toml = (open ($project_root | path join "Cargo.toml"))
+    let cargo_toml = (open ($project_api | path join "Cargo.toml"))
     let binary_name = $cargo_toml.package.name
     log info $"[runtime-stage] Binary name: ($binary_name)"
 
@@ -144,7 +147,7 @@ def runtime-stage []: any -> any {
     # Copy any additional runtime assets if they exist
     ["assets", "config", "templates", "static"]
     | each {|dir|
-        let src = ($project_root | path join $dir)
+        let src = ($project_api | path join $dir)
         if ($src | path exists) {
             log info $"[runtime-stage] Copying ($dir) directory..."
             cp -r $src ($runtime_dir | path join $dir)
