@@ -57,7 +57,7 @@ def build-stage []: any -> any {
 
     # Create dummy source to cache dependencies
     log info "[build-stage] Caching dependencies..."
-    ^buildah run $builder -- sh -c $"mkdir -p ($build_dir)/src && echo 'fn main() {}' > ($build_dir)/src/main.rs"
+    ^buildah run $builder -- sh -c $"mkdir -p ($build_dir)/src && echo 'fn main\(\) {}' > ($build_dir)/src/main.rs"
     ^buildah run $builder -- cargo build --release
     ^buildah run $builder -- rm -rf $"($build_dir)/src"
 
