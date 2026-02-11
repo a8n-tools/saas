@@ -65,6 +65,7 @@ export function MembershipPage() {
     setActionLoading(true)
     try {
       await cancel()
+      window.location.reload()
     } catch {
       // Error handled by hook
     } finally {
