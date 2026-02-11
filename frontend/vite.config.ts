@@ -12,10 +12,10 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true,
+    allowedHosts: ['app.a8n.run'],
     proxy: {
       '/api': {
-        // Use 'api' for Docker networking, fallback to localhost for local dev
-        target: process.env.VITE_API_URL || 'http://api:8080',
+        target: process.env.VITE_API_URL || 'http://localhost:8080',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, '/v1'),
       },

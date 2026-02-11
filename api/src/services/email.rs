@@ -30,11 +30,26 @@ impl EmailService {
                 config.smtp_password.clone(),
             );
 
-            let transport = AsyncSmtpTransport::<Tokio1Executor>::relay(&config.smtp_host)
-                .map_err(|e| AppError::internal(format!("SMTP connection error: {}", e)))?
-                .port(config.smtp_port)
-                .credentials(creds)
-                .build();
+            // Port 465 uses implicit TLS (SMTPS), port 587 uses STARTTLS
+            let transport = if config.smtp_port == 465 {
+                // Use SMTPS (implicit TLS) for port 465
+                AsyncSmtpTransport::<Tokio1Executor>::relay(&config.smtp_host)
+                    .map_err(|e| AppError::internal(format!("SMTP connection error: {}", e)))?
+                    .port(config.smtp_port)
+                    .credentials(creds)
+                    .tls(lettre::transport::smtp::client::Tls::Wrapper(
+                        lettre::transport::smtp::client::TlsParameters::new(config.smtp_host.clone())
+                            .map_err(|e| AppError::internal(format!("TLS error: {}", e)))?,
+                    ))
+                    .build()
+            } else {
+                // Use STARTTLS for other ports (587, 25, etc.)
+                AsyncSmtpTransport::<Tokio1Executor>::relay(&config.smtp_host)
+                    .map_err(|e| AppError::internal(format!("SMTP connection error: {}", e)))?
+                    .port(config.smtp_port)
+                    .credentials(creds)
+                    .build()
+            };
 
             Some(transport)
         } else {
@@ -66,6 +81,11 @@ impl EmailService {
         templates.add_raw_template("welcome.txt", include_str!("../../templates/emails/welcome.txt"))
             .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
 
+        templates.add_raw_template("account_created.html", include_str!("../../templates/emails/account_created.html"))
+            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
+        templates.add_raw_template("account_created.txt", include_str!("../../templates/emails/account_created.txt"))
+            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
+
         templates.add_raw_template("payment_failed.html", include_str!("../../templates/emails/payment_failed.html"))
             .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
         templates.add_raw_template("payment_failed.txt", include_str!("../../templates/emails/payment_failed.txt"))
@@ -76,9 +96,9 @@ impl EmailService {
         templates.add_raw_template("grace_period_reminder.txt", include_str!("../../templates/emails/grace_period_reminder.txt"))
             .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
 
-        templates.add_raw_template("subscription_canceled.html", include_str!("../../templates/emails/subscription_canceled.html"))
+        templates.add_raw_template("membership_canceled.html", include_str!("../../templates/emails/membership_canceled.html"))
             .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
-        templates.add_raw_template("subscription_canceled.txt", include_str!("../../templates/emails/subscription_canceled.txt"))
+        templates.add_raw_template("membership_canceled.txt", include_str!("../../templates/emails/membership_canceled.txt"))
             .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
 
         templates.add_raw_template("payment_succeeded.html", include_str!("../../templates/emails/payment_succeeded.html"))
@@ -228,7 +248,21 @@ impl EmailService {
         self.send_email(email, "Reset your a8n.tools password", html, text).await
     }
 
-    /// Send welcome email after subscription
+    /// Send account creation email
+    pub async fn send_account_created(&self, email: &str) -> Result<(), AppError> {
+        if !self.config.enabled {
+            tracing::info!(email = %email, "Account created email (dev mode - not sending)");
+            return Ok(());
+        }
+
+        let mut context = self.base_context();
+        context.insert("dashboard_url", &format!("{}/dashboard", self.config.base_url));
+
+        let (html, text) = self.render_template("account_created", &context)?;
+        self.send_email(email, "Welcome to a8n.tools!", html, text).await
+    }
+
+    /// Send welcome email after membership activation
     pub async fn send_welcome(&self, email: &str, price_cents: i32) -> Result<(), AppError> {
         if !self.config.enabled {
             tracing::info!(email = %email, price = price_cents, "Welcome email (dev mode)");
@@ -255,7 +289,7 @@ impl EmailService {
         }
 
         let mut context = self.base_context();
-        context.insert("billing_url", &format!("{}/dashboard/subscription", self.config.base_url));
+        context.insert("billing_url", &format!("{}/dashboard/membership", self.config.base_url));
         context.insert("days_remaining", &days_remaining);
 
         let (html, text) = self.render_template("payment_failed", &context)?;
@@ -274,7 +308,7 @@ impl EmailService {
         }
 
         let mut context = self.base_context();
-        context.insert("billing_url", &format!("{}/dashboard/subscription", self.config.base_url));
+        context.insert("billing_url", &format!("{}/dashboard/membership", self.config.base_url));
         context.insert("days_remaining", &days_remaining);
 
         let (html, text) = self.render_template("grace_period_reminder", &context)?;
@@ -286,10 +320,10 @@ impl EmailService {
         ).await
     }
 
-    /// Send subscription canceled email
-    pub async fn send_subscription_canceled(&self, email: &str, end_date: DateTime<Utc>) -> Result<(), AppError> {
+    /// Send membership canceled email
+    pub async fn send_membership_canceled(&self, email: &str, end_date: DateTime<Utc>) -> Result<(), AppError> {
         if !self.config.enabled {
-            tracing::info!(email = %email, end_date = %end_date, "Subscription canceled email (dev mode)");
+            tracing::info!(email = %email, end_date = %end_date, "Membership canceled email (dev mode)");
             return Ok(());
         }
 
@@ -297,8 +331,8 @@ impl EmailService {
         context.insert("end_date", &end_date.format("%B %d, %Y").to_string());
         context.insert("resubscribe_url", &format!("{}/pricing", self.config.base_url));
 
-        let (html, text) = self.render_template("subscription_canceled", &context)?;
-        self.send_email(email, "Your a8n.tools subscription has been canceled", html, text).await
+        let (html, text) = self.render_template("membership_canceled", &context)?;
+        self.send_email(email, "Your a8n.tools membership has been canceled", html, text).await
     }
 
     /// Send payment succeeded (receipt) email

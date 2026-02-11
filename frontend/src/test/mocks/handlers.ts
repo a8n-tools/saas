@@ -6,8 +6,8 @@ export const mockUser = {
   email: 'test@example.com',
   role: 'subscriber' as const,
   email_verified: true,
-  subscription_status: 'active' as const,
-  subscription_tier: 'personal' as const,
+  membership_status: 'active' as const,
+  membership_tier: 'personal' as const,
   price_locked: false,
   locked_price_id: null,
   locked_price_amount: null,
@@ -83,8 +83,8 @@ export const handlers = [
       ...mockUser,
       id: '123e4567-e89b-12d3-a456-426614174002',
       email: body.email,
-      subscription_status: 'none' as const,
-      subscription_tier: null,
+      membership_status: 'none' as const,
+      membership_tier: null,
     }
 
     return HttpResponse.json({
@@ -175,9 +175,7 @@ export const handlers = [
   }),
 
   // Request password reset
-  http.post(`${API_BASE}/auth/password-reset`, async ({ request }) => {
-    const body = await request.json() as { email: string }
-
+  http.post(`${API_BASE}/auth/password-reset`, async () => {
     // Always return success to prevent email enumeration
     return HttpResponse.json({
       success: true,

@@ -10,9 +10,9 @@ export function DashboardPage() {
   const { user } = useAuthStore()
   const { applications, isLoading } = useApplications()
 
-  const hasActiveSubscription =
-    user?.subscription_status === 'active' ||
-    user?.subscription_status === 'past_due'
+  const hasActiveMembership =
+    user?.membership_status === 'active' ||
+    user?.membership_status === 'past_due'
 
   return (
     <div className="space-y-8">
@@ -23,19 +23,19 @@ export function DashboardPage() {
         </p>
       </div>
 
-      {/* Subscription Status */}
+      {/* Membership Status */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <CreditCard className="h-5 w-5 text-primary" />
-              <CardTitle className="text-lg">Subscription</CardTitle>
+              <CardTitle className="text-lg">Membership</CardTitle>
             </div>
-            <SubscriptionBadge status={user?.subscription_status} />
+            <MembershipBadge status={user?.membership_status} />
           </div>
         </CardHeader>
         <CardContent>
-          {hasActiveSubscription ? (
+          {hasActiveMembership ? (
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">
@@ -47,7 +47,7 @@ export function DashboardPage() {
                   )}
                 </p>
               </div>
-              <Link to="/subscription">
+              <Link to="/membership">
                 <Button variant="outline" size="sm">
                   Manage
                 </Button>
@@ -58,7 +58,7 @@ export function DashboardPage() {
               <p className="text-sm text-muted-foreground">
                 Subscribe to access all applications.
               </p>
-              <Link to="/subscription">
+              <Link to="/membership">
                 <Button size="sm">Subscribe Now</Button>
               </Link>
             </div>
@@ -99,7 +99,7 @@ export function DashboardPage() {
                     <CardDescription>{app.description}</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    {hasActiveSubscription && app.is_active && !isMaintenance ? (
+                    {hasActiveMembership && app.is_active && !isMaintenance ? (
                       <a
                         href={`https://${appUrl}`}
                         target="_blank"
@@ -112,8 +112,8 @@ export function DashboardPage() {
                       </a>
                     ) : (
                       <Button className="w-full" disabled>
-                        {!hasActiveSubscription
-                          ? 'Subscription Required'
+                        {!hasActiveMembership
+                          ? 'Membership Required'
                           : isMaintenance
                           ? 'Under Maintenance'
                           : 'Not Available'}
@@ -130,7 +130,7 @@ export function DashboardPage() {
   )
 }
 
-function SubscriptionBadge({ status }: { status?: string }) {
+function MembershipBadge({ status }: { status?: string }) {
   switch (status) {
     case 'active':
       return <Badge variant="success">Active</Badge>
@@ -141,6 +141,6 @@ function SubscriptionBadge({ status }: { status?: string }) {
     case 'incomplete':
       return <Badge variant="secondary">Incomplete</Badge>
     default:
-      return <Badge variant="outline">No Subscription</Badge>
+      return <Badge variant="outline">No Membership</Badge>
   }
 }

@@ -1,5 +1,5 @@
 ---
-
+name: a8n-development-environment
 services:
   # PostgreSQL Database
   postgres:
@@ -10,10 +10,11 @@ services:
       POSTGRES_USER: a8n
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpassword}
       POSTGRES_DB: a8n_platform
-    ports:
+    expose:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      # - postgres_data:/var/lib/postgresql/data
+      - data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U a8n -d a8n_platform"]
       interval: 5s
@@ -28,26 +29,48 @@ services:
     container_name: a8n-api
     restart: unless-stopped
     environment:
+      # scheme://username:password@host:port/path/file.ext
       DATABASE_URL: postgres://a8n:${POSTGRES_PASSWORD:-devpassword}@postgres:5432/a8n_platform
       HOST: 0.0.0.0
       PORT: 8080
       RUST_LOG: ${RUST_LOG:-debug}
-      CORS_ORIGIN: http://localhost:5173
+      # CORS_ORIGIN: http://localhost:5173
+      CORS_ORIGIN: https://app.a8n.run
       ENVIRONMENT: development
+      JWT_SECRET: ${JWT_SECRET:-s3cr3tK3yAtL34st32Ch4r4ct3rsL0ng!}
+      COOKIE_DOMAIN: .a8n.run
+      # Email configuration
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_FROM: ${SMTP_FROM:-noreply@a8n.tools}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      EMAIL_ENABLED: ${EMAIL_ENABLED:-false}
+      # BASE_URL: ${BASE_URL:-http://localhost:5173}
+      BASE_URL: ${BASE_URL:-http://app.a8n.run}
     ports:
       - "18080:8080"
     volumes:
       - ./api/src:/app/src:ro
+      - ./api/migrations:/app/migrations:ro
+      - ./api/templates:/app/templates:ro
       - ./api/Cargo.toml:/app/Cargo.toml:ro
       - ./api/Cargo.lock:/app/Cargo.lock:ro
       - api_target:/app/target
+    networks:
+      - default # Use default network for internal communication with Postgres
+      - network-traefik-public
     depends_on:
       postgres:
         condition: service_healthy
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.api.rule=Host(`api.localhost`)"
-      - "traefik.http.services.api.loadbalancer.server.port=8080"
+      traefik.enable: true
+      traefik.docker.network: network-traefik-public
+      traefik.http.routers.api-saas.rule: Host(`api.a8n.run`)
+      traefik.http.routers.api-saas.service: api-saas@docker
+      traefik.http.routers.api-saas.entrypoints: web-secure
+      traefik.http.routers.api-saas.tls.certresolver: cert-cloudflare
+      traefik.http.services.api-saas.loadbalancer.server.port: 8080
 
   # React Frontend
   frontend:
@@ -58,9 +81,13 @@ services:
     restart: unless-stopped
     environment:
       # Use Docker service name for internal proxy requests
-      VITE_API_URL: http://api:8080
+      # TODO: Once port 443 is working through Traefik, this is not needed.
+      # VITE_API_URL: http://api.a8n.run:8080
+      VITE_API_URL: https://api.a8n.run
     ports:
       - "5173:5173"
+    networks:
+      - network-traefik-public
     volumes:
       - ./frontend/src:/app/src:ro
       - ./frontend/public:/app/public:ro
@@ -70,28 +97,20 @@ services:
       - ./frontend/tailwind.config.js:/app/tailwind.config.js:ro
       - ./frontend/postcss.config.js:/app/postcss.config.js:ro
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.frontend.rule=Host(`localhost`)"
-      - "traefik.http.services.frontend.loadbalancer.server.port=5173"
+      traefik.enable: true
+      traefik.docker.network: network-traefik-public
+      traefik.http.routers.frontend-saas.rule: Host(`app.a8n.run`)
+      traefik.http.routers.frontend-saas.service: frontend-saas@docker
+      traefik.http.routers.frontend-saas.entrypoints: web-secure
+      traefik.http.routers.frontend-saas.tls.certresolver: cert-cloudflare
+      traefik.http.services.frontend-saas.loadbalancer.server.port: 5173
 
- # Traefik Reverse Proxy
-  traefik:
-   image: traefik:v3.0
-   container_name: a8n-traefik
-   restart: unless-stopped
-   command:
-     - "--api.dashboard=true"
-     - "--api.insecure=true"
-     - "--providers.docker=true"
-     - "--providers.docker.exposedbydefault=false"
-     - "--entrypoints.web.address=:80"
-     - "--log.level=DEBUG"
-   ports:
-     - "18880:80"
-     - "18081:8080"  # Traefik dashboard
-   volumes:
-     - /var/run/docker.sock:/var/run/docker.sock:ro
 
 volumes:
-  postgres_data:
+  # postgres_data:
+  data:
   api_target:
+
+networks:
+  network-traefik-public:
+    external: true

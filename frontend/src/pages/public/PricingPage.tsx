@@ -48,7 +48,7 @@ export function PricingPage() {
                 <span className="text-muted-foreground">/month</span>
               </div>
               <p className="mt-2 text-sm text-muted-foreground">
-                Price locked for life when you subscribe
+                Price locked for life when you join
               </p>
             </CardHeader>
             <CardContent>
@@ -87,7 +87,7 @@ export function PricingPage() {
                   <span className="text-muted-foreground">/month</span>
                 </div>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Price locked for life when you subscribe
+                  Price locked for life when you join
                 </p>
               </CardHeader>
               <CardContent>
@@ -126,10 +126,10 @@ export function PricingPage() {
               </p>
             </div>
             <div>
-              <h3 className="font-semibold">What if I cancel and resubscribe?</h3>
+              <h3 className="font-semibold">What if I cancel and rejoin?</h3>
               <p className="mt-2 text-muted-foreground">
-                As long as you had an active subscription, your locked price
-                will be honored when you resubscribe. We keep track of your
+                As long as you had an active membership, your locked price
+                will be honored when you rejoin. We keep track of your
                 original price.
               </p>
             </div>
@@ -144,7 +144,7 @@ export function PricingPage() {
               <h3 className="font-semibold">Do you offer refunds?</h3>
               <p className="mt-2 text-muted-foreground">
                 We offer refunds within the first 7 days of your initial
-                subscription. After that, you can cancel anytime but won't
+                membership. After that, you can cancel anytime but won't
                 receive a refund for the current period.
               </p>
             </div>

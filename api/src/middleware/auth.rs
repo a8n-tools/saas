@@ -125,11 +125,11 @@ impl FromRequest for AdminUser {
     }
 }
 
-/// Extractor for users with active subscription - returns 403 if not subscribed
+/// Extractor for users with active membership - returns 403 if not a member
 #[derive(Debug, Clone)]
-pub struct SubscribedUser(pub AccessTokenClaims);
+pub struct MemberUser(pub AccessTokenClaims);
 
-impl FromRequest for SubscribedUser {
+impl FromRequest for MemberUser {
     type Error = AppError;
     type Future = Ready<Result<Self, Self::Error>>;
 
@@ -147,16 +147,16 @@ impl FromRequest for SubscribedUser {
         match token {
             Some(token) => match jwt_service.verify_access_token(&token) {
                 Ok(claims) => {
-                    // Check subscription status
-                    let has_access = claims.subscription_status == "active"
-                        || claims.subscription_status == "grace_period";
+                    // Check membership status
+                    let has_access = claims.membership_status == "active"
+                        || claims.membership_status == "grace_period";
 
                     if !has_access {
                         return ready(Err(AppError::Forbidden));
                     }
 
                     req.extensions_mut().insert(AuthenticatedClaims(claims.clone()));
-                    ready(Ok(SubscribedUser(claims)))
+                    ready(Ok(MemberUser(claims)))
                 }
                 Err(e) => ready(Err(e)),
             },

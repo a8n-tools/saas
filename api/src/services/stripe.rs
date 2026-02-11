@@ -7,31 +7,31 @@ use uuid::Uuid;
 /// Subscription tier enum
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum SubscriptionTier {
+pub enum MembershipTier {
     Personal,
     Business,
 }
 
-impl SubscriptionTier {
+impl MembershipTier {
     pub fn as_str(&self) -> &'static str {
         match self {
-            SubscriptionTier::Personal => "personal",
-            SubscriptionTier::Business => "business",
+            MembershipTier::Personal => "personal",
+            MembershipTier::Business => "business",
         }
     }
 
     /// Get the amount in cents for this tier
     pub fn amount_cents(&self) -> i32 {
         match self {
-            SubscriptionTier::Personal => 300,   // $3.00
-            SubscriptionTier::Business => 1500,  // $15.00
+            MembershipTier::Personal => 300,   // $3.00
+            MembershipTier::Business => 1500,  // $15.00
         }
     }
 }
 
-impl Default for SubscriptionTier {
+impl Default for MembershipTier {
     fn default() -> Self {
-        SubscriptionTier::Personal
+        MembershipTier::Personal
     }
 }
 
@@ -65,10 +65,10 @@ impl StripeConfig {
     }
 
     /// Get the price ID for a given tier
-    pub fn price_id_for_tier(&self, tier: SubscriptionTier) -> &str {
+    pub fn price_id_for_tier(&self, tier: MembershipTier) -> &str {
         match tier {
-            SubscriptionTier::Personal => &self.personal_price_id,
-            SubscriptionTier::Business => &self.business_price_id,
+            MembershipTier::Personal => &self.personal_price_id,
+            MembershipTier::Business => &self.business_price_id,
         }
     }
 }
@@ -101,7 +101,7 @@ impl StripeService {
         &self,
         customer_id: &str,
         user_id: Uuid,
-        tier: SubscriptionTier,
+        tier: MembershipTier,
     ) -> Result<(String, String), AppError> {
         // TODO: Implement actual Stripe API call
         // Returns (session_id, checkout_url)
@@ -121,11 +121,11 @@ impl StripeService {
     }
 
     /// Get the tier from a price ID
-    pub fn tier_from_price_id(&self, price_id: &str) -> SubscriptionTier {
+    pub fn tier_from_price_id(&self, price_id: &str) -> MembershipTier {
         if price_id == self.config.business_price_id {
-            SubscriptionTier::Business
+            MembershipTier::Business
         } else {
-            SubscriptionTier::Personal
+            MembershipTier::Personal
         }
     }
 

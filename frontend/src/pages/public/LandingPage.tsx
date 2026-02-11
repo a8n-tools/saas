@@ -96,7 +96,7 @@ export function LandingPage() {
         <div className="container">
           <h2 className="text-center text-3xl font-bold">Our Applications</h2>
           <p className="mx-auto mt-4 max-w-2xl text-center text-muted-foreground">
-            All included with your subscription. More coming soon.
+            All included with your membership. More coming soon.
           </p>
           <div className="mt-12 grid gap-8 md:grid-cols-2 max-w-3xl mx-auto">
             {apps.map((app) => (

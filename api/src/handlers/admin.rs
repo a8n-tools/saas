@@ -12,11 +12,11 @@ use chrono::{Duration, Utc};
 use crate::errors::AppError;
 use crate::middleware::AdminUser;
 use crate::models::{
-    AuditAction, CreateAuditLog, CreatePasswordResetToken, CreateRefreshToken, SubscriptionStatus,
+    AuditAction, CreateAuditLog, CreatePasswordResetToken, CreateRefreshToken, MembershipStatus,
     UserResponse,
 };
 use crate::repositories::{
-    ApplicationRepository, AuditLogRepository, NotificationRepository, SubscriptionRepository,
+    ApplicationRepository, AuditLogRepository, MembershipRepository, NotificationRepository,
     TokenRepository, UserRepository,
 };
 use crate::responses::{get_request_id, paginated, success, success_no_data};
@@ -47,7 +47,7 @@ pub async fn list_users(
 
     let page = query.page.unwrap_or(1).max(1);
     let per_page = query.per_page.unwrap_or(20).min(100);
-    let status_filter = query.status.as_ref().map(|s| SubscriptionStatus::from(s.as_str()));
+    let status_filter = query.status.as_ref().map(|s| MembershipStatus::from(s.as_str()));
 
     let (users, total) = UserRepository::list_paginated(
         &pool,
@@ -193,29 +193,29 @@ pub async fn update_user_role(
 }
 
 // =============================================================================
-// Subscription Management
+// Membership Management
 // =============================================================================
 
-/// Request body for granting subscription
+/// Request body for granting membership
 #[derive(Debug, Deserialize)]
-pub struct GrantSubscriptionRequest {
+pub struct GrantMembershipRequest {
     pub user_id: uuid::Uuid,
     pub price_locked: Option<bool>,
     pub locked_price_amount: Option<i32>,
 }
 
-/// POST /v1/admin/subscriptions/grant
-/// Grant a subscription to a user
-pub async fn grant_subscription(
+/// POST /v1/admin/memberships/grant
+/// Grant a membership to a user
+pub async fn grant_membership(
     req: HttpRequest,
     _admin: AdminUser,
     pool: web::Data<PgPool>,
-    body: web::Json<GrantSubscriptionRequest>,
+    body: web::Json<GrantMembershipRequest>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
 
-    // Update user subscription status
-    UserRepository::update_subscription_status(&pool, body.user_id, SubscriptionStatus::Active)
+    // Update user membership status
+    UserRepository::update_membership_status(&pool, body.user_id, MembershipStatus::Active)
         .await?;
 
     // Lock price if requested
@@ -227,17 +227,17 @@ pub async fn grant_subscription(
     Ok(success_no_data(request_id))
 }
 
-/// POST /v1/admin/subscriptions/revoke
-/// Revoke a subscription from a user
-pub async fn revoke_subscription(
+/// POST /v1/admin/memberships/revoke
+/// Revoke a membership from a user
+pub async fn revoke_membership(
     req: HttpRequest,
     _admin: AdminUser,
     pool: web::Data<PgPool>,
-    body: web::Json<GrantSubscriptionRequest>,
+    body: web::Json<GrantMembershipRequest>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
 
-    UserRepository::update_subscription_status(&pool, body.user_id, SubscriptionStatus::Canceled)
+    UserRepository::update_membership_status(&pool, body.user_id, MembershipStatus::Canceled)
         .await?;
 
     // Clear any grace period
@@ -246,32 +246,32 @@ pub async fn revoke_subscription(
     Ok(success_no_data(request_id))
 }
 
-/// Query parameters for listing subscriptions
+/// Query parameters for listing memberships
 #[derive(Debug, Deserialize)]
-pub struct ListSubscriptionsQuery {
+pub struct ListMembershipsQuery {
     pub page: Option<i32>,
     pub per_page: Option<i32>,
     pub status: Option<String>,
 }
 
-/// GET /v1/admin/subscriptions
-/// List all subscriptions with pagination
-pub async fn list_subscriptions(
+/// GET /v1/admin/memberships
+/// List all memberships with pagination
+pub async fn list_memberships(
     req: HttpRequest,
     _admin: AdminUser,
     pool: web::Data<PgPool>,
-    query: web::Query<ListSubscriptionsQuery>,
+    query: web::Query<ListMembershipsQuery>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
 
     let page = query.page.unwrap_or(1).max(1);
     let per_page = query.per_page.unwrap_or(20).min(100);
 
-    let (subscriptions, total) =
-        SubscriptionRepository::list_paginated(&pool, page, per_page, query.status.as_deref())
+    let (memberships, total) =
+        MembershipRepository::list_paginated(&pool, page, per_page, query.status.as_deref())
             .await?;
 
-    Ok(paginated(subscriptions, total, page, per_page, request_id))
+    Ok(paginated(memberships, total, page, per_page, request_id))
 }
 
 // =============================================================================
@@ -393,9 +393,9 @@ pub async fn list_audit_logs(
 #[derive(Debug, Serialize)]
 pub struct DashboardStats {
     pub total_users: i64,
-    pub active_subscribers: i64,
-    pub past_due_subscribers: i64,
-    pub grace_period_subscribers: i64,
+    pub active_members: i64,
+    pub past_due_members: i64,
+    pub grace_period_members: i64,
     pub total_applications: i64,
     pub active_applications: i64,
 }
@@ -415,19 +415,19 @@ pub async fn get_dashboard_stats(
             .fetch_one(pool.get_ref())
             .await?;
 
-    let active_subscribers: (i64,) = sqlx::query_as(
+    let active_members: (i64,) = sqlx::query_as(
         "SELECT COUNT(*) FROM users WHERE subscription_status = 'active' AND deleted_at IS NULL",
     )
     .fetch_one(pool.get_ref())
     .await?;
 
-    let past_due_subscribers: (i64,) = sqlx::query_as(
+    let past_due_members: (i64,) = sqlx::query_as(
         "SELECT COUNT(*) FROM users WHERE subscription_status = 'past_due' AND deleted_at IS NULL",
     )
     .fetch_one(pool.get_ref())
     .await?;
 
-    let grace_period_subscribers: (i64,) = sqlx::query_as(
+    let grace_period_members: (i64,) = sqlx::query_as(
         "SELECT COUNT(*) FROM users WHERE subscription_status = 'grace_period' AND deleted_at IS NULL",
     )
     .fetch_one(pool.get_ref())
@@ -445,9 +445,9 @@ pub async fn get_dashboard_stats(
 
     let stats = DashboardStats {
         total_users: total_users.0,
-        active_subscribers: active_subscribers.0,
-        past_due_subscribers: past_due_subscribers.0,
-        grace_period_subscribers: grace_period_subscribers.0,
+        active_members: active_members.0,
+        past_due_members: past_due_members.0,
+        grace_period_members: grace_period_members.0,
         total_applications: total_applications.0,
         active_applications: active_applications.0,
     };
@@ -716,10 +716,10 @@ pub async fn get_system_health(
         "health": health,
     });
 
-    if let Some((users, active_subs, recent_logs)) = db_stats {
+    if let Some((users, active_members, recent_logs)) = db_stats {
         response["stats"] = serde_json::json!({
             "total_users": users,
-            "active_subscribers": active_subs,
+            "active_members": active_members,
             "audit_logs_last_hour": recent_logs
         });
     }

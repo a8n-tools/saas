@@ -118,9 +118,9 @@ export function SettingsPage() {
               </p>
             </div>
             <div>
-              <Label className="text-muted-foreground">Subscription Status</Label>
+              <Label className="text-muted-foreground">Membership Status</Label>
               <p className="font-medium capitalize">
-                {user?.subscription_status || 'None'}
+                {user?.membership_status || 'None'}
               </p>
             </div>
           </div>

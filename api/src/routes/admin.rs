@@ -20,10 +20,10 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route("/users/{user_id}/role", web::put().to(handlers::update_user_role))
             .route("/users/{user_id}/reset-password", web::post().to(handlers::admin_reset_password))
             .route("/users/{user_id}/impersonate", web::post().to(handlers::impersonate_user))
-            // Subscription management
-            .route("/subscriptions", web::get().to(handlers::list_subscriptions))
-            .route("/subscriptions/grant", web::post().to(handlers::grant_subscription))
-            .route("/subscriptions/revoke", web::post().to(handlers::revoke_subscription))
+            // Membership management
+            .route("/memberships", web::get().to(handlers::list_memberships))
+            .route("/memberships/grant", web::post().to(handlers::grant_membership))
+            .route("/memberships/revoke", web::post().to(handlers::revoke_membership))
             // Application management
             .route("/applications", web::get().to(handlers::list_all_applications))
             .route("/applications/{app_id}", web::put().to(handlers::update_application))

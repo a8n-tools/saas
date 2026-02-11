@@ -46,8 +46,16 @@ pub struct EmailConfig {
 impl EmailConfig {
     /// Load email configuration from environment variables
     pub fn from_env(is_production: bool) -> Self {
+        // Allow forcing email enabled in development via env var
+        let force_enabled = env::var("EMAIL_ENABLED")
+            .map(|v| v == "true" || v == "1")
+            .unwrap_or(false);
+
+        let smtp_host = env::var("SMTP_HOST").unwrap_or_else(|_| "localhost".to_string());
+        let has_smtp = !smtp_host.is_empty() && smtp_host != "localhost";
+
         Self {
-            smtp_host: env::var("SMTP_HOST").unwrap_or_else(|_| "localhost".to_string()),
+            smtp_host,
             smtp_port: env::var("SMTP_PORT")
                 .unwrap_or_else(|_| "587".to_string())
                 .parse()
@@ -56,8 +64,8 @@ impl EmailConfig {
             smtp_password: env::var("SMTP_PASSWORD").unwrap_or_default(),
             from_email: env::var("SMTP_FROM").unwrap_or_else(|_| "noreply@a8n.tools".to_string()),
             from_name: env::var("EMAIL_FROM_NAME").unwrap_or_else(|_| "a8n.tools".to_string()),
-            base_url: env::var("BASE_URL").unwrap_or_else(|_| "https://app.a8n.tools".to_string()),
-            enabled: is_production && env::var("SMTP_HOST").is_ok(),
+            base_url: env::var("BASE_URL").unwrap_or_else(|_| "http://localhost:5173".to_string()),
+            enabled: (is_production && has_smtp) || force_enabled,
         }
     }
 }

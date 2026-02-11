@@ -25,20 +25,20 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { formatDate, formatCurrency } from '@/lib/utils'
-import { CreditCard, MoreVertical, Loader2, XCircle, Gift } from 'lucide-react'
-import { adminApi, type AdminSubscription } from '@/api/admin'
+import { CreditCard, MoreVertical, Loader2, XCircle } from 'lucide-react'
+import { adminApi, type AdminMembership } from '@/api/admin'
 
-export function AdminSubscriptionsPage() {
+export function AdminMembershipsPage() {
   const [page, setPage] = useState(1)
   const [statusFilter, setStatusFilter] = useState<string>('all')
-  const [selectedSub, setSelectedSub] = useState<AdminSubscription | null>(null)
+  const [selectedMembership, setSelectedMembership] = useState<AdminMembership | null>(null)
   const [dialogType, setDialogType] = useState<'revoke' | null>(null)
 
   const queryClient = useQueryClient()
 
   const { data, isLoading } = useQuery({
-    queryKey: ['admin', 'subscriptions', page, statusFilter],
-    queryFn: () => adminApi.getSubscriptions(page, 20, statusFilter === 'all' ? undefined : statusFilter),
+    queryKey: ['admin', 'memberships', page, statusFilter],
+    queryFn: () => adminApi.getMemberships(page, 20, statusFilter === 'all' ? undefined : statusFilter),
   })
 
   const { data: stats } = useQuery({
@@ -47,26 +47,26 @@ export function AdminSubscriptionsPage() {
   })
 
   const revokeMutation = useMutation({
-    mutationFn: (userId: string) => adminApi.revokeSubscription({ user_id: userId }),
+    mutationFn: (userId: string) => adminApi.revokeMembership({ user_id: userId }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'subscriptions'] })
+      queryClient.invalidateQueries({ queryKey: ['admin', 'memberships'] })
       queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] })
       setDialogType(null)
-      setSelectedSub(null)
+      setSelectedMembership(null)
     },
   })
 
-  const handleRevoke = (sub: AdminSubscription) => {
-    setSelectedSub(sub)
+  const handleRevoke = (membership: AdminMembership) => {
+    setSelectedMembership(membership)
     setDialogType('revoke')
   }
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Subscriptions</h1>
+        <h1 className="text-3xl font-bold">Memberships</h1>
         <p className="mt-2 text-muted-foreground">
-          View and manage all subscriptions.
+          View and manage all memberships.
         </p>
       </div>
 
@@ -77,7 +77,7 @@ export function AdminSubscriptionsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
-              {stats?.active_subscribers ?? 0}
+              {stats?.active_members ?? 0}
             </div>
           </CardContent>
         </Card>
@@ -87,7 +87,7 @@ export function AdminSubscriptionsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-yellow-600">
-              {stats?.past_due_subscribers ?? 0}
+              {stats?.past_due_members ?? 0}
             </div>
           </CardContent>
         </Card>
@@ -97,7 +97,7 @@ export function AdminSubscriptionsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-orange-600">
-              {stats?.grace_period_subscribers ?? 0}
+              {stats?.grace_period_members ?? 0}
             </div>
           </CardContent>
         </Card>
@@ -107,8 +107,8 @@ export function AdminSubscriptionsPage() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>All Subscriptions</CardTitle>
-              <CardDescription>Manage customer subscriptions.</CardDescription>
+              <CardTitle>All Memberships</CardTitle>
+              <CardDescription>Manage customer memberships.</CardDescription>
             </div>
             <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
               <SelectTrigger className="w-40">
@@ -131,9 +131,9 @@ export function AdminSubscriptionsPage() {
           ) : (
             <>
               <div className="space-y-4">
-                {data?.items.map((sub) => (
+                {data?.items.map((membership) => (
                   <div
-                    key={sub.id}
+                    key={membership.id}
                     className="flex items-center justify-between py-4 border-b last:border-0"
                   >
                     <div className="flex items-center gap-4">
@@ -141,18 +141,18 @@ export function AdminSubscriptionsPage() {
                         <CreditCard className="h-5 w-5 text-muted-foreground" />
                       </div>
                       <div>
-                        <p className="font-medium">{sub.user_email}</p>
+                        <p className="font-medium">{membership.user_email}</p>
                         <p className="text-sm text-muted-foreground">
-                          {formatCurrency(sub.amount_cents)} / month
-                          {sub.current_period_end && ` - Ends ${formatDate(sub.current_period_end)}`}
+                          {formatCurrency(membership.amount_cents)} / month
+                          {membership.current_period_end && ` - Ends ${formatDate(membership.current_period_end)}`}
                         </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-4">
                       <Badge variant="outline" className="capitalize">
-                        {sub.tier}
+                        {membership.tier}
                       </Badge>
-                      <SubscriptionBadge status={sub.status} />
+                      <MembershipBadge status={membership.status} />
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="icon">
@@ -160,10 +160,10 @@ export function AdminSubscriptionsPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          {sub.status === 'active' && (
-                            <DropdownMenuItem onClick={() => handleRevoke(sub)}>
+                          {membership.status === 'active' && (
+                            <DropdownMenuItem onClick={() => handleRevoke(membership)}>
                               <XCircle className="h-4 w-4 mr-2" />
-                              Revoke Subscription
+                              Revoke Membership
                             </DropdownMenuItem>
                           )}
                         </DropdownMenuContent>
@@ -173,7 +173,7 @@ export function AdminSubscriptionsPage() {
                 ))}
                 {data?.items.length === 0 && (
                   <p className="text-center text-muted-foreground py-8">
-                    No subscriptions found
+                    No memberships found
                   </p>
                 )}
               </div>
@@ -208,26 +208,26 @@ export function AdminSubscriptionsPage() {
 
       <Dialog open={dialogType === 'revoke'} onOpenChange={() => {
         setDialogType(null)
-        setSelectedSub(null)
+        setSelectedMembership(null)
       }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Revoke Subscription</DialogTitle>
+            <DialogTitle>Revoke Membership</DialogTitle>
             <DialogDescription>
-              Are you sure you want to revoke the subscription for {selectedSub?.user_email}?
+              Are you sure you want to revoke the membership for {selectedMembership?.user_email}?
               They will immediately lose access to all applications.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => {
               setDialogType(null)
-              setSelectedSub(null)
+              setSelectedMembership(null)
             }}>
               Cancel
             </Button>
             <Button
               variant="destructive"
-              onClick={() => selectedSub && revokeMutation.mutate(selectedSub.user_id)}
+              onClick={() => selectedMembership && revokeMutation.mutate(selectedMembership.user_id)}
               disabled={revokeMutation.isPending}
             >
               {revokeMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
@@ -240,7 +240,7 @@ export function AdminSubscriptionsPage() {
   )
 }
 
-function SubscriptionBadge({ status }: { status: string }) {
+function MembershipBadge({ status }: { status: string }) {
   switch (status) {
     case 'active':
       return <Badge variant="success">Active</Badge>

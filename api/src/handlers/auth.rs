@@ -63,23 +63,60 @@ pub struct AuthResponse {
 }
 
 /// POST /v1/auth/register
-/// Register a new user
+/// Register a new user and log them in
 pub async fn register(
     req: HttpRequest,
     auth_service: web::Data<Arc<AuthService>>,
+    email_service: web::Data<Arc<crate::services::EmailService>>,
     body: web::Json<RegisterRequest>,
+    config: web::Data<crate::config::Config>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
     let ip_address = extract_client_ip(&req);
+    let device_info = extract_device_info(&req);
 
     // Validate email format
     crate::validation::validate_email(&body.email)?;
 
-    let user = auth_service
-        .register(body.email.clone(), body.password.clone(), ip_address)
+    auth_service
+        .register(body.email.clone(), body.password.clone(), ip_address.clone())
         .await?;
 
-    Ok(crate::responses::created(user, request_id))
+    // Generate tokens so the user is logged in immediately
+    let (tokens, user) = auth_service
+        .login(body.email.clone(), body.password.clone(), device_info, ip_address)
+        .await?;
+
+    let secure = config.is_production();
+    let cookie_domain = config.cookie_domain.as_deref();
+
+    // Send welcome email (in background, don't wait)
+    let email = body.email.clone();
+    let email_svc = email_service.get_ref().clone();
+    tokio::spawn(async move {
+        if let Err(e) = email_svc.send_account_created(&email).await {
+            tracing::error!(error = %e, email = %email, "Failed to send account created email");
+        }
+    });
+
+    let response = AuthResponse {
+        user,
+        expires_in: tokens.expires_in,
+    };
+
+    Ok(HttpResponse::Created()
+        .cookie(AuthCookies::access_token(&tokens.access_token, secure, cookie_domain))
+        .cookie(AuthCookies::refresh_token(
+            &tokens.refresh_token,
+            secure,
+            false,
+            cookie_domain,
+        ))
+        .json(crate::responses::ApiResponse {
+            success: true,
+            data: Some(response),
+            meta: crate::responses::ResponseMeta::new(request_id),
+        }))
 }
 
 /// POST /v1/auth/login
