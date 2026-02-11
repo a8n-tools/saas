@@ -1,5 +1,5 @@
 ---
-
+name: a8n-development-environment
 services:
   # PostgreSQL Database
   postgres:
@@ -10,10 +10,11 @@ services:
       POSTGRES_USER: a8n
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpassword}
       POSTGRES_DB: a8n_platform
-    ports:
+    expose:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      # - postgres_data:/var/lib/postgresql/data
+      - data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U a8n -d a8n_platform"]
       interval: 5s
@@ -28,8 +29,8 @@ services:
     container_name: a8n-api
     restart: unless-stopped
     environment:
+      # scheme://username:password@host:port/path/file.ext
       DATABASE_URL: postgres://a8n:${POSTGRES_PASSWORD:-devpassword}@postgres:5432/a8n_platform
-      #             scheme://username:password@host:port/path/file.ext
       HOST: 0.0.0.0
       PORT: 8080
       RUST_LOG: ${RUST_LOG:-debug}
@@ -104,7 +105,8 @@ services:
 
 
 volumes:
-  postgres_data:
+  # postgres_data:
+  data:
   api_target:
 
 networks:
