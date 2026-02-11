@@ -2,9 +2,6 @@
 
 # Build script for Rust applications using buildah and Alpine
 
-# TODO: Fix this script
-#		- Make script aware that the Rust stuff is in the saas/api files, not the saas/saas files
-
 export-env {
     # Set the log level and file.
     $env.NU_LOG_LEVEL = "DEBUG"
@@ -46,7 +43,7 @@ def build-stage []: any -> any {
     ^buildah run $builder -- apk add --no-cache musl-dev pkgconfig openssl-dev openssl-libs-static
 
     # Copy source files into builder
-    let project_root = ($env.FILE_PWD | path dirname)
+    let project_root = ($env.FILE_PWD | path dirname | path join "api")
     log info $"[build-stage] Project root: ($project_root)"
 
     # Copy Cargo files first for better layer caching
@@ -90,7 +87,7 @@ def runtime-stage []: any -> any {
     use std log
     mut config = $in
     let builder = $config.builder.id
-    let project_root = ($env.FILE_PWD | path dirname)
+    let project_root = ($env.FILE_PWD | path dirname | path join "api")
     let app_dir = $config.runtime.dir
 
     log info "========================================\n"
