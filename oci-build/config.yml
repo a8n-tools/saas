@@ -4,7 +4,7 @@
 builder:
   name: rust-alpine
   url: "docker.io/library/rust"
-  version: "1.75-alpine"
+  version: "1.84-alpine"
   dir: /build
 
 # Docker image for running the application
