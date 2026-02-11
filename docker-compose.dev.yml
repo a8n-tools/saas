@@ -84,6 +84,7 @@ services:
       # TODO: Once port 443 is working through Traefik, this is not needed.
       # VITE_API_URL: http://api.a8n.run:8080
       VITE_API_URL: https://api.a8n.run
+      VITE_APP_DOMAIN: a8n.run
     ports:
       - "5173:5173"
     networks:
