@@ -55,15 +55,13 @@ export function ApplicationsPage() {
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {applications.map((app) => {
           const Icon = appIcons[app.slug] || Link2
-          const isMaintenance = app.maintenance_mode ?? app.is_maintenance ?? false
-          const appName = app.display_name || app.name
-          const appUrl = app.subdomain || `${app.slug}.a8n.tools`
-          const canAccess = hasActiveMembership && app.is_active && !isMaintenance
+          const baseDomain = import.meta.env.VITE_APP_DOMAIN || 'a8n.tools'
+          const appUrl = `${app.slug}.${baseDomain}`
 
           return (
             <Card
               key={app.id}
-              className={!canAccess ? 'opacity-75' : ''}
+              className={!app.is_accessible ? 'opacity-75' : ''}
             >
               <CardHeader>
                 <div className="flex items-start justify-between">
@@ -71,22 +69,19 @@ export function ApplicationsPage() {
                     <Icon className="h-6 w-6 text-primary" />
                   </div>
                   <div className="flex gap-2">
-                    {isMaintenance && (
+                    {app.maintenance_mode && (
                       <Badge variant="warning">Maintenance</Badge>
-                    )}
-                    {!app.is_active && (
-                      <Badge variant="secondary">Inactive</Badge>
                     )}
                   </div>
                 </div>
-                <CardTitle className="mt-4">{appName}</CardTitle>
+                <CardTitle className="mt-4">{app.display_name}</CardTitle>
                 <CardDescription>{app.description}</CardDescription>
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground mb-4">
                   {appUrl}
                 </p>
-                {canAccess ? (
+                {app.is_accessible ? (
                   <a
                     href={`https://${appUrl}`}
                     target="_blank"
@@ -101,7 +96,7 @@ export function ApplicationsPage() {
                   <Button className="w-full" disabled>
                     {!hasActiveMembership
                       ? 'Membership Required'
-                      : isMaintenance
+                      : app.maintenance_mode
                       ? 'Under Maintenance'
                       : 'Not Available'}
                   </Button>

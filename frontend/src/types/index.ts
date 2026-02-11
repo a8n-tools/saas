@@ -91,18 +91,15 @@ export interface CheckoutSessionResponse {
 // Application types
 export interface Application {
   id: string
-  name: string
   slug: string
-  description: string
-  display_name?: string
+  display_name: string
+  description: string | null
   icon_url: string | null
-  subdomain?: string
-  container_name?: string
-  is_active: boolean
-  is_maintenance?: boolean
-  maintenance_mode?: boolean
-  created_at: string
-  updated_at: string
+  version: string | null
+  source_code_url: string | null
+  is_accessible: boolean
+  maintenance_mode: boolean
+  maintenance_message: string | null
 }
 
 // API response types
