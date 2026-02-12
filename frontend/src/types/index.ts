@@ -69,13 +69,9 @@ export interface Membership {
 
 export interface PaymentHistory {
   id: string
-  user_id: string
-  stripe_invoice_id: string
-  stripe_payment_intent_id: string | null
-  amount_cents: number
+  amount: number
   currency: string
   status: string
-  invoice_pdf_url: string | null
   created_at: string
 }
 

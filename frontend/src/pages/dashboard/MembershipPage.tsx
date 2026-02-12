@@ -298,24 +298,16 @@ export function MembershipPage() {
                     </div>
                     <div>
                       <p className="font-medium">
-                        {formatCurrency(payment.amount_cents, payment.currency)}
+                        {formatCurrency(payment.amount, payment.currency)}
                       </p>
                       <p className="text-sm text-muted-foreground">
                         {formatDate(payment.created_at)}
                       </p>
                     </div>
                   </div>
-                  {payment.invoice_pdf_url && (
-                    <a
-                      href={payment.invoice_pdf_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <Button variant="ghost" size="sm">
-                        Download
-                      </Button>
-                    </a>
-                  )}
+                  <Badge variant="outline" className="capitalize">
+                    {payment.status}
+                  </Badge>
                 </div>
               ))}
             </div>
