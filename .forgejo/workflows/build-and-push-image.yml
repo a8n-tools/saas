@@ -44,27 +44,27 @@ jobs:
         uses: actions/checkout@v3
 
       # Use Nushell for all scripts.
-      - uses: hustcer/setup-nu@v3
+      - uses: github.com/hustcer/setup-nu@v3
         with:
           # Don't use 0.90 here, as it would be a float number and would be converted to 0.9
           # you can use v0.90/0.90.0 or '0.90'
           version: "0.101.0"
 
-      - name: Free Disk Space (Ubuntu)
-        uses: jlumbroso/free-disk-space@main
-        with:
-          # this might remove tools that are actually needed,
-          # if set to "true" but frees about 6 GB
-          tool-cache: false
+      #- name: Free Disk Space (Ubuntu)
+      #  uses: jlumbroso/free-disk-space@main
+      #  with:
+      #    # this might remove tools that are actually needed,
+      #    # if set to "true" but frees about 6 GB
+      #    tool-cache: false
 
-          # all of these default to true, but feel free to set to
-          # "false" if necessary for your workflow
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: true
-          docker-images: true
-          swap-storage: true
+      #    # all of these default to true, but feel free to set to
+      #    # "false" if necessary for your workflow
+      #    android: true
+      #    dotnet: true
+      #    haskell: true
+      #    large-packages: true
+      #    docker-images: true
+      #    swap-storage: true
 
       # The repository owner needs to be lowercase.
       - name: Set environment variables
@@ -85,7 +85,7 @@ jobs:
       # Example to push to GHCR: https://github.com/redhat-actions/push-to-registry/blob/main/.github/workflows/ghcr-push.yaml
       - name: Push image to GitHub Container Repository
         id: push-to-ghcr
-        uses: redhat-actions/push-to-registry@v2
+        uses: github.com/redhat-actions/push-to-registry@v2
         with:
           registry: ${{ env.IMAGE_REGISTRY }}
           username: ${{ env.REGISTRY_USER }}
