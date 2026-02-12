@@ -1,23 +1,44 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
+import { authApi } from '@/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { CheckCircle, AppWindow, CreditCard, ArrowRight } from 'lucide-react'
 
 export function CheckoutSuccessPage() {
   const navigate = useNavigate()
-  const { refreshUser, user } = useAuthStore()
+  const { user } = useAuthStore()
   const [countdown, setCountdown] = useState(10)
+  const [ready, setReady] = useState(false)
 
-  // Refresh user data once to pick up new membership status from JWT
+  // Force a token refresh to get a new JWT with updated membership claims.
+  // The old JWT still has membership_status: "none" even though the webhook
+  // has already updated the DB. The refresh endpoint sets a new cookie but
+  // doesn't return user data, so we fetch /users/me after.
   useEffect(() => {
-    refreshUser()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    let cancelled = false
+    const refresh = async () => {
+      try {
+        await authApi.refresh()
+        // New JWT cookie is now set — fetch user with fresh claims
+        const user = await authApi.me()
+        if (!cancelled) {
+          useAuthStore.getState().setUser(user)
+          setReady(true)
+        }
+      } catch {
+        if (!cancelled) setReady(true)
+      }
+    }
+    refresh()
+    return () => { cancelled = true }
   }, [])
 
-  // Auto-redirect countdown
+  // Auto-redirect countdown (only starts after token is refreshed)
   useEffect(() => {
+    if (!ready) return
+
     const timer = setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) {
@@ -30,7 +51,7 @@ export function CheckoutSuccessPage() {
     }, 1000)
 
     return () => clearInterval(timer)
-  }, [navigate])
+  }, [ready, navigate])
 
   return (
     <div className="flex items-center justify-center min-h-[70vh]">

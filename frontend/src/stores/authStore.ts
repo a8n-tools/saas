@@ -111,11 +111,25 @@ export const useAuthStore = create<AuthState>()(
             isLoading: false,
           })
         } catch {
-          set({
-            user: null,
-            isAuthenticated: false,
-            isLoading: false,
-          })
+          // Access token may be expired — try refreshing it
+          try {
+            // Refresh sets a new JWT cookie but doesn't return user data
+            await authApi.refresh()
+            // Now fetch user with the fresh token
+            const user = await authApi.me()
+            set({
+              user,
+              isAuthenticated: true,
+              isLoading: false,
+            })
+          } catch {
+            // Refresh token also failed — truly logged out
+            set({
+              user: null,
+              isAuthenticated: false,
+              isLoading: false,
+            })
+          }
         }
       },
     }),
