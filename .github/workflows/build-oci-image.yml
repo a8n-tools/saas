@@ -4,7 +4,7 @@ name: Build OCI container
 
 on:
   push:
-    branch:
+    branches:
       - "main"
     #paths:
     #  - "oci-build/**"
