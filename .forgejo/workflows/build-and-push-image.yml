@@ -45,12 +45,12 @@ jobs:
         uses: actions/checkout@v3
 
       # Use Nushell for all scripts.
-      - name: Install Nushell
-        id: nushell
-        uses: https://codeberg.org/NiceGuyIT/action-install-nushell@main
-        with:
-          nushell-version: '0.101.0'
-          register-plugins: true
+      #- name: Install Nushell
+      #  id: nushell
+      #  uses: https://codeberg.org/NiceGuyIT/action-install-nushell@main
+      #  with:
+      #    nushell-version: '0.101.0'
+      #    register-plugins: true
 
       # The repository owner needs to be lowercase.
       - name: Set environment variables
