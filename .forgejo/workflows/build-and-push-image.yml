@@ -5,11 +5,6 @@ name: Build and push image
 on:
   workflow_call:
     inputs:
-      runs-on:
-        description: 'Runner label to use'
-        required: false
-        default: 'ubuntu-act-22.04'
-        type: string
       dir-name:
         description: 'Name of directory to build'
         required: true
@@ -31,7 +26,7 @@ on:
 jobs:
   build-and-push:
     name: Build and push ${{ inputs.image-name }} image of type ${{ inputs.image-type }}
-    runs-on: ${{ inputs.runs-on }}
+    runs-on: ubuntu-act-22.04
     permissions:
       contents: read
       packages: write

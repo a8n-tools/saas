@@ -8,12 +8,12 @@ on:
       - "main"
     #paths:
     #  - "oci-build/**"
-    #  - ".github/workflows/build-oci-image.yml"
+    #  - ".forgejo/workflows/build-oci-image.yml"
 
 jobs:
   build-base:
     name: Build OCI image
-    uses: ./.github/workflows/build-and-push-image.yml
+    uses: ./.forgejo/workflows/build-and-push-image.yml
     permissions:
       contents: read
       packages: write
