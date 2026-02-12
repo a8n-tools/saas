@@ -4,9 +4,11 @@ name: Build OCI container
 
 on:
   push:
-    paths:
-      - "oci-build/**"
-      - ".github/workflows/build-oci-image.yml"
+    branch:
+      - "main"
+    #paths:
+    #  - "oci-build/**"
+    #  - ".github/workflows/build-oci-image.yml"
 
 jobs:
   build-base:
