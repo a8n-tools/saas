@@ -100,7 +100,9 @@ export const useAuthStore = create<AuthState>()(
           return
         }
 
-        set({ isLoading: true })
+        // Don't set isLoading here — this is a background refresh.
+        // Setting isLoading causes ProtectedRoute to unmount/remount children,
+        // which re-triggers mount effects and creates an infinite loop.
         try {
           const user = await authApi.me()
           set({

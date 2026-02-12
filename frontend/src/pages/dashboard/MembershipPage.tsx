@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useMembership } from '@/hooks/useMembership'
 import { membershipApi } from '@/api'
+import { useAuthStore } from '@/stores/authStore'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -35,7 +36,7 @@ export function MembershipPage() {
   const {
     membership,
     isLoading,
-    subscribe,
+    startCheckout,
     cancel,
     reactivate,
     willCancel,
@@ -52,7 +53,7 @@ export function MembershipPage() {
   const handleSubscribe = async () => {
     setActionLoading(true)
     try {
-      await subscribe(selectedTier)
+      await startCheckout(selectedTier)
     } catch {
       // Error handled by hook
     } finally {
@@ -65,6 +66,20 @@ export function MembershipPage() {
     setActionLoading(true)
     try {
       await cancel()
+      window.location.reload()
+    } catch {
+      // Error handled by hook
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleCancelNow = async () => {
+    if (!confirm('Cancel immediately? You will lose access right now.')) return
+    setActionLoading(true)
+    try {
+      await membershipApi.cancelNow()
+      await useAuthStore.getState().refreshUser()
       window.location.reload()
     } catch {
       // Error handled by hook
@@ -174,16 +189,28 @@ export function MembershipPage() {
                     Reactivate Membership
                   </Button>
                 ) : (
-                  <Button
-                    variant="outline"
-                    onClick={handleCancel}
-                    disabled={actionLoading}
-                  >
-                    {actionLoading && (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    )}
-                    Cancel Membership
-                  </Button>
+                  <>
+                    <Button
+                      variant="outline"
+                      onClick={handleCancel}
+                      disabled={actionLoading}
+                    >
+                      {actionLoading && (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      )}
+                      Cancel Membership
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={handleCancelNow}
+                      disabled={actionLoading}
+                    >
+                      {actionLoading && (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      )}
+                      Cancel Now
+                    </Button>
+                  </>
                 )}
               </div>
             </>

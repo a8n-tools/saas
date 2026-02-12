@@ -27,6 +27,9 @@ export const membershipApi = {
   cancel: (): Promise<void> =>
     apiClient.post('/memberships/cancel'),
 
+  cancelNow: (): Promise<void> =>
+    apiClient.post('/memberships/cancel-now'),
+
   reactivate: (): Promise<void> =>
     apiClient.post('/memberships/reactivate'),
 
