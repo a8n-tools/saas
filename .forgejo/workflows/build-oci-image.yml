@@ -13,7 +13,8 @@ on:
 jobs:
   build-base:
     name: Build OCI image
-    runs-on: ghcr.io/niceguyit/opensuse-base:v1-leap-16.0
+    # Use the label from the Forgejo runner
+    runs-on: opensuse-base-16.0-v1
     uses: ./.forgejo/workflows/build-and-push-image.yml
     permissions:
       contents: read

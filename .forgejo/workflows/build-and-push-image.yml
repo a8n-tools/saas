@@ -26,7 +26,8 @@ on:
 jobs:
   build-and-push:
     name: Build and push ${{ inputs.image-name }} image of type ${{ inputs.image-type }}
-    runs-on: ghcr.io/niceguyit/opensuse-base:v1-leap-16.0
+    # Use the label from the Forgejo runner
+    runs-on: opensuse-base-16.0-v1
     permissions:
       contents: read
       packages: write
