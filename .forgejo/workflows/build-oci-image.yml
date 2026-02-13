@@ -22,4 +22,3 @@ jobs:
     with:
       dir-name: oci-build
       image-name: saas
-      image-type: base
