@@ -19,6 +19,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+    secrets: inherit
     with:
       dir-name: oci-build
       image-name: saas
