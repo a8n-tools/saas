@@ -34,11 +34,11 @@ jobs:
     env:
       # Image registry and registry user are set in the steps below.
       IMAGE_REGISTRY: ""
-      REGISTRY_PROVIDER: ghcr.io
+      REGISTRY_PROVIDER: dev.a8n.run
       REGISTRY_USER: ""
-      REGISTRY_PASSWORD: ${{ github.token }}
+      REGISTRY_PASSWORD: ${{ secrets.FORGEJO_PAT }}
     outputs:
-      registry-paths: ${{ steps.push-to-ghcr.outputs.registry-paths }}
+      registry-paths: ${{ steps.push-to-forgejo.outputs.registry-paths }}
 
     steps:
       - name: Clone the repository
@@ -68,9 +68,8 @@ jobs:
           cd ${{ inputs.dir-name }}
           ./build.nu
 
-      # Example to push to GHCR: https://github.com/redhat-actions/push-to-registry/blob/main/.github/workflows/ghcr-push.yaml
-      - name: Push image to GitHub Container Repository
-        id: push-to-ghcr
+      - name: Push image to Forgejo Container Registry
+        id: push-to-forgejo
         uses: https://github.com/redhat-actions/push-to-registry@v2
         with:
           registry: ${{ env.IMAGE_REGISTRY }}
@@ -80,4 +79,4 @@ jobs:
           tags: ${{ steps.build-image.outputs.tags }}
 
       - name: Print image URL
-        run: echo "Production image pushed to ${{ steps.push-to-ghcr.outputs.registry-paths }}"
+        run: echo "Production image pushed to ${{ steps.push-to-forgejo.outputs.registry-paths }}"
