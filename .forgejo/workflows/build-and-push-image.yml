@@ -80,7 +80,7 @@ jobs:
         shell: nu {0}
         run: |
           # Use env vars at runtime to avoid PAT special chars breaking Nushell parsing
-          $env.REGISTRY_PASSWORD | ^buildah login --username $env.REGISTRY_USER --password-stdin $env.REGISTRY_PROVIDER
+          ^buildah login --username $env.REGISTRY_USER --password $env.REGISTRY_PASSWORD $env.REGISTRY_PROVIDER
           let image = "${{ steps.build-image.outputs.image }}"
           let tag = "${{ steps.build-image.outputs.tags }}"
           let registry = $env.IMAGE_REGISTRY
