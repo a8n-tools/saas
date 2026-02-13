@@ -45,7 +45,7 @@ def build-stage []: any -> any {
     # Copy source files into builder
     let project_root = ($env.FILE_PWD | path dirname)
     # Use the troubleshooting stub for fast CI iteration. Change back to "api" when done.
-    let project_api = ($project_root | path join "troubleshooting")
+    let project_api = ($project_root | path join "api")
     log info $"[build-stage] Project root: ($project_root)"
     log info $"[build-stage] Project API: ($project_api)"
 
