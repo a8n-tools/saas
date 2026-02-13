@@ -44,7 +44,8 @@ def build-stage []: any -> any {
 
     # Copy source files into builder
     let project_root = ($env.FILE_PWD | path dirname)
-    let project_api = ($project_root | path join "api")
+    # Use the troubleshooting stub for fast CI iteration. Change back to "api" when done.
+    let project_api = ($project_root | path join "troubleshooting")
     log info $"[build-stage] Project root: ($project_root)"
     log info $"[build-stage] Project API: ($project_api)"
 
@@ -90,7 +91,8 @@ def runtime-stage []: any -> any {
     mut config = $in
     let builder = $config.builder.id
     let project_root = ($env.FILE_PWD | path dirname)
-    let project_api = ($project_root | path join "api")
+    # Use the troubleshooting stub for fast CI iteration. Change back to "api" when done.
+    let project_api = ($project_root | path join "troubleshooting")
     let app_dir = $config.runtime.dir
 
     log info "========================================\n"
