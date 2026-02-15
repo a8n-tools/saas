@@ -22,6 +22,7 @@ import { PrivacyPolicyPage } from '@/pages/public/PrivacyPolicyPage'
 import { DashboardPage } from '@/pages/dashboard/DashboardPage'
 import { ApplicationsPage } from '@/pages/dashboard/ApplicationsPage'
 import { MembershipPage } from '@/pages/dashboard/MembershipPage'
+import { CheckoutSuccessPage } from '@/pages/dashboard/CheckoutSuccessPage'
 import { SettingsPage } from '@/pages/dashboard/SettingsPage'
 
 // Admin pages
@@ -37,14 +38,15 @@ import { MembershipRequiredPage } from '@/pages/errors/MembershipRequiredPage'
 
 // Protected route wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading, refreshUser } = useAuthStore()
+  const { isAuthenticated, isLoading } = useAuthStore()
 
-  // Refresh user data on mount to get latest info from backend
+  // Refresh user data once on mount to get latest info from backend
   useEffect(() => {
     if (isAuthenticated) {
-      refreshUser()
+      useAuthStore.getState().refreshUser()
     }
-  }, [isAuthenticated, refreshUser])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   if (isLoading) {
     return (
@@ -63,14 +65,15 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 // Admin route wrapper
 function AdminRoute({ children }: { children: React.ReactNode }) {
-  const { user, isAuthenticated, isLoading, refreshUser } = useAuthStore()
+  const { user, isAuthenticated, isLoading } = useAuthStore()
 
-  // Refresh user data on mount to get latest role from backend
+  // Refresh user data once on mount to get latest role from backend
   useEffect(() => {
     if (isAuthenticated) {
-      refreshUser()
+      useAuthStore.getState().refreshUser()
     }
-  }, [isAuthenticated, refreshUser])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   if (isLoading) {
     return (
@@ -118,6 +121,7 @@ export default function App() {
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/applications" element={<ApplicationsPage />} />
         <Route path="/membership" element={<MembershipPage />} />
+        <Route path="/checkout/success" element={<CheckoutSuccessPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/membership-required" element={<MembershipRequiredPage />} />
       </Route>

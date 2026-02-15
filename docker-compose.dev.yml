@@ -48,6 +48,13 @@ services:
       EMAIL_ENABLED: ${EMAIL_ENABLED:-false}
       # BASE_URL: ${BASE_URL:-http://localhost:5173}
       BASE_URL: ${BASE_URL:-http://app.a8n.run}
+      # Stripe
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_PRICE_ID: ${STRIPE_PRICE_ID:-}
+      STRIPE_BUSINESS_PRICE_ID: ${STRIPE_BUSINESS_PRICE_ID:-}
+      STRIPE_SUCCESS_URL: https://app.a8n.run/checkout/success
+      STRIPE_CANCEL_URL: https://app.a8n.run/pricing?checkout=canceled
     ports:
       - "18080:8080"
     volumes:
@@ -84,6 +91,7 @@ services:
       # TODO: Once port 443 is working through Traefik, this is not needed.
       # VITE_API_URL: http://api.a8n.run:8080
       VITE_API_URL: https://api.a8n.run
+      VITE_APP_DOMAIN: a8n.run
     ports:
       - "5173:5173"
     networks:

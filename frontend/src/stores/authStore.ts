@@ -100,7 +100,9 @@ export const useAuthStore = create<AuthState>()(
           return
         }
 
-        set({ isLoading: true })
+        // Don't set isLoading here — this is a background refresh.
+        // Setting isLoading causes ProtectedRoute to unmount/remount children,
+        // which re-triggers mount effects and creates an infinite loop.
         try {
           const user = await authApi.me()
           set({
@@ -109,11 +111,25 @@ export const useAuthStore = create<AuthState>()(
             isLoading: false,
           })
         } catch {
-          set({
-            user: null,
-            isAuthenticated: false,
-            isLoading: false,
-          })
+          // Access token may be expired — try refreshing it
+          try {
+            // Refresh sets a new JWT cookie but doesn't return user data
+            await authApi.refresh()
+            // Now fetch user with the fresh token
+            const user = await authApi.me()
+            set({
+              user,
+              isAuthenticated: true,
+              isLoading: false,
+            })
+          } catch {
+            // Refresh token also failed — truly logged out
+            set({
+              user: null,
+              isAuthenticated: false,
+              isLoading: false,
+            })
+          }
         }
       },
     }),

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useMembership } from '@/hooks/useMembership'
 import { membershipApi } from '@/api'
+import { useAuthStore } from '@/stores/authStore'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -35,7 +36,7 @@ export function MembershipPage() {
   const {
     membership,
     isLoading,
-    subscribe,
+    startCheckout,
     cancel,
     reactivate,
     willCancel,
@@ -52,7 +53,7 @@ export function MembershipPage() {
   const handleSubscribe = async () => {
     setActionLoading(true)
     try {
-      await subscribe(selectedTier)
+      await startCheckout(selectedTier)
     } catch {
       // Error handled by hook
     } finally {
@@ -65,6 +66,21 @@ export function MembershipPage() {
     setActionLoading(true)
     try {
       await cancel()
+      window.location.reload()
+    } catch {
+      // Error handled by hook
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleCancelNow = async () => {
+    if (!confirm('Cancel immediately? You will lose access right now.')) return
+    setActionLoading(true)
+    try {
+      await membershipApi.cancelNow()
+      await useAuthStore.getState().refreshUser()
+      window.location.reload()
     } catch {
       // Error handled by hook
     } finally {
@@ -173,16 +189,28 @@ export function MembershipPage() {
                     Reactivate Membership
                   </Button>
                 ) : (
-                  <Button
-                    variant="outline"
-                    onClick={handleCancel}
-                    disabled={actionLoading}
-                  >
-                    {actionLoading && (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    )}
-                    Cancel Membership
-                  </Button>
+                  <>
+                    <Button
+                      variant="outline"
+                      onClick={handleCancel}
+                      disabled={actionLoading}
+                    >
+                      {actionLoading && (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      )}
+                      Cancel Membership
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={handleCancelNow}
+                      disabled={actionLoading}
+                    >
+                      {actionLoading && (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      )}
+                      Cancel Now
+                    </Button>
+                  </>
                 )}
               </div>
             </>
@@ -270,24 +298,16 @@ export function MembershipPage() {
                     </div>
                     <div>
                       <p className="font-medium">
-                        {formatCurrency(payment.amount_cents, payment.currency)}
+                        {formatCurrency(payment.amount, payment.currency)}
                       </p>
                       <p className="text-sm text-muted-foreground">
                         {formatDate(payment.created_at)}
                       </p>
                     </div>
                   </div>
-                  {payment.invoice_pdf_url && (
-                    <a
-                      href={payment.invoice_pdf_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <Button variant="ghost" size="sm">
-                        Download
-                      </Button>
-                    </a>
-                  )}
+                  <Badge variant="outline" className="capitalize">
+                    {payment.status}
+                  </Badge>
                 </div>
               ))}
             </div>

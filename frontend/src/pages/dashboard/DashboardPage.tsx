@@ -80,33 +80,32 @@ export function DashboardPage() {
         ) : (
           <div className="grid gap-4 md:grid-cols-2">
             {applications.map((app) => {
-              const appName = app.display_name || app.name
-              const isMaintenance = app.maintenance_mode ?? app.is_maintenance ?? false
-              const appUrl = app.subdomain || `${app.slug}.a8n.tools`
+              const baseDomain = import.meta.env.VITE_APP_DOMAIN || 'a8n.tools'
+              const appUrl = `${app.slug}.${baseDomain}`
               return (
                 <Card key={app.id}>
                   <CardHeader>
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-lg">{appName}</CardTitle>
-                      {isMaintenance ? (
+                      <CardTitle className="text-lg">{app.display_name}</CardTitle>
+                      {app.maintenance_mode ? (
                         <Badge variant="warning">Maintenance</Badge>
-                      ) : app.is_active ? (
+                      ) : app.is_accessible ? (
                         <Badge variant="success">Active</Badge>
                       ) : (
-                        <Badge variant="secondary">Inactive</Badge>
+                        <Badge variant="secondary">Locked</Badge>
                       )}
                     </div>
                     <CardDescription>{app.description}</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    {hasActiveMembership && app.is_active && !isMaintenance ? (
+                    {app.is_accessible ? (
                       <a
                         href={`https://${appUrl}`}
                         target="_blank"
                         rel="noopener noreferrer"
                       >
                         <Button className="w-full">
-                          Open {appName}
+                          Open {app.display_name}
                           <ExternalLink className="ml-2 h-4 w-4" />
                         </Button>
                       </a>
@@ -114,7 +113,7 @@ export function DashboardPage() {
                       <Button className="w-full" disabled>
                         {!hasActiveMembership
                           ? 'Membership Required'
-                          : isMaintenance
+                          : app.maintenance_mode
                           ? 'Under Maintenance'
                           : 'Not Available'}
                       </Button>
