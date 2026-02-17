@@ -25,4 +25,3 @@ runtime:
 # Published image configuration
 published:
   name: "saas"
-  version: "v0.1.0"
