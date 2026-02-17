@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Link2, Bookmark, Zap, Shield, DollarSign, Terminal, ArrowRight } from 'lucide-react'
+import { useInView } from '@/hooks/useInView'
 
 const heroLines = [
   { plain: 'All access.', gradient: 'No clock.' },
@@ -57,6 +58,9 @@ const apps = [
 
 export function LandingPage() {
   const hero = useMemo(() => heroLines[Math.floor(Math.random() * heroLines.length)], [])
+  const features$ = useInView(0.1)
+  const apps$ = useInView(0.1)
+  const cta$ = useInView(0.15)
 
   return (
     <div>
@@ -103,12 +107,15 @@ export function LandingPage() {
       {/* Features Section */}
       <section className="relative border-t border-border/50 py-20">
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-indigo-500/[0.03] via-transparent to-teal-500/[0.03]" />
-        <div className="container relative">
+        <div
+          ref={features$.ref}
+          className={`container relative scroll-fade-up ${features$.inView ? 'in-view' : ''}`}
+        >
           <h2 className="text-center text-3xl font-bold">No ops. No overhead. No nonsense.</h2>
           <p className="mx-auto mt-4 max-w-2xl text-center text-muted-foreground">
             We handle hosting, updates, and uptime. You get tools that just work.
           </p>
-          <div className="mt-12 grid gap-8 md:grid-cols-3">
+          <div className={`mt-12 grid gap-8 md:grid-cols-3 scroll-fade-up-child ${features$.inView ? 'in-view' : ''}`}>
             {features.map((feature) => (
               <div key={feature.title} className="group relative rounded-xl">
                 {/* Gradient border effect */}
@@ -138,12 +145,15 @@ export function LandingPage() {
           <div className="absolute bottom-0 left-1/3 h-64 w-64 rounded-full bg-teal-500/10 blur-3xl" />
           <div className="absolute bottom-0 right-1/3 h-64 w-64 rounded-full bg-indigo-500/10 blur-3xl" />
         </div>
-        <div className="container relative">
+        <div
+          ref={apps$.ref}
+          className={`container relative scroll-fade-up ${apps$.inView ? 'in-view' : ''}`}
+        >
           <h2 className="text-center text-3xl font-bold">The toolkit</h2>
           <p className="mx-auto mt-4 max-w-2xl text-center text-muted-foreground">
             All included. More shipping soon.
           </p>
-          <div className="mt-12 grid gap-8 md:grid-cols-2 max-w-3xl mx-auto">
+          <div className={`mt-12 grid gap-8 md:grid-cols-2 max-w-3xl mx-auto scroll-fade-up-child ${apps$.inView ? 'in-view' : ''}`}>
             {apps.map((app) => (
               <Card key={app.name} className={`transition-all hover:shadow-lg hover:shadow-indigo-500/5 ${app.borderColor}`}>
                 <CardHeader>
@@ -183,7 +193,10 @@ export function LandingPage() {
           <div className="absolute -top-20 left-1/4 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
           <div className="absolute -bottom-20 right-1/4 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
         </div>
-        <div className="container relative text-center">
+        <div
+          ref={cta$.ref}
+          className={`container relative text-center scroll-fade-up ${cta$.inView ? 'in-view' : ''}`}
+        >
           <h2 className="text-3xl font-bold text-white">
             Stop configuring. Start building.
           </h2>
