@@ -17,7 +17,7 @@ export function DashboardLayout() {
     <div className="flex min-h-screen">
       <Sidebar variant="dashboard" />
       <div className="flex flex-1 flex-col">
-        <header className="flex h-16 items-center justify-between border-b bg-background px-6">
+        <header className="flex h-16 items-center justify-between border-b border-border/50 bg-background/80 backdrop-blur-sm px-6">
           <h1 className="text-lg font-semibold">Dashboard</h1>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -33,8 +33,12 @@ export function DashboardLayout() {
             </Button>
           </div>
         </header>
-        <main className="flex-1 overflow-auto p-6">
-          <Outlet />
+        <main className="relative flex-1 overflow-auto p-6">
+          {/* Subtle background gradient */}
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-indigo-500/[0.02] via-transparent to-teal-500/[0.02]" />
+          <div className="relative">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>

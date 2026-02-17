@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   CheckCircle,
   Receipt,
+  ArrowRight,
 } from 'lucide-react'
 
 // Helper to get tier display name
@@ -102,7 +103,7 @@ export function MembershipPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
       </div>
     )
   }
@@ -131,11 +132,14 @@ export function MembershipPage() {
       )}
 
       {/* Current Plan */}
-      <Card>
+      <Card className="border-border/50 overflow-hidden">
+        <div className="h-1 bg-gradient-to-r from-primary via-indigo-500 to-teal-500" />
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <CreditCard className="h-5 w-5 text-primary" />
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-indigo-500">
+                <CreditCard className="h-4 w-4 text-white" />
+              </div>
               <CardTitle>Current Plan</CardTitle>
             </div>
             <MembershipBadge status={membership?.status} />
@@ -159,7 +163,7 @@ export function MembershipPage() {
                   <p className="font-medium">
                     {getTierPrice(tier, membership)}
                     {membership?.price_locked && (
-                      <Badge variant="outline" className="ml-2">
+                      <Badge variant="outline" className="ml-2 border-teal-500/30 text-teal-600 dark:text-teal-400">
                         Locked
                       </Badge>
                     )}
@@ -182,7 +186,7 @@ export function MembershipPage() {
 
               <div className="flex gap-4 pt-4">
                 {willCancel ? (
-                  <Button onClick={handleReactivate} disabled={actionLoading}>
+                  <Button onClick={handleReactivate} disabled={actionLoading} className="bg-gradient-to-r from-primary to-indigo-500 text-white border-0">
                     {actionLoading && (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     )}
@@ -217,7 +221,9 @@ export function MembershipPage() {
           ) : (
             <div className="py-8">
               <div className="text-center mb-8">
-                <CreditCard className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500/20 to-teal-500/20">
+                  <CreditCard className="h-8 w-8 text-indigo-500" />
+                </div>
                 <h3 className="text-lg font-semibold mb-2">No Active Membership</h3>
                 <p className="text-muted-foreground">
                   Subscribe to access all applications.
@@ -229,37 +235,44 @@ export function MembershipPage() {
                 <button
                   type="button"
                   onClick={() => setSelectedTier('personal')}
-                  className={`p-4 rounded-lg border-2 text-left transition-colors ${
+                  className={`p-4 rounded-lg border-2 text-left transition-all ${
                     selectedTier === 'personal'
-                      ? 'border-primary bg-primary/5'
-                      : 'border-border hover:border-primary/50'
+                      ? 'border-indigo-500 bg-gradient-to-br from-indigo-500/5 to-primary/5 shadow-md shadow-indigo-500/10'
+                      : 'border-border hover:border-indigo-500/50'
                   }`}
                 >
                   <div className="font-semibold">Personal</div>
-                  <div className="text-2xl font-bold mt-1">$3<span className="text-sm font-normal text-muted-foreground">/month</span></div>
-                  <div className="text-sm text-muted-foreground mt-1">For individual developers</div>
+                  <div className="text-2xl font-bold mt-1">
+                    <span className="text-gradient bg-gradient-to-r from-primary to-indigo-500">$3</span>
+                    <span className="text-sm font-normal text-muted-foreground">/month</span>
+                  </div>
+                  <div className="text-sm text-muted-foreground mt-1">For individual use</div>
                 </button>
                 <button
                   type="button"
                   onClick={() => setSelectedTier('business')}
-                  className={`p-4 rounded-lg border-2 text-left transition-colors ${
+                  className={`p-4 rounded-lg border-2 text-left transition-all ${
                     selectedTier === 'business'
-                      ? 'border-primary bg-primary/5'
-                      : 'border-border hover:border-primary/50'
+                      ? 'border-teal-500 bg-gradient-to-br from-teal-500/5 to-indigo-500/5 shadow-md shadow-teal-500/10'
+                      : 'border-border hover:border-teal-500/50'
                   }`}
                 >
                   <div className="font-semibold">Business</div>
-                  <div className="text-2xl font-bold mt-1">$15<span className="text-sm font-normal text-muted-foreground">/month</span></div>
+                  <div className="text-2xl font-bold mt-1">
+                    <span className="text-gradient bg-gradient-to-r from-teal-500 to-indigo-500">$15</span>
+                    <span className="text-sm font-normal text-muted-foreground">/month</span>
+                  </div>
                   <div className="text-sm text-muted-foreground mt-1">For teams and organizations</div>
                 </button>
               </div>
 
               <div className="text-center">
-                <Button onClick={handleSubscribe} disabled={actionLoading} size="lg">
+                <Button onClick={handleSubscribe} disabled={actionLoading} size="lg" className="gap-2 bg-gradient-to-r from-primary to-indigo-500 text-white border-0 shadow-lg shadow-primary/20">
                   {actionLoading && (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   )}
                   Subscribe to {selectedTier === 'business' ? 'Business' : 'Personal'}
+                  <ArrowRight className="h-4 w-4" />
                 </Button>
               </div>
             </div>
@@ -268,10 +281,12 @@ export function MembershipPage() {
       </Card>
 
       {/* Payment History */}
-      <Card>
+      <Card className="border-border/50">
         <CardHeader>
           <div className="flex items-center gap-3">
-            <Receipt className="h-5 w-5 text-primary" />
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-teal-500 to-indigo-500">
+              <Receipt className="h-4 w-4 text-white" />
+            </div>
             <CardTitle>Payment History</CardTitle>
           </div>
           <CardDescription>Your recent payments and invoices.</CardDescription>
@@ -279,7 +294,7 @@ export function MembershipPage() {
         <CardContent>
           {paymentsLoading ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              <Loader2 className="h-6 w-6 animate-spin text-indigo-500" />
             </div>
           ) : payments?.items.length === 0 ? (
             <p className="text-center text-muted-foreground py-8">
@@ -290,11 +305,11 @@ export function MembershipPage() {
               {payments?.items.map((payment) => (
                 <div
                   key={payment.id}
-                  className="flex items-center justify-between py-3 border-b last:border-0"
+                  className="flex items-center justify-between py-3 border-b border-border/50 last:border-0"
                 >
                   <div className="flex items-center gap-4">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100">
-                      <CheckCircle className="h-5 w-5 text-green-600" />
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-teal-500/20 to-teal-500/5">
+                      <CheckCircle className="h-5 w-5 text-teal-600 dark:text-teal-400" />
                     </div>
                     <div>
                       <p className="font-medium">

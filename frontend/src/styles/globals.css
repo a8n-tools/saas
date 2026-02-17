@@ -4,64 +4,64 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 240 20% 98%;
+    --foreground: 240 24% 10%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card: 240 25% 100%;
+    --card-foreground: 240 24% 10%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 240 24% 10%;
 
     --primary: 24.6 95% 53.1%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 240 20% 95%;
+    --secondary-foreground: 240 24% 10%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 240 20% 95%;
+    --muted-foreground: 240 10% 46%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 240 20% 95%;
+    --accent-foreground: 240 24% 10%;
 
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
+    --border: 240 15% 90%;
+    --input: 240 15% 90%;
     --ring: 24.6 95% 53.1%;
 
     --radius: 0.5rem;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    --background: 246 30% 7%;
+    --foreground: 240 20% 92%;
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    --card: 246 28% 10%;
+    --card-foreground: 240 20% 92%;
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 246 28% 10%;
+    --popover-foreground: 240 20% 92%;
 
     --primary: 24.6 95% 53.1%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 246 25% 15%;
+    --secondary-foreground: 240 20% 92%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 246 25% 15%;
+    --muted-foreground: 240 12% 60%;
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 246 25% 15%;
+    --accent-foreground: 240 20% 92%;
 
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
+    --border: 246 25% 16%;
+    --input: 246 25% 16%;
     --ring: 24.6 95% 53.1%;
   }
 }
@@ -75,3 +75,77 @@
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
+
+@layer utilities {
+  .text-gradient {
+    @apply bg-clip-text text-transparent;
+  }
+}
+
+/* Hero animations */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes gradient-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translate(0, 0); }
+  33% { transform: translate(10px, -15px); }
+  66% { transform: translate(-10px, 10px); }
+}
+
+.hero-fade-up {
+  animation: fade-up 0.6s ease-out both;
+}
+.hero-fade-up-1 {
+  animation: fade-up 0.6s ease-out 0.15s both;
+}
+.hero-fade-up-2 {
+  animation: fade-up 0.6s ease-out 0.3s both;
+}
+.hero-fade-up-3 {
+  animation: fade-up 0.6s ease-out 0.45s both;
+}
+.hero-gradient-shift {
+  background-size: 200% auto;
+  animation: gradient-shift 6s ease-in-out infinite;
+}
+.hero-float-slow {
+  animation: float 8s ease-in-out infinite;
+}
+.hero-float-slower {
+  animation: float 12s ease-in-out infinite;
+}
+
+/* Scroll-triggered fade-up */
+.scroll-fade-up {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity 0.7s ease-out, transform 0.7s ease-out;
+}
+.scroll-fade-up.in-view {
+  opacity: 1;
+  transform: translateY(0);
+}
+.scroll-fade-up-child > * {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.5s ease-out, transform 0.5s ease-out;
+}
+.scroll-fade-up-child.in-view > *:nth-child(1) { opacity: 1; transform: translateY(0); transition-delay: 0s; }
+.scroll-fade-up-child.in-view > *:nth-child(2) { opacity: 1; transform: translateY(0); transition-delay: 0.1s; }
+.scroll-fade-up-child.in-view > *:nth-child(3) { opacity: 1; transform: translateY(0); transition-delay: 0.2s; }
+.scroll-fade-up-child.in-view > *:nth-child(4) { opacity: 1; transform: translateY(0); transition-delay: 0.3s; }
+.scroll-fade-up-child.in-view > *:nth-child(5) { opacity: 1; transform: translateY(0); transition-delay: 0.4s; }
+.scroll-fade-up-child.in-view > *:nth-child(6) { opacity: 1; transform: translateY(0); transition-delay: 0.5s; }

@@ -55,25 +55,29 @@ export function CheckoutSuccessPage() {
 
   return (
     <div className="flex items-center justify-center min-h-[70vh]">
-      <Card className="max-w-lg w-full">
+      <Card className="max-w-lg w-full border-border/50 overflow-hidden">
+        <div className="h-1 bg-gradient-to-r from-teal-500 via-indigo-500 to-primary" />
         <CardContent className="pt-8 pb-8 text-center space-y-6">
           <div className="flex justify-center">
-            <div className="rounded-full bg-green-100 p-4">
-              <CheckCircle className="h-12 w-12 text-green-600" />
+            <div className="rounded-full bg-gradient-to-br from-teal-500/20 to-teal-500/5 p-4">
+              <CheckCircle className="h-12 w-12 text-teal-500" />
             </div>
           </div>
 
           <div className="space-y-2">
-            <h1 className="text-3xl font-bold">Welcome aboard!</h1>
+            <h1 className="text-3xl font-bold">
+              Welcome aboard
+              <span className="text-gradient bg-gradient-to-r from-primary to-indigo-500">!</span>
+            </h1>
             <p className="text-muted-foreground text-lg">
               Your membership is now active. You have full access to all applications.
             </p>
           </div>
 
           {user && (
-            <div className="bg-muted/50 rounded-lg p-4 space-y-2 text-sm">
+            <div className="bg-gradient-to-r from-indigo-500/5 via-primary/5 to-teal-500/5 rounded-lg p-4 space-y-2 text-sm border border-border/50">
               <div className="flex items-center justify-center gap-2">
-                <CreditCard className="h-4 w-4 text-muted-foreground" />
+                <CreditCard className="h-4 w-4 text-indigo-500" />
                 <span className="capitalize font-medium">{user.membership_tier || 'Personal'} Plan</span>
               </div>
               <p className="text-muted-foreground">
@@ -83,12 +87,12 @@ export function CheckoutSuccessPage() {
           )}
 
           <div className="flex flex-col gap-3 pt-2">
-            <Button size="lg" onClick={() => navigate('/applications')}>
-              <AppWindow className="mr-2 h-4 w-4" />
+            <Button size="lg" onClick={() => navigate('/applications')} className="gap-2 bg-gradient-to-r from-primary to-indigo-500 text-white border-0 shadow-lg shadow-primary/20">
+              <AppWindow className="h-4 w-4" />
               Browse Applications
-              <ArrowRight className="ml-2 h-4 w-4" />
+              <ArrowRight className="h-4 w-4" />
             </Button>
-            <Button variant="outline" onClick={() => navigate('/membership')}>
+            <Button variant="outline" onClick={() => navigate('/membership')} className="border-indigo-300/30 text-indigo-600 hover:bg-indigo-500/10 dark:border-indigo-500/30 dark:text-indigo-400">
               View Membership Details
             </Button>
           </div>

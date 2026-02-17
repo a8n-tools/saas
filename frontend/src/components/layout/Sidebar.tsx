@@ -43,14 +43,14 @@ export function Sidebar({ variant = 'dashboard' }: SidebarProps) {
   const isAdmin = user?.role === 'admin'
 
   return (
-    <aside className="hidden md:flex w-64 flex-col border-r bg-background">
-      <div className="flex h-16 items-center border-b px-6">
+    <aside className="hidden md:flex w-64 flex-col border-r border-border/50 bg-gradient-to-b from-background via-background to-indigo-950/5 dark:to-indigo-950/20">
+      <div className="flex h-16 items-center border-b border-border/50 px-6">
         <Link to="/" className="flex items-center space-x-2">
-          <span className="text-xl font-bold text-primary">a8n</span>
+          <span className="text-xl font-bold text-gradient bg-gradient-to-r from-primary to-indigo-500">a8n</span>
           <span className="text-xl font-light">.tools</span>
         </Link>
         {variant === 'admin' && (
-          <span className="ml-2 rounded bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+          <span className="ml-2 rounded bg-gradient-to-r from-indigo-500/20 to-teal-500/20 px-2 py-0.5 text-xs font-medium text-indigo-600 dark:text-indigo-400">
             Admin
           </span>
         )}
@@ -63,9 +63,9 @@ export function Sidebar({ variant = 'dashboard' }: SidebarProps) {
               key={item.href}
               to={item.href}
               className={cn(
-                'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all',
                 isActive
-                  ? 'bg-primary text-primary-foreground'
+                  ? 'bg-gradient-to-r from-primary to-indigo-500 text-white shadow-md shadow-primary/20'
                   : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
               )}
             >
@@ -76,7 +76,7 @@ export function Sidebar({ variant = 'dashboard' }: SidebarProps) {
         })}
         {variant === 'dashboard' && isAdmin && (
           <>
-            <div className="my-4 border-t" />
+            <div className="my-4 border-t border-border/50" />
             <Link
               to="/admin"
               className={cn(
@@ -91,7 +91,7 @@ export function Sidebar({ variant = 'dashboard' }: SidebarProps) {
         )}
         {variant === 'admin' && (
           <>
-            <div className="my-4 border-t" />
+            <div className="my-4 border-t border-border/50" />
             <Link
               to="/dashboard"
               className={cn(

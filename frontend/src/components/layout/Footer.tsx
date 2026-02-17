@@ -2,16 +2,16 @@ import { Link } from 'react-router-dom'
 
 export function Footer() {
   return (
-    <footer className="border-t bg-background">
+    <footer className="border-t border-border/50 bg-gradient-to-b from-background to-indigo-950/5 dark:to-indigo-950/30">
       <div className="container py-8 md:py-12">
         <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
           <div className="col-span-2 md:col-span-1">
             <Link to="/" className="flex items-center space-x-2">
-              <span className="text-xl font-bold text-primary">a8n</span>
+              <span className="text-xl font-bold text-gradient bg-gradient-to-r from-primary to-indigo-500">a8n</span>
               <span className="text-xl font-light">.tools</span>
             </Link>
             <p className="mt-4 text-sm text-muted-foreground">
-              Developer tools, automated.
+              Ship more. Manage less.
             </p>
           </div>
           <div>
@@ -20,7 +20,7 @@ export function Footer() {
               <li>
                 <Link
                   to="/pricing"
-                  className="text-muted-foreground hover:text-foreground"
+                  className="text-muted-foreground hover:text-foreground transition-colors"
                 >
                   Pricing
                 </Link>
@@ -28,7 +28,7 @@ export function Footer() {
               <li>
                 <a
                   href="https://rus.a8n.tools"
-                  className="text-muted-foreground hover:text-foreground"
+                  className="text-muted-foreground hover:text-foreground transition-colors"
                 >
                   RUS
                 </a>
@@ -36,7 +36,7 @@ export function Footer() {
               <li>
                 <a
                   href="https://rustylinks.a8n.tools"
-                  className="text-muted-foreground hover:text-foreground"
+                  className="text-muted-foreground hover:text-foreground transition-colors"
                 >
                   Rusty Links
                 </a>
@@ -49,7 +49,7 @@ export function Footer() {
               <li>
                 <Link
                   to="/login"
-                  className="text-muted-foreground hover:text-foreground"
+                  className="text-muted-foreground hover:text-foreground transition-colors"
                 >
                   Login
                 </Link>
@@ -57,7 +57,7 @@ export function Footer() {
               <li>
                 <Link
                   to="/register"
-                  className="text-muted-foreground hover:text-foreground"
+                  className="text-muted-foreground hover:text-foreground transition-colors"
                 >
                   Register
                 </Link>
@@ -70,7 +70,7 @@ export function Footer() {
               <li>
                 <Link
                   to="/terms"
-                  className="text-muted-foreground hover:text-foreground"
+                  className="text-muted-foreground hover:text-foreground transition-colors"
                 >
                   Terms of Service
                 </Link>
@@ -78,7 +78,7 @@ export function Footer() {
               <li>
                 <Link
                   to="/privacy"
-                  className="text-muted-foreground hover:text-foreground"
+                  className="text-muted-foreground hover:text-foreground transition-colors"
                 >
                   Privacy Policy
                 </Link>
@@ -86,7 +86,7 @@ export function Footer() {
             </ul>
           </div>
         </div>
-        <div className="mt-8 border-t pt-8 text-center text-sm text-muted-foreground">
+        <div className="mt-8 border-t border-border/50 pt-8 text-center text-sm text-muted-foreground">
           <p>&copy; {new Date().getFullYear()} a8n.tools. All rights reserved.</p>
         </div>
       </div>
