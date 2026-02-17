@@ -8,7 +8,7 @@ const heroLines = [
   { plain: 'All access.', gradient: 'No clock.' },
   { plain: 'All in.', gradient: 'All yours.' },
   { plain: 'Price locked.', gradient: 'Tools stocked.' },
-  { plain: 'Locked in.', gradient: 'Lights on' },
+  { plain: 'Locked in.', gradient: 'Lights on.' },
   { plain: 'Subscribed once', gradient: 'Sorted Forever.' },
 ]
 
@@ -62,30 +62,30 @@ export function LandingPage() {
     <div>
       {/* Hero Section */}
       <section className="relative overflow-hidden py-20 md:py-32">
-        {/* Gradient orbs */}
+        {/* Gradient orbs — drifting */}
         <div className="pointer-events-none absolute inset-0">
-          <div className="absolute -top-24 left-1/4 h-96 w-96 rounded-full bg-primary/15 blur-3xl" />
-          <div className="absolute -top-24 right-1/4 h-96 w-96 rounded-full bg-indigo-500/15 blur-3xl" />
-          <div className="absolute top-32 left-1/2 h-64 w-64 -translate-x-1/2 rounded-full bg-teal-500/10 blur-3xl" />
+          <div className="absolute -top-24 left-1/4 h-96 w-96 rounded-full bg-primary/15 blur-3xl hero-float-slow" />
+          <div className="absolute -top-24 right-1/4 h-96 w-96 rounded-full bg-indigo-500/15 blur-3xl hero-float-slower" />
+          <div className="absolute top-32 left-1/2 h-64 w-64 -translate-x-1/2 rounded-full bg-teal-500/10 blur-3xl hero-float-slow" />
         </div>
 
         <div className="container relative flex flex-col items-center text-center">
-          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-indigo-300/30 bg-indigo-500/10 px-4 py-1.5 text-sm text-indigo-600 backdrop-blur-sm dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-400">
+          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-indigo-300/30 bg-indigo-500/10 px-4 py-1.5 text-sm text-indigo-600 backdrop-blur-sm dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-400 hero-fade-up">
             <Terminal className="h-3.5 w-3.5" />
             Open source. Rust-powered. Fully managed.
           </div>
-          <h1 className="text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl lg:text-7xl">
+          <h1 className="text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl lg:text-7xl hero-fade-up-1">
             {hero.plain}{' '}
-            <span className="text-gradient bg-gradient-to-r from-primary via-indigo-500 to-teal-400">
+            <span className="text-gradient bg-gradient-to-r from-primary via-indigo-500 to-teal-400 hero-gradient-shift">
               {hero.gradient}
             </span>
           </h1>
-          <p className="mt-6 max-w-2xl text-lg text-muted-foreground md:text-xl">
+          <p className="mt-6 max-w-2xl text-lg text-muted-foreground md:text-xl hero-fade-up-2">
             Tools that run themselves so you can focus on what you're actually building.
             One subscription.{' '}
             <span className="font-semibold text-foreground">$3/month</span>, locked forever.
           </p>
-          <div className="mt-10 flex flex-col gap-4 sm:flex-row">
+          <div className="mt-10 flex flex-col gap-4 sm:flex-row hero-fade-up-3">
             <Link to="/register">
               <Button size="lg" className="w-full sm:w-auto gap-2 bg-gradient-to-r from-primary to-indigo-500 hover:from-primary/90 hover:to-indigo-500/90 border-0 text-white shadow-lg shadow-primary/25">
                 Get Started <ArrowRight className="h-4 w-4" />
