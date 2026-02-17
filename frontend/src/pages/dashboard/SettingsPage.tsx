@@ -78,10 +78,13 @@ export function SettingsPage() {
       </div>
 
       {/* Account Info */}
-      <Card>
+      <Card className="border-border/50 overflow-hidden">
+        <div className="h-1 bg-gradient-to-r from-primary via-indigo-500 to-teal-500" />
         <CardHeader>
           <div className="flex items-center gap-3">
-            <User className="h-5 w-5 text-primary" />
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-indigo-500">
+              <User className="h-4 w-4 text-white" />
+            </div>
             <CardTitle>Account Information</CardTitle>
           </div>
           <CardDescription>Your account details.</CardDescription>
@@ -106,7 +109,7 @@ export function SettingsPage() {
               <p className="font-medium flex items-center gap-2">
                 {user?.email_verified ? (
                   <>
-                    <Check className="h-4 w-4 text-green-600" />
+                    <Check className="h-4 w-4 text-teal-600 dark:text-teal-400" />
                     Verified
                   </>
                 ) : (
@@ -128,10 +131,12 @@ export function SettingsPage() {
       </Card>
 
       {/* Change Password */}
-      <Card>
+      <Card className="border-border/50">
         <CardHeader>
           <div className="flex items-center gap-3">
-            <Lock className="h-5 w-5 text-primary" />
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-teal-500">
+              <Lock className="h-4 w-4 text-white" />
+            </div>
             <CardTitle>Change Password</CardTitle>
           </div>
           <CardDescription>
@@ -185,7 +190,7 @@ export function SettingsPage() {
                     key={req.label}
                     className={`flex items-center gap-2 text-xs ${
                       req.test(newPassword)
-                        ? 'text-green-600'
+                        ? 'text-teal-600 dark:text-teal-400'
                         : 'text-muted-foreground'
                     }`}
                   >
@@ -214,7 +219,7 @@ export function SettingsPage() {
               )}
             </div>
 
-            <Button type="submit" disabled={isLoading}>
+            <Button type="submit" disabled={isLoading} className="bg-gradient-to-r from-primary to-indigo-500 text-white border-0">
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Update Password
             </Button>
@@ -223,10 +228,12 @@ export function SettingsPage() {
       </Card>
 
       {/* Security */}
-      <Card>
+      <Card className="border-border/50">
         <CardHeader>
           <div className="flex items-center gap-3">
-            <Shield className="h-5 w-5 text-primary" />
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-teal-500 to-indigo-500">
+              <Shield className="h-4 w-4 text-white" />
+            </div>
             <CardTitle>Security</CardTitle>
           </div>
           <CardDescription>
