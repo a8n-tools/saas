@@ -64,9 +64,9 @@ export function LandingPage() {
             Open source. Rust-powered. Fully managed.
           </div>
           <h1 className="text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl lg:text-7xl">
-            Ship more.{' '}
+            All access.{' '}
             <span className="text-gradient bg-gradient-to-r from-primary via-indigo-500 to-teal-400">
-              Manage less.
+              No clock.
             </span>
           </h1>
           <p className="mt-6 max-w-2xl text-lg text-muted-foreground md:text-xl">
