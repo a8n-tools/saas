@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 import { useApplications } from '@/hooks/useApplications'
@@ -6,9 +7,18 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { AppWindow, CreditCard, ExternalLink, Loader2, ArrowRight } from 'lucide-react'
 
+const taglines = [
+  'All access. No clock.',
+  'All in. All yours.',
+  'No teardown. No sunset. Just tools.',
+  'Price locked. Tools stocked.',
+  'Zero TTL. Infinite access.',
+]
+
 export function DashboardPage() {
   const { user } = useAuthStore()
   const { applications, isLoading } = useApplications()
+  const tagline = useMemo(() => taglines[Math.floor(Math.random() * taglines.length)], [])
 
   const hasActiveMembership =
     user?.membership_status === 'active' ||
@@ -22,7 +32,7 @@ export function DashboardPage() {
           <span className="text-gradient bg-gradient-to-r from-primary to-indigo-500">!</span>
         </h1>
         <p className="mt-2 text-muted-foreground">
-          Here's an overview of your account and applications.
+          {tagline}
         </p>
       </div>
 
