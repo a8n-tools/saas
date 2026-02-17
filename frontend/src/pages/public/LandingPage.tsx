@@ -1,7 +1,16 @@
+import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Link2, Bookmark, Zap, Shield, DollarSign, Terminal, ArrowRight } from 'lucide-react'
+
+const heroLines = [
+  { plain: 'All access.', gradient: 'No clock.' },
+  { plain: 'All in.', gradient: 'All yours.' },
+  { plain: 'Price locked.', gradient: 'Tools stocked.' },
+  { plain: 'Locked in.', gradient: 'Lights on' },
+  { plain: 'Subscribed once', gradient: 'Sorted Forever.' },
+]
 
 const features = [
   {
@@ -47,6 +56,8 @@ const apps = [
 ]
 
 export function LandingPage() {
+  const hero = useMemo(() => heroLines[Math.floor(Math.random() * heroLines.length)], [])
+
   return (
     <div>
       {/* Hero Section */}
@@ -64,9 +75,9 @@ export function LandingPage() {
             Open source. Rust-powered. Fully managed.
           </div>
           <h1 className="text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl lg:text-7xl">
-            All access.{' '}
+            {hero.plain}{' '}
             <span className="text-gradient bg-gradient-to-r from-primary via-indigo-500 to-teal-400">
-              No clock.
+              {hero.gradient}
             </span>
           </h1>
           <p className="mt-6 max-w-2xl text-lg text-muted-foreground md:text-xl">
