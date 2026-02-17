@@ -11,6 +11,8 @@ const heroLines = [
   { plain: 'Price locked.', gradient: 'Tools stocked.' },
   { plain: 'Locked in.', gradient: 'Lights on.' },
   { plain: 'Subscribed once', gradient: 'Sorted Forever.' },
+  { plain: 'One Price', gradient: 'For life.' },
+  { plain: 'Open source', gradient: 'For life.' },
 ]
 
 const features = [
