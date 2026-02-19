@@ -20,7 +20,7 @@ runtime:
       - HOSTNAME=0.0.0.0
       - RUST_LOG=info
     labels:
-      - org.opencontainers.image.source=https://github.com/a8n-tools/saas
+      - org.opencontainers.image.source=https://dev.a8n.run/a8n-tools/saas
 
 # Published image configuration
 published:
