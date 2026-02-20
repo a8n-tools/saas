@@ -22,6 +22,15 @@ pub struct Config {
     pub cookie_domain: Option<String>,
 }
 
+/// SMTP TLS mode
+#[derive(Debug, Clone, PartialEq)]
+pub enum SmtpTls {
+    /// Implicit TLS (port 465) — connection is TLS from the start
+    Implicit,
+    /// STARTTLS (port 587) — plaintext connection upgraded to TLS
+    Starttls,
+}
+
 /// Email configuration
 #[derive(Debug, Clone)]
 pub struct EmailConfig {
@@ -29,6 +38,8 @@ pub struct EmailConfig {
     pub smtp_host: String,
     /// SMTP server port
     pub smtp_port: u16,
+    /// SMTP TLS mode
+    pub smtp_tls: SmtpTls,
     /// SMTP username
     pub smtp_username: String,
     /// SMTP password
@@ -54,12 +65,25 @@ impl EmailConfig {
         let smtp_host = env::var("SMTP_HOST").unwrap_or_else(|_| "localhost".to_string());
         let has_smtp = !smtp_host.is_empty() && smtp_host != "localhost";
 
+        // SMTP_TLS: "implicit" (port 465) or "starttls" (port 587)
+        let smtp_tls = match env::var("SMTP_TLS").unwrap_or_default().to_lowercase().as_str() {
+            "starttls" => SmtpTls::Starttls,
+            // Default to implicit TLS (port 465)
+            _ => SmtpTls::Implicit,
+        };
+
+        let default_port: u16 = match smtp_tls {
+            SmtpTls::Implicit => 465,
+            SmtpTls::Starttls => 587,
+        };
+
         Self {
             smtp_host,
             smtp_port: env::var("SMTP_PORT")
-                .unwrap_or_else(|_| "587".to_string())
+                .unwrap_or_else(|_| default_port.to_string())
                 .parse()
-                .unwrap_or(587),
+                .unwrap_or(default_port),
+            smtp_tls,
             smtp_username: env::var("SMTP_USERNAME").unwrap_or_default(),
             smtp_password: env::var("SMTP_PASSWORD").unwrap_or_default(),
             from_email: env::var("SMTP_FROM").unwrap_or_else(|_| "noreply@a8n.tools".to_string()),

@@ -8,7 +8,7 @@ use lettre::{
 };
 use tera::{Context, Tera};
 
-use crate::config::EmailConfig;
+use crate::config::{EmailConfig, SmtpTls};
 use crate::errors::AppError;
 
 /// Email service for sending transactional emails
@@ -30,25 +30,25 @@ impl EmailService {
                 config.smtp_password.clone(),
             );
 
-            // Port 465 uses implicit TLS (SMTPS), port 587 uses STARTTLS
-            let transport = if config.smtp_port == 465 {
-                // Use SMTPS (implicit TLS) for port 465
-                AsyncSmtpTransport::<Tokio1Executor>::relay(&config.smtp_host)
-                    .map_err(|e| AppError::internal(format!("SMTP connection error: {}", e)))?
-                    .port(config.smtp_port)
-                    .credentials(creds)
-                    .tls(lettre::transport::smtp::client::Tls::Wrapper(
-                        lettre::transport::smtp::client::TlsParameters::new(config.smtp_host.clone())
-                            .map_err(|e| AppError::internal(format!("TLS error: {}", e)))?,
-                    ))
-                    .build()
-            } else {
-                // Use STARTTLS for other ports (587, 25, etc.)
-                AsyncSmtpTransport::<Tokio1Executor>::relay(&config.smtp_host)
-                    .map_err(|e| AppError::internal(format!("SMTP connection error: {}", e)))?
-                    .port(config.smtp_port)
-                    .credentials(creds)
-                    .build()
+            let transport = match config.smtp_tls {
+                SmtpTls::Implicit => {
+                    AsyncSmtpTransport::<Tokio1Executor>::relay(&config.smtp_host)
+                        .map_err(|e| AppError::internal(format!("SMTP connection error: {}", e)))?
+                        .port(config.smtp_port)
+                        .credentials(creds)
+                        .tls(lettre::transport::smtp::client::Tls::Wrapper(
+                            lettre::transport::smtp::client::TlsParameters::new(config.smtp_host.clone())
+                                .map_err(|e| AppError::internal(format!("TLS error: {}", e)))?,
+                        ))
+                        .build()
+                }
+                SmtpTls::Starttls => {
+                    AsyncSmtpTransport::<Tokio1Executor>::relay(&config.smtp_host)
+                        .map_err(|e| AppError::internal(format!("SMTP connection error: {}", e)))?
+                        .port(config.smtp_port)
+                        .credentials(creds)
+                        .build()
+                }
             };
 
             Some(transport)
@@ -118,6 +118,7 @@ impl EmailService {
         let config = EmailConfig {
             smtp_host: "localhost".to_string(),
             smtp_port: 587,
+            smtp_tls: SmtpTls::Starttls,
             smtp_username: String::new(),
             smtp_password: String::new(),
             from_email: "noreply@a8n.tools".to_string(),
