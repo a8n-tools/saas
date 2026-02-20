@@ -18,8 +18,8 @@ env:
   ACTIONS_STEP_DEBUG: true
 
 jobs:
-  build-and-push:
-    name: Build and push saas image
+  build-and-push-api:
+    name: Build and push API image
     runs-on: opensuse-base-16.0-v1
     permissions:
       contents: read
@@ -98,6 +98,79 @@ jobs:
         shell: nu {0}
         run: |
           let paths = "${{ steps.push-to-forgejo.outputs.registry-paths }}"
+          for path in ($paths | split row ",") {
+            print $"Image pushed to ($path)"
+          }
+
+  build-and-push-frontend:
+    name: Build and push frontend image
+    runs-on: opensuse-base-16.0-v1
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE_REGISTRY: ""
+      REGISTRY_PROVIDER: dev.a8n.run
+      REGISTRY_USER: ""
+      REGISTRY_PASSWORD: ${{ secrets.FORGEJO_PAT }}
+
+    steps:
+      - name: Clone the repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set environment variables
+        shell: nu {0}
+        run: |
+          let owner = ($env.GITHUB_REPOSITORY_OWNER | str downcase)
+          $"REGISTRY_USER=($owner)\n" | save --append $env.GITHUB_ENV
+          $"IMAGE_REGISTRY=($env.REGISTRY_PROVIDER)/($owner)\n" | save --append $env.GITHUB_ENV
+
+      - name: Get image tags
+        id: get-tags
+        shell: nu {0}
+        run: |
+          let tags = (nu oci-build/get-tags.nu)
+          $"tags=($tags)\n" | save --append $env.GITHUB_OUTPUT
+
+      - name: Build frontend image
+        id: build-frontend
+        shell: nu {0}
+        run: |
+          let tags_str = "${{ steps.get-tags.outputs.tags }}"
+          let tags = ($tags_str | split row ",")
+          let image = "saas-frontend"
+          let primary = $"($image):($tags.0)"
+          ^buildah bud -t $primary frontend/
+          for tag in ($tags | skip 1) {
+            ^buildah tag $primary $"($image):($tag)"
+          }
+          $"image=($image)\n" | save --append $env.GITHUB_OUTPUT
+
+      - name: Push frontend image to Forgejo Container Registry
+        id: push-frontend
+        shell: nu {0}
+        run: |
+          let password_masked = ($env.REGISTRY_PASSWORD | str substring 0..3) + "***"
+          print $"DEBUG: buildah login --username ($env.REGISTRY_USER) --password ($password_masked) ($env.REGISTRY_PROVIDER)"
+          ^buildah login --username $env.REGISTRY_USER --password $env.REGISTRY_PASSWORD $env.REGISTRY_PROVIDER
+          let image = "${{ steps.build-frontend.outputs.image }}"
+          let tags_str = "${{ steps.get-tags.outputs.tags }}"
+          let tags = ($tags_str | split row ",")
+          let registry = $env.IMAGE_REGISTRY
+          let registry_paths = ($tags | each {|tag|
+            let dest = $"docker://($registry)/($image):($tag)"
+            print $"Pushing ($image):($tag) to ($dest)"
+            ^buildah push $"($image):($tag)" $dest
+            $"($registry)/($image):($tag)"
+          } | str join ",")
+          $"registry-paths=($registry_paths)\n" | save --append $env.GITHUB_OUTPUT
+
+      - name: Print image URLs
+        shell: nu {0}
+        run: |
+          let paths = "${{ steps.push-frontend.outputs.registry-paths }}"
           for path in ($paths | split row ",") {
             print $"Image pushed to ($path)"
           }
