@@ -25,9 +25,9 @@
 		respond "healthy" 200
 	}
 
-	# Reverse proxy /api/* to the API service, rewriting /api/* to /v1/*
+	# Reverse proxy /api/* to the API service, stripping the /api prefix
 	handle /api/* {
-		uri replace /api /v1 1
+		uri strip_prefix /api
 		reverse_proxy {$API_UPSTREAM:a8n-api:8080} {
 			header_up X-Forwarded-Proto {scheme}
 		}

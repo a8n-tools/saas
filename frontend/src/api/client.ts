@@ -1,7 +1,7 @@
 import type { ApiResponse, ApiError } from '@/types'
 
-// Always use /api for browser requests - Vite proxy handles forwarding to the API server
-const API_BASE_URL = '/api'
+// All browser requests go through /api/v1 - proxy layers strip the /api prefix
+const API_BASE_URL = '/api/v1'
 
 class ApiClient {
   private baseUrl: string
