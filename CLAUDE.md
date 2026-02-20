@@ -12,24 +12,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 # Start full dev environment (Postgres + API + Frontend via Docker Compose)
-make dev
+just dev
 
 # Stop / view logs / clean up
-make down
-make logs              # all services
-make logs-api          # API only
-make logs-frontend     # frontend only
-make clean             # stop + remove volumes
+just down
+just logs              # all services
+just logs-api          # API only
+just logs-frontend     # frontend only
+just clean             # stop + remove volumes
 
 # Database
-make db-shell                           # psql into a8n_platform
-make migrate                            # run migrations (cd api && cargo sqlx migrate run)
-make migrate-create NAME=add_feature    # create new migration file
+just db-shell                           # psql into a8n_platform
+just migrate                            # run migrations (cd api && cargo sqlx migrate run)
+just migrate-create add_feature         # create new migration file
 
 # Testing
-make test              # all tests
-make test-api          # cd api && cargo test
-make test-frontend     # cd frontend && npm test (vitest watch mode)
+just test              # all tests
+just test-api          # cd api && cargo test
+just test-frontend     # cd frontend && npm test (vitest watch mode)
 
 # Run a single Rust test
 cd api && cargo test test_name
@@ -49,9 +49,9 @@ cd api && cargo fmt
 cd frontend && npm run lint
 
 # Build Docker images
-make build             # all
-make build-api
-make build-frontend
+just build             # all
+just build-api
+just build-frontend
 ```
 
 ## Architecture

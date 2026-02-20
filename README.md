@@ -55,7 +55,7 @@ A SaaS platform hosting developer and productivity tools. We sell convenience, r
 
 3. Start the development environment:
    ```bash
-   make dev
+   just dev
    ```
 
 4. Access the applications:
@@ -107,7 +107,7 @@ a8n-tools/
 ├── traefik/                # Traefik configuration
 ├── docs/                   # Documentation
 ├── docker-compose.dev.yml  # Development environment
-├── Makefile                # Development commands
+├── Justfile                # Development commands
 └── .env.example            # Environment template
 ```
 
@@ -152,39 +152,53 @@ docker exec a8n-postgres psql -U a8n -d a8n_platform -c \
    "SELECT COUNT(*) FROM _sqlx_migrations;"
 ```
 
+## Admin Setup
+
+To promote a user to admin, connect to the database and update their role:
+
+```bash
+just db-shell
+```
+
+```sql
+UPDATE users SET role = 'admin' WHERE email = 'your@email.com';
+```
+
+Once you have an admin account, you can promote additional users from the admin UI at the Users page.
+
 ## Development
 
 ### Available Commands
 
-Run `make help` to see all available commands:
+Run `just --list` to see all available commands:
 
 ```bash
 # Start development environment
-make dev
+just dev
 
 # Stop all services
-make down
+just down
 
 # View logs
-make logs
-make logs-api
-make logs-frontend
+just logs
+just logs-api
+just logs-frontend
 
 # Database operations
-make db-shell       # Connect to PostgreSQL
-make migrate        # Run migrations
-make migrate-create NAME=create_users  # Create new migration
+just db-shell       # Connect to PostgreSQL
+just migrate        # Run migrations
+just migrate-create create_users  # Create new migration
 
 # Testing
-make test           # Run all tests
-make test-api       # Run API tests only
-make test-frontend  # Run frontend tests only
+just test           # Run all tests
+just test-api       # Run API tests only
+just test-frontend  # Run frontend tests only
 
 # Build
-make build          # Build all Docker images
+just build          # Build all Docker images
 
 # Cleanup
-make clean          # Stop services and remove volumes
+just clean          # Stop services and remove volumes
 ```
 
 ### Adding a New API Endpoint
