@@ -23,21 +23,19 @@ ENV VITE_SHOW_BUSINESS_PRICING=$VITE_SHOW_BUSINESS_PRICING
 # Build the application
 RUN npm run build
 
-# Production stage - nginx to serve static files
-FROM nginx:alpine
+# Production stage - Caddy to serve static files
+FROM caddy:alpine
 
-# Copy custom nginx config
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Copy Caddyfile
+COPY Caddyfile /etc/caddy/Caddyfile
 
 # Copy built assets from builder
-COPY --from=builder /app/dist /usr/share/nginx/html
+COPY --from=builder /app/dist /usr/share/caddy
 
-# Expose port
-EXPOSE 80
+# Default port (configurable via PORT env var)
+ENV PORT=8080
+EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget -q --spider http://localhost/health || exit 1
-
-# Run nginx
-CMD ["nginx", "-g", "daemon off;"]
+    CMD wget -q --spider http://localhost:${PORT}/health || exit 1
