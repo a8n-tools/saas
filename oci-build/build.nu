@@ -184,12 +184,34 @@ def runtime-stage []: any -> any {
     $config
 }
 
-# Get the version from git tags
-def get-version []: nothing -> string {
+# Get image tags from git describe.
+# Returns a list of tags to publish:
+# - Tagged commit (e.g. v0.1.0):          [v0.1.0, latest]
+# - After a tag (e.g. v0.1.0-1-g1b66909): [v0.1.0, latest]
+# - No tag at all:                         [latest]
+def get-tags []: nothing -> list<string> {
     use std log
-    let version = (^git describe --tags --always | str trim)
-    log info $"[get-version] Resolved version: ($version)"
-    $version
+    let describe = (^git describe --tags --always | str trim)
+    log info $"[get-tags] git describe: ($describe)"
+
+    # Try to parse as <tag>-<N>-g<hash> format (commits after a tag)
+    let parts = ($describe | parse --regex '^(?<tag>.+)-\d+-g[0-9a-f]+$')
+
+    if ($parts | is-not-empty) {
+        let tag = $parts.tag.0
+        log info $"[get-tags] Resolved tags: [($tag), latest]"
+        return [$tag, "latest"]
+    }
+
+    # Exact tag match (no commits after tag)
+    if ($describe | str starts-with "v") {
+        log info $"[get-tags] Exact tag. Resolved tags: [($describe), latest]"
+        return [$describe, "latest"]
+    }
+
+    # No tag — just latest
+    log info $"[get-tags] No tag. Resolved tags: [latest]"
+    return ["latest"]
 }
 
 # Publish the image
@@ -197,29 +219,36 @@ def publish-image []: any -> any {
     use std log
     let config = $in
     let runtime = $config.runtime.id
-    let version = (get-version)
+    let tags = (get-tags)
 
     log info "========================================\n"
     log info "[publish-image] Committing and publishing image"
 
-    let image_name = $"($config.published.name):($version)"
+    # Commit the container with the first tag
+    let primary_image = $"($config.published.name):($tags.0)"
+    let image = (^buildah commit --format docker $runtime $primary_image)
+    log info $"[publish-image] Committed image: ($primary_image)"
 
-    # Commit the container as an image (stored in buildah's local storage)
-    let image = (^buildah commit --format docker $runtime $image_name)
-    log info $"[publish-image] Committed image: ($image_name)"
+    # Add additional tags to the same image
+    for tag in ($tags | skip 1) {
+        let additional_image = $"($config.published.name):($tag)"
+        ^buildah tag $primary_image $additional_image
+        log info $"[publish-image] Tagged image: ($additional_image)"
+    }
 
     # Cleanup runtime container
     ^buildah rm $runtime
 
-    # Output for CI/CD
+    # Output for CI/CD (comma-separated tags)
     mut output = "output.log"
     if ("GITHUB_OUTPUT" in $env) {
         $output = $env.GITHUB_OUTPUT
     }
+    let tags_str = ($tags | str join ",")
     $"image=($config.published.name)\n" | save --append $output
-    $"tags=($version)\n" | save --append $output
+    $"tags=($tags_str)\n" | save --append $output
 
-    log info $"[publish-image] Build complete: ($image_name)"
+    log info $"[publish-image] Build complete: ($config.published.name) with tags: ($tags_str)"
     $config
 }
 
