@@ -34,11 +34,10 @@ services:
       HOST: 0.0.0.0
       PORT: 8080
       RUST_LOG: ${RUST_LOG:-debug}
-      # CORS_ORIGIN: http://localhost:5173
-      CORS_ORIGIN: https://app.a8n.run
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
       ENVIRONMENT: development
       JWT_SECRET: ${JWT_SECRET:-s3cr3tK3yAtL34st32Ch4r4ct3rsL0ng!}
-      COOKIE_DOMAIN: .a8n.run
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
       # Email configuration
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-465}
@@ -47,15 +46,14 @@ services:
       SMTP_USERNAME: ${SMTP_USERNAME:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       EMAIL_ENABLED: ${EMAIL_ENABLED:-false}
-      # BASE_URL: ${BASE_URL:-http://localhost:5173}
-      BASE_URL: ${BASE_URL:-http://app.a8n.run}
+      APP_URL: ${APP_URL:-http://localhost:5173}
       # Stripe
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       STRIPE_PRICE_ID: ${STRIPE_PRICE_ID:-}
       STRIPE_BUSINESS_PRICE_ID: ${STRIPE_BUSINESS_PRICE_ID:-}
-      STRIPE_SUCCESS_URL: https://app.a8n.run/checkout/success
-      STRIPE_CANCEL_URL: https://app.a8n.run/pricing?checkout=canceled
+      STRIPE_SUCCESS_URL: ${APP_URL:-http://localhost:5173}/checkout/success
+      STRIPE_CANCEL_URL: ${APP_URL:-http://localhost:5173}/pricing?checkout=canceled
     ports:
       - "18080:8080"
     volumes:
@@ -65,20 +63,9 @@ services:
       - ./api/Cargo.toml:/app/Cargo.toml:ro
       - ./api/Cargo.lock:/app/Cargo.lock:ro
       - api_target:/app/target
-    networks:
-      - default # Use default network for internal communication with Postgres
-      - network-traefik-public
     depends_on:
       postgres:
         condition: service_healthy
-    labels:
-      traefik.enable: true
-      traefik.docker.network: network-traefik-public
-      traefik.http.routers.api-saas.rule: Host(`api.a8n.run`)
-      traefik.http.routers.api-saas.service: api-saas@docker
-      traefik.http.routers.api-saas.entrypoints: web-secure
-      traefik.http.routers.api-saas.tls.certresolver: cert-cloudflare
-      traefik.http.services.api-saas.loadbalancer.server.port: 8080
 
   # React Frontend
   frontend:
@@ -88,15 +75,10 @@ services:
     container_name: a8n-frontend
     restart: unless-stopped
     environment:
-      # Use Docker service name for internal proxy requests
-      # TODO: Once port 443 is working through Traefik, this is not needed.
-      # VITE_API_URL: http://api.a8n.run:8080
-      VITE_API_URL: https://api.a8n.run
-      VITE_APP_DOMAIN: a8n.run
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:18080}
+      VITE_APP_DOMAIN: ${VITE_APP_DOMAIN:-localhost}
     ports:
       - "5173:5173"
-    networks:
-      - network-traefik-public
     volumes:
       - ./frontend/src:/app/src:ro
       - ./frontend/public:/app/public:ro
@@ -105,21 +87,9 @@ services:
       - ./frontend/tsconfig.json:/app/tsconfig.json:ro
       - ./frontend/tailwind.config.js:/app/tailwind.config.js:ro
       - ./frontend/postcss.config.js:/app/postcss.config.js:ro
-    labels:
-      traefik.enable: true
-      traefik.docker.network: network-traefik-public
-      traefik.http.routers.frontend-saas.rule: Host(`app.a8n.run`)
-      traefik.http.routers.frontend-saas.service: frontend-saas@docker
-      traefik.http.routers.frontend-saas.entrypoints: web-secure
-      traefik.http.routers.frontend-saas.tls.certresolver: cert-cloudflare
-      traefik.http.services.frontend-saas.loadbalancer.server.port: 5173
 
 
 volumes:
   # postgres_data:
   data:
   api_target:
-
-networks:
-  network-traefik-public:
-    external: true

@@ -92,7 +92,7 @@ impl EmailConfig {
             from_name: parse_smtp_from_name(
                 &env::var("SMTP_FROM").unwrap_or_else(|_| "noreply@a8n.tools".to_string()),
             ),
-            base_url: env::var("BASE_URL").unwrap_or_else(|_| "http://localhost:5173".to_string()),
+            base_url: env::var("APP_URL").unwrap_or_else(|_| "http://localhost:5173".to_string()),
             enabled: (is_production && has_smtp) || force_enabled,
         }
     }

@@ -120,8 +120,5 @@ Forgejo Actions (`.forgejo/workflows/`). On push to `main`, builds OCI image usi
 
 ## Dev Environment URLs
 
-- Frontend: http://localhost:5173 (or https://app.a8n.run via Traefik)
-- API: http://localhost:18080 (or https://api.a8n.run via Traefik)
-- Traefik dashboard: http://localhost:8081
-
-Requires external Traefik network `network-traefik-public` and `/etc/hosts` entries for `*.a8n.run` subdomains when using Traefik routing.
+- Frontend: http://localhost:5173
+- API: http://localhost:18080

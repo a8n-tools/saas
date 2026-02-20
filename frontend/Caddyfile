@@ -25,6 +25,14 @@
 		respond "healthy" 200
 	}
 
+	# Reverse proxy /api/* to the API service, rewriting /api/* to /v1/*
+	handle /api/* {
+		uri replace /api /v1 1
+		reverse_proxy {$API_UPSTREAM:a8n-api:8080} {
+			header_up X-Forwarded-Proto {scheme}
+		}
+	}
+
 	# Deny access to hidden files
 	@hidden path /.*
 	handle @hidden {
