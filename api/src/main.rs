@@ -14,6 +14,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilte
 use a8n_api::{
     config::Config,
     middleware::{request_id::RequestIdMiddleware, SecurityHeaders},
+    repositories::RateLimitRepository,
     routes,
     services::{AuthService, EmailService, JwtConfig, JwtService, StripeConfig, StripeService},
 };
@@ -106,6 +107,26 @@ async fn main() -> anyhow::Result<()> {
     let cors_origin = config.cors_origin.clone();
     let config_data = config.clone();
 
+    // Spawn rate limit cleanup background task
+    let cleanup_pool = pool.clone();
+    tokio::spawn(async move {
+        info!("Rate limit cleanup task started");
+        let mut interval = tokio::time::interval(Duration::from_secs(3600));
+        loop {
+            interval.tick().await;
+            match RateLimitRepository::cleanup_expired(&cleanup_pool).await {
+                Ok(deleted) => {
+                    if deleted > 0 {
+                        info!(deleted, "Cleaned up expired rate limit entries");
+                    }
+                }
+                Err(e) => {
+                    error!(error = %e, "Failed to cleanup expired rate limit entries");
+                }
+            }
+        }
+    });
+
     info!(address = %server_addr, "Starting HTTP server");
 
     // Start HTTP server
@@ -143,6 +164,8 @@ async fn main() -> anyhow::Result<()> {
             .wrap(SecurityHeaders)
             .wrap(RequestIdMiddleware)
             .wrap(cors)
+            // Explicit JSON body size limit (32 KB)
+            .app_data(web::JsonConfig::default().limit(32_768))
             // Add database pool to app state
             .app_data(web::Data::new(pool.clone()))
             // Add services to app state

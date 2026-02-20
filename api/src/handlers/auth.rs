@@ -4,15 +4,31 @@
 
 use actix_web::{web, HttpRequest, HttpResponse};
 use serde::{Deserialize, Serialize};
+use sqlx::PgPool;
 use std::sync::Arc;
 
 use crate::errors::AppError;
 use crate::middleware::{
     extract_client_ip, extract_device_info, AuthCookies, AuthenticatedUser,
 };
-use crate::models::UserResponse;
+use crate::models::{RateLimitConfig, UserResponse};
+use crate::repositories::RateLimitRepository;
 use crate::responses::{get_request_id, success};
 use crate::services::AuthService;
+
+/// Check rate limit and return RateLimited error if exceeded
+async fn check_rate_limit(
+    pool: &PgPool,
+    key: &str,
+    config: &RateLimitConfig,
+) -> Result<(), AppError> {
+    let (_count, exceeded) = RateLimitRepository::check_and_increment(pool, key, config).await?;
+    if exceeded {
+        let retry_after = RateLimitRepository::get_retry_after(pool, key, config).await?;
+        return Err(AppError::RateLimited { retry_after });
+    }
+    Ok(())
+}
 
 /// Request body for user registration
 #[derive(Debug, Deserialize)]
@@ -66,6 +82,7 @@ pub struct AuthResponse {
 /// Register a new user and log them in
 pub async fn register(
     req: HttpRequest,
+    pool: web::Data<PgPool>,
     auth_service: web::Data<Arc<AuthService>>,
     email_service: web::Data<Arc<crate::services::EmailService>>,
     body: web::Json<RegisterRequest>,
@@ -74,6 +91,9 @@ pub async fn register(
     let request_id = get_request_id(&req);
     let ip_address = extract_client_ip(&req);
     let device_info = extract_device_info(&req);
+
+    // Rate limit by IP address
+    check_rate_limit(&pool, &ip_address, &RateLimitConfig::REGISTRATION).await?;
 
     // Validate email format
     crate::validation::validate_email(&body.email)?;
@@ -123,6 +143,7 @@ pub async fn register(
 /// Login with email and password
 pub async fn login(
     req: HttpRequest,
+    pool: web::Data<PgPool>,
     auth_service: web::Data<Arc<AuthService>>,
     body: web::Json<LoginRequest>,
     config: web::Data<crate::config::Config>,
@@ -130,6 +151,9 @@ pub async fn login(
     let request_id = get_request_id(&req);
     let ip_address = extract_client_ip(&req);
     let device_info = extract_device_info(&req);
+
+    // Rate limit by email
+    check_rate_limit(&pool, &body.email.to_lowercase(), &RateLimitConfig::LOGIN).await?;
 
     let (tokens, user) = auth_service
         .login(
@@ -167,12 +191,16 @@ pub async fn login(
 /// Request a magic link for passwordless login
 pub async fn request_magic_link(
     req: HttpRequest,
+    pool: web::Data<PgPool>,
     auth_service: web::Data<Arc<AuthService>>,
     email_service: web::Data<Arc<crate::services::EmailService>>,
     body: web::Json<MagicLinkRequest>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
     let ip_address = extract_client_ip(&req);
+
+    // Rate limit by email
+    check_rate_limit(&pool, &body.email.to_lowercase(), &RateLimitConfig::MAGIC_LINK).await?;
 
     // Validate email format
     crate::validation::validate_email(&body.email)?;
@@ -203,6 +231,7 @@ pub async fn request_magic_link(
 /// Verify a magic link and login
 pub async fn verify_magic_link(
     req: HttpRequest,
+    pool: web::Data<PgPool>,
     auth_service: web::Data<Arc<AuthService>>,
     body: web::Json<VerifyMagicLinkRequest>,
     config: web::Data<crate::config::Config>,
@@ -210,6 +239,9 @@ pub async fn verify_magic_link(
     let request_id = get_request_id(&req);
     let ip_address = extract_client_ip(&req);
     let device_info = extract_device_info(&req);
+
+    // Rate limit by IP address
+    check_rate_limit(&pool, &ip_address, &RateLimitConfig::LOGIN).await?;
 
     let (tokens, user) = auth_service
         .verify_magic_link(body.token.clone(), device_info, ip_address)
@@ -335,12 +367,16 @@ pub async fn logout_all(
 /// Request a password reset
 pub async fn request_password_reset(
     req: HttpRequest,
+    pool: web::Data<PgPool>,
     auth_service: web::Data<Arc<AuthService>>,
     email_service: web::Data<Arc<crate::services::EmailService>>,
     body: web::Json<PasswordResetRequest>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
     let ip_address = extract_client_ip(&req);
+
+    // Rate limit by email
+    check_rate_limit(&pool, &body.email.to_lowercase(), &RateLimitConfig::PASSWORD_RESET).await?;
 
     // Validate email format
     crate::validation::validate_email(&body.email)?;
@@ -372,11 +408,15 @@ pub async fn request_password_reset(
 /// Complete password reset with token
 pub async fn confirm_password_reset(
     req: HttpRequest,
+    pool: web::Data<PgPool>,
     auth_service: web::Data<Arc<AuthService>>,
     body: web::Json<PasswordResetConfirmRequest>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
     let ip_address = extract_client_ip(&req);
+
+    // Rate limit by IP address
+    check_rate_limit(&pool, &ip_address, &RateLimitConfig::LOGIN).await?;
 
     auth_service
         .complete_password_reset(body.token.clone(), body.new_password.clone(), ip_address)
