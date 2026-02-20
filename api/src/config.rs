@@ -86,12 +86,39 @@ impl EmailConfig {
             smtp_tls,
             smtp_username: env::var("SMTP_USERNAME").unwrap_or_default(),
             smtp_password: env::var("SMTP_PASSWORD").unwrap_or_default(),
-            from_email: env::var("SMTP_FROM").unwrap_or_else(|_| "noreply@a8n.tools".to_string()),
-            from_name: env::var("EMAIL_FROM_NAME").unwrap_or_else(|_| "a8n.tools".to_string()),
+            from_email: parse_smtp_from_email(
+                &env::var("SMTP_FROM").unwrap_or_else(|_| "noreply@a8n.tools".to_string()),
+            ),
+            from_name: parse_smtp_from_name(
+                &env::var("SMTP_FROM").unwrap_or_else(|_| "noreply@a8n.tools".to_string()),
+            ),
             base_url: env::var("BASE_URL").unwrap_or_else(|_| "http://localhost:5173".to_string()),
             enabled: (is_production && has_smtp) || force_enabled,
         }
     }
+}
+
+/// Parse email address from SMTP_FROM.
+/// Supports "Display Name <email>" or plain "email" format.
+fn parse_smtp_from_email(smtp_from: &str) -> String {
+    if let Some(start) = smtp_from.find('<') {
+        if let Some(end) = smtp_from.find('>') {
+            return smtp_from[start + 1..end].trim().to_string();
+        }
+    }
+    smtp_from.trim().to_string()
+}
+
+/// Parse display name from SMTP_FROM.
+/// Returns the part before `<`, or "a8n.tools" if no display name is present.
+fn parse_smtp_from_name(smtp_from: &str) -> String {
+    if let Some(start) = smtp_from.find('<') {
+        let name = smtp_from[..start].trim();
+        if !name.is_empty() {
+            return name.to_string();
+        }
+    }
+    "a8n.tools".to_string()
 }
 
 impl Config {
@@ -207,5 +234,19 @@ mod tests {
 
         let result = Config::from_env();
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_smtp_from_with_display_name() {
+        let input = "a8n Tools Staging <tools-staging@a8n.run>";
+        assert_eq!(parse_smtp_from_email(input), "tools-staging@a8n.run");
+        assert_eq!(parse_smtp_from_name(input), "a8n Tools Staging");
+    }
+
+    #[test]
+    fn test_parse_smtp_from_plain_email() {
+        let input = "noreply@a8n.tools";
+        assert_eq!(parse_smtp_from_email(input), "noreply@a8n.tools");
+        assert_eq!(parse_smtp_from_name(input), "a8n.tools");
     }
 }
