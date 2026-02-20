@@ -27,15 +27,14 @@ export function AdminApplicationsPage() {
   const handleToggleActive = (app: Application) => {
     updateMutation.mutate({
       appId: app.id,
-      data: { is_active: !app.is_active },
+      data: { is_active: !app.is_accessible },
     })
   }
 
   const handleToggleMaintenance = (app: Application) => {
-    const currentMaintenance = app.maintenance_mode ?? app.is_maintenance ?? false
     updateMutation.mutate({
       appId: app.id,
-      data: { is_maintenance: !currentMaintenance },
+      data: { is_maintenance: !app.maintenance_mode },
     })
   }
 
@@ -66,15 +65,15 @@ export function AdminApplicationsPage() {
                     <AppWindow className="h-6 w-6 text-primary" />
                   </div>
                   <div>
-                    <CardTitle>{app.name}</CardTitle>
-                    <CardDescription>{app.subdomain}</CardDescription>
+                    <CardTitle>{app.display_name}</CardTitle>
+                    <CardDescription>{app.slug}</CardDescription>
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
-                  {(app.maintenance_mode ?? app.is_maintenance) && (
+                  {app.maintenance_mode && (
                     <Badge variant="warning">Maintenance</Badge>
                   )}
-                  {app.is_active ? (
+                  {app.is_accessible ? (
                     <Badge variant="success">Active</Badge>
                   ) : (
                     <Badge variant="secondary">Inactive</Badge>
@@ -89,7 +88,7 @@ export function AdminApplicationsPage() {
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-muted-foreground">Active</span>
                     <Switch
-                      checked={app.is_active}
+                      checked={app.is_accessible}
                       onCheckedChange={() => handleToggleActive(app)}
                       disabled={updateMutation.isPending}
                     />
@@ -99,14 +98,14 @@ export function AdminApplicationsPage() {
                       Maintenance Mode
                     </span>
                     <Switch
-                      checked={app.maintenance_mode ?? app.is_maintenance ?? false}
+                      checked={app.maintenance_mode}
                       onCheckedChange={() => handleToggleMaintenance(app)}
                       disabled={updateMutation.isPending}
                     />
                   </div>
                 </div>
                 <a
-                  href={`https://${app.subdomain}`}
+                  href={`https://${app.slug}`}
                   target="_blank"
                   rel="noopener noreferrer"
                 >

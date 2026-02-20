@@ -2,6 +2,8 @@
 
 # Build script for Rust applications using buildah and Alpine
 
+use get-tags.nu
+
 export-env {
     # Set the log level and file.
     $env.NU_LOG_LEVEL = "DEBUG"
@@ -229,7 +231,6 @@ def main [] {
 
     # Check environment for buildah
     use buildah-wrapper.nu *
-    use get-tags.nu
     $env.BUILD_ARGS = ""
     check-environment
 
