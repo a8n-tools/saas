@@ -25,14 +25,6 @@
 		respond "healthy" 200
 	}
 
-	# Reverse proxy /api/* to the API service, stripping the /api prefix
-	handle /api/* {
-		uri strip_prefix /api
-		reverse_proxy {$API_UPSTREAM:a8n-api:8080} {
-			header_up X-Forwarded-Proto {scheme}
-		}
-	}
-
 	# Deny access to hidden files
 	@hidden path /.*
 	handle @hidden {
