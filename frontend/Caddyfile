@@ -15,7 +15,7 @@
 	}
 }
 
-{env.PORT:8080} {
+:{env.PORT:8080} {
 	root * /usr/share/caddy
 
 	import logging
