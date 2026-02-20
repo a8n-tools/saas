@@ -24,4 +24,4 @@ runtime:
 
 # Published image configuration
 published:
-  name: "saas"
+  name: "saas-api"
