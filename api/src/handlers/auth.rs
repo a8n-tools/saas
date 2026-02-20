@@ -93,7 +93,8 @@ pub async fn register(
     let device_info = extract_device_info(&req);
 
     // Rate limit by IP address
-    check_rate_limit(&pool, &ip_address, &RateLimitConfig::REGISTRATION).await?;
+    let ip_key = ip_address.map(|ip| ip.to_string()).unwrap_or_default();
+    check_rate_limit(&pool, &ip_key, &RateLimitConfig::REGISTRATION).await?;
 
     // Validate email format
     crate::validation::validate_email(&body.email)?;
@@ -241,7 +242,8 @@ pub async fn verify_magic_link(
     let device_info = extract_device_info(&req);
 
     // Rate limit by IP address
-    check_rate_limit(&pool, &ip_address, &RateLimitConfig::LOGIN).await?;
+    let ip_key = ip_address.map(|ip| ip.to_string()).unwrap_or_default();
+    check_rate_limit(&pool, &ip_key, &RateLimitConfig::LOGIN).await?;
 
     let (tokens, user) = auth_service
         .verify_magic_link(body.token.clone(), device_info, ip_address)
@@ -416,7 +418,8 @@ pub async fn confirm_password_reset(
     let ip_address = extract_client_ip(&req);
 
     // Rate limit by IP address
-    check_rate_limit(&pool, &ip_address, &RateLimitConfig::LOGIN).await?;
+    let ip_key = ip_address.map(|ip| ip.to_string()).unwrap_or_default();
+    check_rate_limit(&pool, &ip_key, &RateLimitConfig::LOGIN).await?;
 
     auth_service
         .complete_password_reset(body.token.clone(), body.new_password.clone(), ip_address)

@@ -24,7 +24,10 @@ ENV VITE_SHOW_BUSINESS_PRICING=$VITE_SHOW_BUSINESS_PRICING
 RUN npm run build
 
 # Production stage - Caddy to serve static files
-FROM caddy:alpine
+FROM alpine:3.21
+
+# Copy Caddy binary from official image
+COPY --from=caddy:alpine /usr/bin/caddy /usr/bin/caddy
 
 # Copy Caddyfile
 COPY Caddyfile /etc/caddy/Caddyfile
@@ -39,3 +42,5 @@ EXPOSE 8080
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD wget -q --spider http://localhost:${PORT}/health || exit 1
+
+CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile"]
