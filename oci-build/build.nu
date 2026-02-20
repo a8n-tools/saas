@@ -229,7 +229,7 @@ def main [] {
 
     # Check environment for buildah
     use buildah-wrapper.nu *
-    use get-tags.nu get-tags
+    use get-tags.nu
     $env.BUILD_ARGS = ""
     check-environment
 

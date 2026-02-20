@@ -5,7 +5,7 @@
 # - Tagged commit (e.g. v0.1.0):          [v0.1.0, latest]
 # - After a tag (e.g. v0.1.0-1-g1b66909): [v0.1.0, latest]
 # - No tag at all:                         [latest]
-export def get-tags []: nothing -> list<string> {
+export def main []: nothing -> list<string> {
     use std log
     let describe = (^git describe --tags --always | str trim)
     log info $"[get-tags] git describe: ($describe)"
@@ -30,7 +30,4 @@ export def get-tags []: nothing -> list<string> {
     return ["latest"]
 }
 
-# When run directly, output comma-separated tags
-def main [] {
-    get-tags | str join ","
-}
+
