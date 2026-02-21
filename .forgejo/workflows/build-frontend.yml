@@ -17,11 +17,11 @@ on:
 jobs:
   build-and-push-frontend:
     name: Build and push frontend image
-    #runs-on: opensuse-base-16.0-v1
-    runs-on: docker
-    container:
-      image: ghcr.io/niceguyit/opensuse-base:v1-leap-16.0
-      #options: --pull always
+    runs-on: opensuse-base-16.0-v1
+    #runs-on: docker
+    #container:
+    #  image: ghcr.io/niceguyit/opensuse-base:v1-leap-16.0
+    #  #options: --pull always
     permissions:
       contents: read
       packages: write
