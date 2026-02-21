@@ -43,7 +43,7 @@ logs-frontend:
 # Database
 # Connect to PostgreSQL shell
 db-shell:
-    docker compose --file compose.dev.yml exec postgres psql -U a8n -d a8n_platform
+    docker compose --file compose.dev.yml exec postgres psql --username a8n --dbname a8n_platform
 
 # Run database migrations
 migrate:

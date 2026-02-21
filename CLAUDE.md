@@ -108,7 +108,7 @@ PostgreSQL 16. Migrations in `api/migrations/` (sqlx, sequential numbering `2024
 
 ## CI/CD
 
-Forgejo Actions (`.forgejo/workflows/`). On push to `main`, builds OCI image using Nushell scripts in `oci-build/` and pushes to Forgejo Container Registry.
+Forgejo Actions (`.forgejo/workflows/`). On push to `main`, builds OCI images using `docker buildx build` with the project Dockerfiles and pushes to Forgejo Container Registry. Tag resolution uses `oci-build/get-tags.nu`.
 
 ## Conventions
 
