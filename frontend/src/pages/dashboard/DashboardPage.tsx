@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
+import { config } from '@/config'
 import { useAuthStore } from '@/stores/authStore'
 import { useApplications } from '@/hooks/useApplications'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -100,7 +101,7 @@ export function DashboardPage() {
         ) : (
           <div className="grid gap-4 md:grid-cols-2">
             {applications.map((app, index) => {
-              const baseDomain = import.meta.env.VITE_APP_DOMAIN || 'a8n.tools'
+              const baseDomain = config.appDomain || 'a8n.tools'
               const appUrl = `${app.slug}.${baseDomain}`
               const gradients = [
                 'from-indigo-500 to-primary',

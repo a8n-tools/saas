@@ -1,6 +1,7 @@
 import type { ApiResponse, ApiError } from '@/types'
+import { config } from '@/config'
 
-const API_BASE_URL = (import.meta.env.VITE_API_URL || '') + '/v1'
+const API_BASE_URL = config.apiUrl + '/v1'
 
 class ApiClient {
   private baseUrl: string

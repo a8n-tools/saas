@@ -39,6 +39,13 @@
 	header X-Frame-Options "SAMEORIGIN"
 	header X-Content-Type-Options "nosniff"
 
+	# Runtime config endpoint — injects env vars via Caddy templates
+	handle /config.js {
+		header Content-Type "application/javascript"
+		templates
+		respond `window.__RUNTIME_CONFIG__ = { apiUrl: "{{env "VITE_API_URL"}}", appDomain: "{{env "VITE_APP_DOMAIN"}}", showBusinessPricing: "{{env "VITE_SHOW_BUSINESS_PRICING"}}" };` 200
+	}
+
 	# SPA fallback - serve index.html for all routes
 	try_files {path} /index.html
 	file_server

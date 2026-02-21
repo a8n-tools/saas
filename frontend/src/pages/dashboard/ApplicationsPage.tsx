@@ -1,3 +1,4 @@
+import { config } from '@/config'
 import { useAuthStore } from '@/stores/authStore'
 import { useApplications } from '@/hooks/useApplications'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -64,7 +65,7 @@ export function ApplicationsPage() {
         {applications.map((app) => {
           const Icon = appIcons[app.slug] || Link2
           const gradient = appGradients[app.slug] || 'from-primary to-indigo-500'
-          const baseDomain = import.meta.env.VITE_APP_DOMAIN || 'a8n.tools'
+          const baseDomain = config.appDomain || 'a8n.tools'
           const appUrl = `${app.slug}.${baseDomain}`
 
           return (

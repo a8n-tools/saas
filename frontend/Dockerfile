@@ -12,14 +12,6 @@ RUN bun install --frozen-lockfile
 # Copy source code
 COPY . .
 
-# Build arguments for environment variables
-ARG VITE_API_URL=https://api.a8n.tools
-ARG VITE_SHOW_BUSINESS_PRICING=false
-
-# Set environment variables for build
-ENV VITE_API_URL=$VITE_API_URL
-ENV VITE_SHOW_BUSINESS_PRICING=$VITE_SHOW_BUSINESS_PRICING
-
 # Build the application
 RUN bun run build
 
