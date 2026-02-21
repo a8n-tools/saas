@@ -40,6 +40,8 @@ jobs:
       - name: Verify Docker availability
         run: |
           which docker
+          echo "DOCKER_HOST=$DOCKER_HOST"
+          docker info
           docker version
           docker buildx version
 
