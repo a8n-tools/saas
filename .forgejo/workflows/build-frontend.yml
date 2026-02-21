@@ -39,6 +39,8 @@ jobs:
 
       - name: Verify Docker availability
         run: |
+          which docker
+          ls -l /usr/bin/
           docker version
           docker buildx version
 
