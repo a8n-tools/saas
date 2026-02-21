@@ -804,12 +804,12 @@ CMD ["/app/a8n-api"]
 ### 11.4 Frontend Dockerfile
 
 ```dockerfile
-FROM node:20-alpine AS builder
+FROM oven/bun:alpine AS builder
 WORKDIR /app
-COPY package*.json ./
-RUN npm ci
+COPY package.json bun.lockb ./
+RUN bun install --frozen-lockfile
 COPY . .
-RUN npm run build
+RUN bun run build
 
 FROM nginx:alpine
 COPY --from=builder /app/dist /usr/share/nginx/html
@@ -1084,7 +1084,7 @@ cd api && cargo sqlx migrate run
 
 # Run tests
 cargo test
-cd frontend && npm test
+cd frontend && bun test
 
 # Deploy
 docker-compose pull && docker-compose up -d
@@ -1093,7 +1093,7 @@ docker-compose pull && docker-compose up -d
 docker-compose logs -f api
 
 # Connect to database
-docker exec -it a8n-postgres psql -U a8n -d a8n_platform
+docker exec -it a8n-tools-postgres psql -U a8n -d a8n_platform
 ```
 
 ### 20.5 Database Connection Strings

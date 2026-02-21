@@ -150,7 +150,7 @@ cd api && RUST_LOG=debug cargo test
 make test-frontend
 
 # Run with watch mode
-cd frontend && npm test -- --watch
+cd frontend && bun test -- --watch
 ```
 
 ## Code Review Process

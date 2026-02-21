@@ -295,7 +295,7 @@ Set up frontend unit testing with Vitest.
 
 Install dependencies:
 ```bash
-npm install -D vitest @testing-library/react @testing-library/jest-dom @testing-library/user-event jsdom
+bun add -D vitest @testing-library/react @testing-library/jest-dom @testing-library/user-event jsdom
 ```
 
 Configure vitest in vite.config.ts:
@@ -395,8 +395,8 @@ describe('PasswordStrengthIndicator', () => {
 
 Run tests:
 ```bash
-npm test
-npm test -- --coverage
+bun test
+bun test -- --coverage
 ```
 ```
 
@@ -409,7 +409,7 @@ Create frontend integration tests with mocked API.
 
 Install MSW for API mocking:
 ```bash
-npm install -D msw
+bun add -D msw
 ```
 
 Create src/test/mocks/handlers.ts:
@@ -550,7 +550,7 @@ Set up E2E testing with Playwright.
 
 Install Playwright:
 ```bash
-npm init playwright@latest
+bun create playwright
 ```
 
 Configure playwright.config.ts:
@@ -580,7 +580,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run dev',
+    command: 'bun run dev',
     url: 'http://localhost:5173',
     reuseExistingServer: !process.env.CI,
   },
@@ -663,9 +663,9 @@ test.describe('Subscription', () => {
 
 Run E2E tests:
 ```bash
-npx playwright test
-npx playwright test --ui  # Interactive mode
-npx playwright show-report
+bunx playwright test
+bunx playwright test --ui  # Interactive mode
+bunx playwright show-report
 ```
 ```
 
@@ -734,20 +734,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
 
       - name: Install dependencies
         working-directory: ./frontend
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Run tests
         working-directory: ./frontend
-        run: npm test -- --coverage
+        run: bun test -- --coverage
 
       - name: Upload coverage
         uses: codecov/codecov-action@v3
@@ -761,25 +757,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
 
       - name: Install dependencies
         working-directory: ./frontend
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Install Playwright
         working-directory: ./frontend
-        run: npx playwright install --with-deps
+        run: bunx playwright install --with-deps
 
       - name: Start services
         run: docker-compose -f docker-compose.test.yml up -d
 
       - name: Run E2E tests
         working-directory: ./frontend
-        run: npx playwright test
+        run: bunx playwright test
 
       - name: Upload test results
         if: always()
@@ -802,8 +796,8 @@ After completing all prompts in this section, verify:
 
 - [ ] Unit tests pass: `cargo test`
 - [ ] Integration tests pass
-- [ ] Frontend tests pass: `npm test`
-- [ ] E2E tests pass: `npx playwright test`
+- [ ] Frontend tests pass: `bun test`
+- [ ] E2E tests pass: `bunx playwright test`
 - [ ] Coverage meets targets
 - [ ] CI pipeline passes
 - [ ] Test database isolated from development
@@ -820,14 +814,14 @@ cargo test --test api         # Integration tests only
 cargo test -- --nocapture     # Show output
 
 # Frontend
-npm test                      # Unit tests
-npm test -- --coverage        # With coverage
-npm test -- --watch          # Watch mode
+bun test                      # Unit tests
+bun test -- --coverage        # With coverage
+bun test -- --watch          # Watch mode
 
 # E2E
-npx playwright test           # All E2E tests
-npx playwright test --ui      # Interactive UI
-npx playwright show-report    # View report
+bunx playwright test           # All E2E tests
+bunx playwright test --ui      # Interactive UI
+bunx playwright show-report    # View report
 
 # CI locally
 act -j rust-tests            # Run GitHub Actions locally

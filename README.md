@@ -1,10 +1,12 @@
 # a8n.tools
 
-A SaaS platform hosting developer and productivity tools. We sell convenience, reliability, and managed hosting for open-source applications.
+A SaaS platform hosting developer and productivity tools. We sell convenience, reliability, and managed hosting for
+open-source applications.
 
 ## Overview
 
 **a8n.tools** provides hosted versions of open-source developer tools with:
+
 - No server setup, maintenance, or updates required
 - Managed infrastructure with monitoring and backups
 - Dedicated support for subscribers
@@ -13,10 +15,10 @@ A SaaS platform hosting developer and productivity tools. We sell convenience, r
 
 ### Current Applications
 
-| Application  | Description                  | Subdomain              |
-|--------------|------------------------------|------------------------|
-| RUS          | URL shortening with QR codes | `rus.a8n.tools`        |
-| Rusty Links  | Bookmark management          | `rustylinks.a8n.tools` |
+| Application | Description                  | Subdomain              |
+|-------------|------------------------------|------------------------|
+| RUS         | URL shortening with QR codes | `rus.a8n.tools`        |
+| Rusty Links | Bookmark management          | `rustylinks.a8n.tools` |
 
 ## Tech Stack
 
@@ -37,7 +39,7 @@ A SaaS platform hosting developer and productivity tools. We sell convenience, r
 
 - Docker and Docker Compose
 - Rust toolchain (for local development)
-- Node.js 20+
+- Bun
 - Git
 
 ### Setup
@@ -59,13 +61,13 @@ A SaaS platform hosting developer and productivity tools. We sell convenience, r
    ```
 
 4. Access the applications:
-   - Frontend: http://localhost:5173
-   - API: http://localhost:8080
-   - Traefik Dashboard: http://localhost:8081
+    - Frontend: http://localhost:5173
+    - API: http://localhost:8080
+    - Traefik Dashboard: http://localhost:8081
 
    With Traefik routing:
-   - Frontend: http://localhost
-   - API: http://api.localhost
+    - Frontend: http://localhost
+    - API: http://api.localhost
 
 5. Add to `/etc/hosts` (optional, for subdomain routing):
    ```
@@ -128,27 +130,33 @@ frontend/src/
 ```
 
 ### Navigate to frontend directory
+
 cd frontend
 
 #### Run tests in watch mode (re-runs on file changes)
-npm test
+
+bun test
 
 #### Run tests once (CI mode)
-npm run test:run
+
+bun run test:run
 
 #### Run tests with coverage report
-npm run test:coverage
+
+bun run test:coverage
 
 ## Current Test Coverage
+
 auth.test.ts - 13 tests (login, register, logout, magic link, password reset)
 authStore.test.ts - 17 tests (state management, login/logout flow, error handling)
 
-
 ## Check if migrations are in sync
+
 Run this command if the _sqlx_migrations table was emptied on accident
 If this returns 0 but tables exist, you know there's a problem before the API crashes.
+
 ```
-docker exec a8n-postgres psql -U a8n -d a8n_platform -c \
+docker exec a8n-tools-postgres psql -U a8n -d a8n_platform -c \
    "SELECT COUNT(*) FROM _sqlx_migrations;"
 ```
 
@@ -161,7 +169,9 @@ just db-shell
 ```
 
 ```sql
-UPDATE users SET role = 'admin' WHERE email = 'your@email.com';
+UPDATE users
+SET role = 'admin'
+WHERE email = 'your@email.com';
 ```
 
 Once you have an admin account, you can promote additional users from the admin UI at the Users page.
@@ -208,6 +218,7 @@ just clean          # Stop services and remove volumes
 3. Register the route in `api/src/routes/mod.rs`
 
 Example:
+
 ```rust
 // api/src/handlers/users.rs
 use actix_web::{get, web, HttpResponse};
@@ -267,57 +278,51 @@ async fn get_current_user() -> HttpResponse {
 ### Subdomain Routing
 
 Traefik handles routing based on subdomain:
+
 - `a8n.tools` -> Marketing site
 - `app.a8n.tools` -> User dashboard
 - `api.a8n.tools` -> Backend API
 - `admin.a8n.tools` -> Admin panel
 - `*.a8n.tools` -> Individual applications
 
+Will this work on any machine?
 
-Will this work on any machine?                                                                                                                                        
-                                                                                                                                                                        
-  Almost — the only manual step is each developer needs to add the /etc/hosts entries:                                                                                  
-   
-  127.0.0.1 a8n.test                                                                                                                                                    
-  127.0.0.1 app.a8n.test                                                           
-  127.0.0.1 api.a8n.test
-  127.0.0.1 rus.a8n.test
+Almost — the only manual step is each developer needs to add the /etc/hosts entries:
 
-  Everything else (Traefik routing, cookie domain, CORS) is baked into the compose files and code. So for any new dev machine it's: clone, add hosts entries, docker
-  compose up.
+- 127.0.0.1 a8n.test
+- 127.0.0.1 app.a8n.test
+- 127.0.0.1 api.a8n.test
+- 127.0.0.1 rus.a8n.test
 
-  You could automate the hosts step with a Makefile target or a setup script if you wanted to reduce friction for the other two devs.
+Everything else (Traefik routing, cookie domain, CORS) is baked into the compose files and code. So for any new dev
+machine it's: clone, add hosts entries, docker
+compose up.
 
-  The Firefox proxy method
+You could automate the hosts step with a Makefile target or a setup script if you wanted to reduce friction for the
+other two devs.
 
-  That approach involves configuring Firefox (or a PAC file) to route *.a8n.test traffic through a local proxy. It avoids touching /etc/hosts but adds complexity. With
-  your current setup — /etc/hosts + Traefik — you get the same result more simply. No need for it.
+The Firefox proxy method
 
-  What changes for production?
+That approach involves configuring Firefox (or a PAC file) to route *.a8n.test traffic through a local proxy. It avoids
+touching /etc/hosts but adds complexity. With
+your current setup — /etc/hosts + Traefik — you get the same result more simply. No need for it.
 
-  Almost nothing — your production docker-compose.yml is already set up correctly:
-  ┌────────────────────┬──────────────────────────────┬───────────────────────────────────────────────────┐
-  │      Concern       │        Dev (current)         │           Production (already handled)            │
-  ├────────────────────┼──────────────────────────────┼───────────────────────────────────────────────────┤
-  │ DNS                │ /etc/hosts → 127.0.0.1       │ Real DNS records for *.a8n.tools                  │
-  ├────────────────────┼──────────────────────────────┼───────────────────────────────────────────────────┤
-  │ TLS                │ None (HTTP)                  │ Let's Encrypt via Traefik (already configured)    │
-  ├────────────────────┼──────────────────────────────┼───────────────────────────────────────────────────┤
-  │ Cookie domain      │ .a8n.test (explicit env var) │ .a8n.tools (auto-set when ENVIRONMENT=production) │
-  ├────────────────────┼──────────────────────────────┼───────────────────────────────────────────────────┤
-  │ Cookie Secure flag │ false                        │ true (from config.is_production())                │
-  ├────────────────────┼──────────────────────────────┼───────────────────────────────────────────────────┤
-  │ CORS               │ .a8n.test + .a8n.tools       │ .a8n.tools (already in code)                      │
-  ├────────────────────┼──────────────────────────────┼───────────────────────────────────────────────────┤
-  │ Vite allowedHosts  │ Needed for dev server        │ N/A — production serves static files via nginx    │
-  └────────────────────┴──────────────────────────────┴───────────────────────────────────────────────────┘
-  The only thing to confirm is that each child app in production shares the same JWT_SECRET env var as the main API. Your production compose already has JWT_SECRET:
-  ${JWT_SECRET} on the API — just make sure RUS and any other child apps get the same value.
+What changes for production?
 
+Almost nothing — your production docker-compose.yml is already set up correctly:
 
+| Concern            | Dev (current)                | Production (already handled)                      |
+|--------------------|------------------------------|---------------------------------------------------|
+| DNS                | /etc/hosts → 127.0.0.1       | Real DNS records for *.a8n.tools                  |
+| TLS                | None (HTTP)                  | Let's Encrypt via Traefik (already configured)    |
+| Cookie domain      | .a8n.test (explicit env var) | .a8n.tools (auto-set when ENVIRONMENT=production) |
+| Cookie Secure flag | false                        | true (from config.is_production())                |
+| CORS               | .a8n.test + .a8n.tools       | .a8n.tools (already in code)                      |
+| Vite allowedHosts  | Needed for dev server        | N/A — production serves static files via nginx    |
 
-
-
+The only thing to confirm is that each child app in production shares the same JWT_SECRET env var as the main API. Your
+production compose already has JWT_SECRET:
+${JWT_SECRET} on the API — just make sure RUS and any other child apps get the same value.
 
 ## License
 

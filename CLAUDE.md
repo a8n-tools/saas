@@ -29,24 +29,24 @@ just migrate-create add_feature         # create new migration file
 # Testing
 just test              # all tests
 just test-api          # cd api && cargo test
-just test-frontend     # cd frontend && npm test (vitest watch mode)
+just test-frontend     # cd frontend && bun test (vitest watch mode)
 
 # Run a single Rust test
 cd api && cargo test test_name
 
 # Run a single frontend test file
-cd frontend && npx vitest run src/path/to/file.test.ts
+cd frontend && bunx vitest run src/path/to/file.test.ts
 
 # Frontend CI mode (no watch)
-cd frontend && npm run test:run
+cd frontend && bun run test:run
 
 # Frontend coverage
-cd frontend && npm run test:coverage
+cd frontend && bun run test:coverage
 
 # Linting
 cd api && cargo clippy
 cd api && cargo fmt
-cd frontend && npm run lint
+cd frontend && bun run lint
 
 # Build Docker images
 just build             # all

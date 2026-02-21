@@ -6,7 +6,7 @@ This document contains prompts for setting up the React frontend with Vite, Type
 
 ## Prerequisites
 - Completed backend API (01-05)
-- Node.js 20+ installed
+- Bun installed
 
 ---
 
@@ -17,9 +17,9 @@ Create a new React project using Vite with TypeScript.
 
 Run in the project root:
 ```bash
-npm create vite@latest frontend -- --template react-ts
+bun create vite@latest frontend -- --template react-ts
 cd frontend
-npm install
+bun install
 ```
 
 Configure TypeScript (tsconfig.json):
@@ -82,7 +82,7 @@ VITE_API_URL=http://localhost:8080
 VITE_APP_URL=http://localhost:5173
 ```
 
-Verify: `npm run dev` starts the development server.
+Verify: `bun run dev` starts the development server.
 ```
 
 ---
@@ -94,8 +94,8 @@ Set up Tailwind CSS and shadcn/ui component library.
 
 Install Tailwind:
 ```bash
-npm install -D tailwindcss postcss autoprefixer
-npx tailwindcss init -p
+bun add -D tailwindcss postcss autoprefixer
+bunx tailwindcss init -p
 ```
 
 Configure tailwind.config.js with a8n.tools theme:
@@ -161,7 +161,7 @@ export default {
 
 Initialize shadcn/ui:
 ```bash
-npx shadcn@latest init
+bunx shadcn@latest init
 ```
 
 Select options:
@@ -171,10 +171,10 @@ Select options:
 
 Install essential shadcn components:
 ```bash
-npx shadcn@latest add button card input label form toast
-npx shadcn@latest add dropdown-menu avatar badge separator
-npx shadcn@latest add dialog alert-dialog sheet
-npx shadcn@latest add table tabs skeleton
+bunx shadcn@latest add button card input label form toast
+bunx shadcn@latest add dropdown-menu avatar badge separator
+bunx shadcn@latest add dialog alert-dialog sheet
+bunx shadcn@latest add table tabs skeleton
 ```
 
 Create src/styles/globals.css with CSS variables for theme.
@@ -191,7 +191,7 @@ Configure React Router for the application.
 
 Install:
 ```bash
-npm install react-router-dom
+bun add react-router-dom
 ```
 
 Create src/router/index.tsx:
@@ -296,7 +296,7 @@ Set up API client and data fetching with TanStack Query.
 
 Install:
 ```bash
-npm install @tanstack/react-query axios
+bun add @tanstack/react-query axios
 ```
 
 Create src/api/client.ts:
@@ -393,7 +393,7 @@ Set up Zustand for state management, starting with auth.
 
 Install:
 ```bash
-npm install zustand
+bun add zustand
 ```
 
 Create src/stores/authStore.ts:
@@ -628,7 +628,7 @@ Set up form handling with React Hook Form and Zod.
 
 Install:
 ```bash
-npm install react-hook-form @hookform/resolvers zod
+bun add react-hook-form @hookform/resolvers zod
 ```
 
 Create src/lib/validations/auth.ts:
@@ -835,7 +835,7 @@ Wrap App with ErrorBoundary.
 
 After completing all prompts in this section, verify:
 
-- [ ] Vite dev server runs at localhost:5173
+- [ ] Vite dev server runs at localhost:5173 (via `bun run dev`)
 - [ ] TypeScript compiles without errors
 - [ ] Tailwind styles apply correctly
 - [ ] shadcn/ui components render

@@ -1,32 +1,35 @@
 ---
-name: a8n-development-environment
+name: a8n-tools-dev
+
 services:
-  # PostgreSQL Database
-  postgres:
-    image: postgres:16-alpine
-    container_name: a8n-postgres
+
+  # React Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: a8n-tools-frontend
     restart: unless-stopped
     environment:
-      POSTGRES_USER: a8n
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpassword}
-      POSTGRES_DB: a8n_platform
-    expose:
-      - "5432:5432"
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:18080}
+      VITE_APP_DOMAIN: ${VITE_APP_DOMAIN:-localhost}
+    ports:
+      - "5173:5173"
     volumes:
-      # - postgres_data:/var/lib/postgresql/data
-      - data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U a8n -d a8n_platform"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+      - ./frontend/src:/app/src:ro
+      - ./frontend/public:/app/public:ro
+      - ./frontend/index.html:/app/index.html:ro
+      - ./frontend/vite.config.ts:/app/vite.config.ts:ro
+      - ./frontend/tsconfig.json:/app/tsconfig.json:ro
+      - ./frontend/tailwind.config.js:/app/tailwind.config.js:ro
+      - ./frontend/postcss.config.js:/app/postcss.config.js:ro
 
   # Rust API Backend
   api:
     build:
       context: ./api
       dockerfile: Dockerfile.dev
-    container_name: a8n-api
+    container_name: a8n-tools-api
     restart: unless-stopped
     environment:
       # scheme://username:password@host:port/path/file.ext
@@ -67,26 +70,25 @@ services:
       postgres:
         condition: service_healthy
 
-  # React Frontend
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile.dev
-    container_name: a8n-frontend
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: a8n-tools-postgres
     restart: unless-stopped
     environment:
-      VITE_API_URL: ${VITE_API_URL:-http://localhost:18080}
-      VITE_APP_DOMAIN: ${VITE_APP_DOMAIN:-localhost}
-    ports:
-      - "5173:5173"
+      POSTGRES_USER: a8n
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpassword}
+      POSTGRES_DB: a8n_platform
+    expose:
+      - "5432:5432"
     volumes:
-      - ./frontend/src:/app/src:ro
-      - ./frontend/public:/app/public:ro
-      - ./frontend/index.html:/app/index.html:ro
-      - ./frontend/vite.config.ts:/app/vite.config.ts:ro
-      - ./frontend/tsconfig.json:/app/tsconfig.json:ro
-      - ./frontend/tailwind.config.js:/app/tailwind.config.js:ro
-      - ./frontend/postcss.config.js:/app/postcss.config.js:ro
+      # - postgres_data:/var/lib/postgresql/data
+      - data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U a8n -d a8n_platform"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
 
 volumes:

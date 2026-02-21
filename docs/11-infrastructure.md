@@ -46,7 +46,7 @@ services:
     build:
       context: ./api
       dockerfile: Dockerfile
-    container_name: a8n-api
+    container_name: a8n-tools-api
     restart: unless-stopped
     environment:
       - DATABASE_URL=postgres://a8n:${DB_PASSWORD}@postgres:5432/a8n_platform
@@ -83,7 +83,7 @@ services:
       dockerfile: Dockerfile
       args:
         - VITE_API_URL=https://api.a8n.tools
-    container_name: a8n-frontend
+    container_name: a8n-tools-frontend
     restart: unless-stopped
     networks:
       - a8n-network
@@ -105,7 +105,7 @@ services:
 
   postgres:
     image: postgres:16-alpine
-    container_name: a8n-postgres
+    container_name: a8n-tools-postgres
     restart: unless-stopped
     environment:
       - POSTGRES_USER=a8n
@@ -351,19 +351,19 @@ CMD ["/app/a8n-api"]
 Create frontend/Dockerfile:
 ```dockerfile
 # Build stage
-FROM node:20-alpine AS builder
+FROM oven/bun:alpine AS builder
 
 WORKDIR /app
 
-COPY package*.json ./
-RUN npm ci
+COPY package.json bun.lockb ./
+RUN bun install --frozen-lockfile
 
 COPY . .
 
 ARG VITE_API_URL
 ENV VITE_API_URL=$VITE_API_URL
 
-RUN npm run build
+RUN bun run build
 
 # Runtime stage
 FROM nginx:alpine
@@ -460,7 +460,7 @@ mkdir -p "$BACKUP_DIR"
 echo "📦 Backing up databases..."
 
 # Platform database
-docker exec a8n-postgres pg_dump -U a8n a8n_platform | gzip > "$BACKUP_DIR/platform.sql.gz"
+docker exec a8n-tools-postgres pg_dump -U a8n a8n_platform | gzip > "$BACKUP_DIR/platform.sql.gz"
 
 # App databases
 docker exec a8n-rus-db pg_dump -U rus rus | gzip > "$BACKUP_DIR/rus.sql.gz"
@@ -492,7 +492,7 @@ fi
 
 echo "📦 Restoring databases..."
 
-gunzip -c "$BACKUP_DIR/platform.sql.gz" | docker exec -i a8n-postgres psql -U a8n a8n_platform
+gunzip -c "$BACKUP_DIR/platform.sql.gz" | docker exec -i a8n-tools-postgres psql -U a8n a8n_platform
 gunzip -c "$BACKUP_DIR/rus.sql.gz" | docker exec -i a8n-rus-db psql -U rus rus
 gunzip -c "$BACKUP_DIR/rustylinks.sql.gz" | docker exec -i a8n-rustylinks-db psql -U rustylinks rustylinks
 

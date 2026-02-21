@@ -7,7 +7,7 @@ This document contains prompts for setting up the foundational project structure
 ## Prerequisites
 - Docker and Docker Compose installed
 - Rust toolchain (rustup)
-- Node.js 20+
+- Bun
 - Git
 
 ---
@@ -223,7 +223,7 @@ Create a Dockerfile.dev for the API that:
 
 Create a Dockerfile.dev for frontend that:
 - Uses node:20-alpine
-- Runs npm run dev
+- Runs bun run dev
 
 Create a Makefile with commands:
 - `make dev` - Start development environment
@@ -324,7 +324,7 @@ Create README.md in project root with:
    - All Makefile commands
    - Manual docker-compose commands
    - Cargo commands for API
-   - npm commands for frontend
+   - bun commands for frontend
 
 6. **Architecture Decisions**
    - Why Actix-Web

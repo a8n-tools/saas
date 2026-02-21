@@ -4,7 +4,7 @@ services:
   # PostgreSQL Database
   postgres:
     image: postgres:16-alpine
-    container_name: a8n-postgres
+    container_name: a8n-tools-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: a8n
@@ -23,7 +23,7 @@ services:
   # Rust API Backend
   api:
     image: codeberg.org/a8n-tools/saas-api:${API_VERSION:-latest}
-    container_name: a8n-api
+    container_name: a8n-tools-api
     restart: unless-stopped
     environment:
       DATABASE_URL: postgres://a8n:${POSTGRES_PASSWORD}@postgres:5432/a8n_platform
@@ -53,7 +53,7 @@ services:
   # React Frontend (Landing + Dashboard)
   frontend:
     image: codeberg.org/a8n-tools/saas-frontend:${FRONTEND_VERSION:-latest}
-    container_name: a8n-frontend
+    container_name: a8n-tools-frontend
     restart: unless-stopped
     environment:
       PORT: 8080
