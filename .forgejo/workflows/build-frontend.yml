@@ -21,7 +21,7 @@ jobs:
     runs-on: docker
     container:
       image: ghcr.io/niceguyit/opensuse-base:v1-leap-16.0
-      options: --pull always
+      #options: --pull always
     permissions:
       contents: read
       packages: write
