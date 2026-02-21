@@ -40,7 +40,6 @@ jobs:
       - name: Verify Docker availability
         run: |
           which docker
-          systemctl status docker.service
           docker version
           docker buildx version
 
