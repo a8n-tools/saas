@@ -2,6 +2,7 @@
 
 # Build frontend OCI image and push to Forgejo Container Registry.
 name: Build frontend image
+run-name: Build frontend
 
 on:
   push:
