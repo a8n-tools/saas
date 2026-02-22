@@ -171,7 +171,7 @@ function SystemHealth() {
           {health?.database === 'healthy' ? 'Connected' : 'Disconnected'}
         </span>
       </div>
-      {health?.uptime_seconds && (
+      {health?.uptime_seconds != null && (
         <div className="flex items-center justify-between">
           <span className="text-sm">Uptime</span>
           <span className="text-sm font-medium">
