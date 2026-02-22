@@ -15,6 +15,50 @@
 	}
 }
 
+(block_suspicious) {
+	# Scripting languages / server-side extensions
+	@suspicious_ext path *.php *.phtml *.phar *.asp *.aspx *.ashx *.asmx *.jsp *.jspx *.do *.action *.cgi *.pl *.cfm *.cfc
+	handle @suspicious_ext {
+		respond 403
+	}
+
+	# Backup, config, and archive files
+	@suspicious_files path *.bak *.backup *.save *.old *.orig *.swp *.tmp *.sql *.sql.gz *.log *.conf *.ini *.yml *.yaml *.toml *.xml *.sh *.bash *.bat *.cmd *.tar *.tar.gz *.tgz *.zip *.rar *.7z *.gz *.bz2
+	handle @suspicious_files {
+		respond 403
+	}
+
+	# CMS probes (WordPress, Joomla, Drupal, Magento)
+	@suspicious_cms path /wp-* /wordpress/* /blog/wp-* /joomla/* /administrator/* /drupal/* /magento/* /downloader/* /cms/* /xmlrpc.php
+	handle @suspicious_cms {
+		respond 403
+	}
+
+	# Server info and admin panel probes
+	@suspicious_probes path /server-info /server-status /phpinfo* /phpmyadmin/* /pma/* /myadmin/* /mysql/* /dbadmin/* /phpMyAdmin/*
+	handle @suspicious_probes {
+		respond 403
+	}
+
+	# Credential and config file probes
+	@suspicious_creds path /aws-credentials* /credentials* /config.php* /database.yml /secrets.json /secrets.yml /docker.sh /docker-compose* /Dockerfile /node_modules/* /package.json /package-lock.json
+	handle @suspicious_creds {
+		respond 403
+	}
+
+	# Debug, API docs, and dev tool probes
+	@suspicious_debug path /api/info /api/config /api/debug /api/env /api/swagger* /swagger* /api-docs* /graphql /actuator* /jolokia/* /console/* /manager/* /host-manager/* /debug* /trace /test /test/* /tmp/* /backup/* /backups/* /dump* /src/*
+	handle @suspicious_debug {
+		respond 403
+	}
+
+	# Path traversal attempts
+	@suspicious_traversal path_regexp \.\./
+	handle @suspicious_traversal {
+		respond 403
+	}
+}
+
 :{$PORT:8080} {
 	root * /usr/share/caddy
 
@@ -30,6 +74,9 @@
 	handle @hidden {
 		respond 403
 	}
+
+	# Block suspicious probe requests
+	import block_suspicious
 
 	# Long-lived cache headers for hashed assets
 	@assets path /assets/*

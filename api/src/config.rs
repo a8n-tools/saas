@@ -20,6 +20,8 @@ pub struct Config {
     pub email: EmailConfig,
     /// Cookie domain (e.g., ".a8n.tools" for production, empty for localhost)
     pub cookie_domain: Option<String>,
+    /// Auto-ban configuration
+    pub auto_ban: AutoBanConfig,
 }
 
 /// SMTP TLS mode
@@ -121,6 +123,42 @@ fn parse_smtp_from_name(smtp_from: &str) -> String {
     "a8n.tools".to_string()
 }
 
+/// Auto-ban configuration
+#[derive(Debug, Clone)]
+pub struct AutoBanConfig {
+    /// Whether auto-banning is enabled
+    pub enabled: bool,
+    /// Number of suspicious requests before banning an IP
+    pub threshold: u32,
+    /// Time window in seconds for counting strikes
+    pub window_secs: u64,
+    /// How long a ban lasts in seconds
+    pub ban_duration_secs: u64,
+}
+
+impl AutoBanConfig {
+    /// Load auto-ban configuration from environment variables
+    pub fn from_env() -> Self {
+        Self {
+            enabled: env::var("AUTO_BAN_ENABLED")
+                .map(|v| v != "false" && v != "0")
+                .unwrap_or(true),
+            threshold: env::var("AUTO_BAN_THRESHOLD")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(5),
+            window_secs: env::var("AUTO_BAN_WINDOW_SECS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(3600),
+            ban_duration_secs: env::var("AUTO_BAN_DURATION_SECS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(86400),
+        }
+    }
+}
+
 impl Config {
     /// Load configuration from environment variables
     ///
@@ -157,6 +195,8 @@ impl Config {
             cookie_domain
         };
 
+        let auto_ban = AutoBanConfig::from_env();
+
         let config = Self {
             database_url,
             host,
@@ -166,6 +206,7 @@ impl Config {
             environment,
             email,
             cookie_domain,
+            auto_ban,
         };
 
         info!(

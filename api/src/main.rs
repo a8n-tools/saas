@@ -13,7 +13,11 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilte
 
 use a8n_api::{
     config::Config,
-    middleware::{request_id::RequestIdMiddleware, SecurityHeaders},
+    middleware::{
+        auto_ban::{self, AutoBanService},
+        request_id::RequestIdMiddleware,
+        AutoBanMiddleware, SecurityHeaders,
+    },
     repositories::RateLimitRepository,
     routes,
     services::{AuthService, EmailService, JwtConfig, JwtService, StripeConfig, StripeService},
@@ -103,6 +107,25 @@ async fn main() -> anyhow::Result<()> {
 
     info!("Stripe service initialized");
 
+    // Initialize auto-ban service
+    let auto_ban_service = Arc::new(AutoBanService::new(config.auto_ban.clone(), pool.clone()));
+
+    // Load existing bans from DB
+    match auto_ban::load_active_bans(&pool).await {
+        Ok(bans) => {
+            auto_ban_service.load_bans(bans).await;
+        }
+        Err(e) => {
+            error!(error = %e, "Failed to load IP bans from database");
+        }
+    }
+
+    info!(
+        enabled = config.auto_ban.enabled,
+        threshold = config.auto_ban.threshold,
+        "Auto-ban service initialized"
+    );
+
     let server_addr = config.server_addr();
     let cors_origin = config.cors_origin.clone();
     let config_data = config.clone();
@@ -122,6 +145,30 @@ async fn main() -> anyhow::Result<()> {
                 }
                 Err(e) => {
                     error!(error = %e, "Failed to cleanup expired rate limit entries");
+                }
+            }
+        }
+    });
+
+    // Spawn auto-ban cleanup background task (every 5 minutes)
+    let ban_cleanup_pool = pool.clone();
+    let ban_cleanup_service = auto_ban_service.clone();
+    tokio::spawn(async move {
+        info!("Auto-ban cleanup task started");
+        let mut interval = tokio::time::interval(Duration::from_secs(300));
+        loop {
+            interval.tick().await;
+            // Clean in-memory state
+            ban_cleanup_service.cleanup_expired().await;
+            // Clean database
+            match auto_ban::cleanup_expired_bans(&ban_cleanup_pool).await {
+                Ok(deleted) => {
+                    if deleted > 0 {
+                        info!(deleted, "Cleaned up expired IP bans");
+                    }
+                }
+                Err(e) => {
+                    error!(error = %e, "Failed to cleanup expired IP bans");
                 }
             }
         }
@@ -164,6 +211,8 @@ async fn main() -> anyhow::Result<()> {
             .wrap(SecurityHeaders)
             .wrap(RequestIdMiddleware)
             .wrap(cors)
+            // Auto-ban runs outermost — rejects banned IPs before CORS processing
+            .wrap(AutoBanMiddleware::new(auto_ban_service.clone()))
             // Explicit JSON body size limit (32 KB)
             .app_data(web::JsonConfig::default().limit(32_768))
             // Add database pool to app state
