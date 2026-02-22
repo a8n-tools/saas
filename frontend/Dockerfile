@@ -31,8 +31,4 @@ COPY --from=builder /app/dist /usr/share/caddy
 ENV PORT=8080
 EXPOSE 8080
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget -q --spider http://localhost:${PORT}/health || exit 1
-
 CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile"]
