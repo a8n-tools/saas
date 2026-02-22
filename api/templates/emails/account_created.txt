@@ -1,6 +1,6 @@
 {% extends "base.txt" %}
 {% block content %}
-Welcome to a8n.tools!
+Welcome to {{ app_name }}!
 
 Thanks for creating your account! We're excited to have you on board.
 

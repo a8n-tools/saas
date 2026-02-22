@@ -39,7 +39,7 @@ services:
       SMTP_HOST: ${SMTP_HOST:-stalwart}
       SMTP_PORT: ${SMTP_PORT:-465}
       SMTP_TLS: ${SMTP_TLS:-implicit}
-      SMTP_FROM: ${SMTP_FROM:-noreply@a8n.tools}
+      SMTP_FROM: ${SMTP_FROM:-noreply@localhost}
     volumes:
       - ./secrets:/secrets:ro
     networks:

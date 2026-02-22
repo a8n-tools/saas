@@ -494,7 +494,7 @@ Create src/middleware/auth.rs:
    pub fn create_auth_cookies(tokens: &AuthTokens, remember: bool) -> Vec<Cookie>;
    pub fn clear_auth_cookies() -> Vec<Cookie>;
    ```
-   - Domain: .a8n.tools
+   - Domain: .example.com
    - HttpOnly: true
    - Secure: true (configurable for dev)
    - SameSite: Lax

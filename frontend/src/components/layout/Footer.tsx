@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { config } from '@/config'
 
 export function Footer() {
   return (
@@ -27,7 +28,7 @@ export function Footer() {
               </li>
               <li>
                 <a
-                  href="https://rus.a8n.tools"
+                  href={config.appDomain ? `https://rus.${config.appDomain}` : '#'}
                   className="text-muted-foreground hover:text-foreground transition-colors"
                 >
                   RUS
@@ -35,7 +36,7 @@ export function Footer() {
               </li>
               <li>
                 <a
-                  href="https://rustylinks.a8n.tools"
+                  href={config.appDomain ? `https://rustylinks.${config.appDomain}` : '#'}
                   className="text-muted-foreground hover:text-foreground transition-colors"
                 >
                   Rusty Links
@@ -87,7 +88,7 @@ export function Footer() {
           </div>
         </div>
         <div className="mt-8 border-t border-border/50 pt-8 text-center text-sm text-muted-foreground">
-          <p>&copy; {new Date().getFullYear()} a8n.tools. All rights reserved.</p>
+          <p>&copy; {new Date().getFullYear()} {config.appDomain || 'localhost'}. All rights reserved.</p>
         </div>
       </div>
     </footer>

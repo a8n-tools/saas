@@ -296,9 +296,9 @@ Update CORS setup in main.rs:
        fn default() -> Self {
            Self {
                allowed_origins: vec![
-                   "https://a8n.tools".to_string(),
-                   "https://app.a8n.tools".to_string(),
-                   "https://admin.a8n.tools".to_string(),
+                   "https://example.com".to_string(),
+                   "https://app.example.com".to_string(),
+                   "https://admin.example.com".to_string(),
                ],
                allowed_methods: vec![
                    Method::GET,

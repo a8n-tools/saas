@@ -98,7 +98,7 @@ bun add -D tailwindcss postcss autoprefixer
 bunx tailwindcss init -p
 ```
 
-Configure tailwind.config.js with a8n.tools theme:
+Configure tailwind.config.js with example.com theme:
 ```javascript
 /** @type {import('tailwindcss').Config} */
 export default {

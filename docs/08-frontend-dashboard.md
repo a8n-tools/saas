@@ -174,7 +174,7 @@ export function DashboardPage() {
       <div>
         <h1 className="text-2xl font-bold">Welcome back!</h1>
         <p className="text-muted-foreground">
-          Here's an overview of your a8n.tools account
+          Here's an overview of your example.com account
         </p>
       </div>
 
@@ -313,7 +313,7 @@ function AppPreviewCard({ app, hasAccess }: { app: any; hasAccess: boolean }) {
       </div>
       {hasAccess ? (
         <a
-          href={`https://${app.slug}.a8n.tools`}
+          href={`https://${app.slug}.example.com`}
           target="_blank"
           rel="noopener noreferrer"
         >
@@ -424,7 +424,7 @@ function ApplicationCard({
   app: Application;
   hasAccess: boolean;
 }) {
-  const appUrl = `https://${app.slug}.a8n.tools`;
+  const appUrl = `https://${app.slug}.example.com`;
 
   return (
     <Card className="flex flex-col">
@@ -595,7 +595,7 @@ export function SubscriptionPage() {
       <div>
         <h1 className="text-2xl font-bold">Subscription</h1>
         <p className="text-muted-foreground">
-          Manage your a8n.tools subscription
+          Manage your example.com subscription
         </p>
       </div>
 
@@ -607,7 +607,7 @@ export function SubscriptionPage() {
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
             <div>
-              <p className="font-medium">a8n.tools Subscription</p>
+              <p className="font-medium">example.com Subscription</p>
               <p className="text-2xl font-bold text-primary">
                 ${subscription?.locked_price_amount ? subscription.locked_price_amount / 100 : 3}/month
               </p>
@@ -1073,7 +1073,7 @@ export function HomePage() {
       <footer className="container mx-auto px-4 py-8 border-t">
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted-foreground">
-            © 2024 a8n.tools. All rights reserved.
+            © 2024 example.com. All rights reserved.
           </p>
           <nav className="flex items-center gap-4 text-sm">
             <Link to="/terms" className="hover:underline">Terms</Link>

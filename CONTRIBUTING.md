@@ -1,6 +1,6 @@
-# Contributing to a8n.tools
+# Contributing to example.com
 
-Thank you for your interest in contributing to a8n.tools!
+Thank you for your interest in contributing to example.com!
 
 ## Getting Started
 

@@ -1,6 +1,6 @@
 //! a8n-api - Main entry point
 //!
-//! This is the entry point for the a8n.tools backend API server.
+//! This is the entry point for the backend API server.
 
 use actix_cors::Cors;
 use actix_web::{middleware::Logger, web, App, HttpServer};
@@ -80,7 +80,7 @@ async fn main() -> anyhow::Result<()> {
         }
         "development-secret-key-min-32-chars-long!".to_string()
     });
-    let jwt_config = JwtConfig::from_secret(&jwt_secret);
+    let jwt_config = JwtConfig::from_secret(&jwt_secret, &config.app_name);
     let jwt_service = Arc::new(JwtService::new(jwt_config));
 
     info!("JWT service initialized");
@@ -128,6 +128,21 @@ async fn main() -> anyhow::Result<()> {
 
     let server_addr = config.server_addr();
     let cors_origin = config.cors_origin.clone();
+
+    // Extract the domain from CORS_ORIGIN for subdomain matching
+    // e.g. "https://pugtsurani.net" → ".pugtsurani.net"
+    let cors_domain = cors_origin
+        .split("://")
+        .nth(1)
+        .unwrap_or("")
+        .split('/')
+        .next()
+        .unwrap_or("")
+        .split(':')
+        .next()
+        .map(|host| format!(".{host}"))
+        .unwrap_or_default();
+
     let config_data = config.clone();
 
     // Spawn rate limit cleanup background task
@@ -179,17 +194,20 @@ async fn main() -> anyhow::Result<()> {
     // Start HTTP server
     HttpServer::new(move || {
         // Configure CORS
+        let domain = cors_domain.clone();
         let cors = Cors::default()
             .allowed_origin(&cors_origin)
-            .allowed_origin_fn(|origin, _req_head| {
-                // Allow all subdomains of a8n.tools and a8n.test (dev)
-                origin
-                    .as_bytes()
-                    .ends_with(b".a8n.tools")
-                    || origin.as_bytes() == b"https://a8n.tools"
-                    || origin.as_bytes().ends_with(b".a8n.test")
-                    || origin.as_bytes() == b"http://a8n.test"
-                    || origin.as_bytes().starts_with(b"http://localhost")
+            .allowed_origin_fn(move |origin, _req_head| {
+                let origin = origin.as_bytes();
+                // Allow localhost (development)
+                if origin.starts_with(b"http://localhost") {
+                    return true;
+                }
+                // Allow the configured domain and its subdomains
+                if !domain.is_empty() {
+                    return origin.ends_with(domain.as_bytes());
+                }
+                false
             })
             .allowed_methods(vec!["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
             .allowed_headers(vec![

@@ -1,3 +1,5 @@
+import { config } from '@/config'
+
 export function PrivacyPolicyPage() {
   return (
     <div className="container max-w-4xl py-12">
@@ -8,7 +10,7 @@ export function PrivacyPolicyPage() {
         <section>
           <h2 className="text-2xl font-semibold mb-4">1. Introduction</h2>
           <p className="text-muted-foreground">
-            This Privacy Policy describes how a8n.tools ("we", "our", or "us") collects, uses, and protects your
+            This Privacy Policy describes how {config.appDomain || 'localhost'} ("we", "our", or "us") collects, uses, and protects your
             personal information when you use our services. We are committed to protecting your privacy and handling
             your data transparently.
           </p>
@@ -93,8 +95,8 @@ export function PrivacyPolicyPage() {
           </ul>
           <p className="text-muted-foreground mt-4">
             To exercise these rights, contact us at{' '}
-            <a href="mailto:privacy@a8n.tools" className="text-primary hover:underline">
-              privacy@a8n.tools
+            <a href={`mailto:privacy@${config.appDomain || 'localhost'}`} className="text-primary hover:underline">
+              privacy@{config.appDomain || 'localhost'}
             </a>
             .
           </p>
@@ -148,14 +150,14 @@ export function PrivacyPolicyPage() {
           <ul className="list-none space-y-1 text-muted-foreground mt-4">
             <li>
               Email:{' '}
-              <a href="mailto:privacy@a8n.tools" className="text-primary hover:underline">
-                privacy@a8n.tools
+              <a href={`mailto:privacy@${config.appDomain || 'localhost'}`} className="text-primary hover:underline">
+                privacy@{config.appDomain || 'localhost'}
               </a>
             </li>
             <li>
               General inquiries:{' '}
-              <a href="mailto:support@a8n.tools" className="text-primary hover:underline">
-                support@a8n.tools
+              <a href={`mailto:support@${config.appDomain || 'localhost'}`} className="text-primary hover:underline">
+                support@{config.appDomain || 'localhost'}
               </a>
             </li>
           </ul>

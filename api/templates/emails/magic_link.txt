@@ -1,6 +1,6 @@
 {% extends "base.txt" %}
 {% block content %}
-Sign in to a8n.tools
+Sign in to {{ app_name }}
 --------------------
 
 Click the link below to sign in to your account. This link expires in 15 minutes.

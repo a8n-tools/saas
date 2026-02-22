@@ -37,7 +37,7 @@ services:
       - a8n-network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.dashboard.rule=Host(`traefik.a8n.tools`)"
+      - "traefik.http.routers.dashboard.rule=Host(`traefik.example.com`)"
       - "traefik.http.routers.dashboard.service=api@internal"
       - "traefik.http.routers.dashboard.middlewares=auth"
       - "traefik.http.middlewares.auth.basicauth.users=${TRAEFIK_DASHBOARD_AUTH}"
@@ -59,7 +59,7 @@ services:
       - SMTP_PORT=587
       - SMTP_USERNAME=${SMTP_USERNAME}
       - SMTP_PASSWORD=${SMTP_PASSWORD}
-      - BASE_URL=https://app.a8n.tools
+      - BASE_URL=https://app.example.com
       - RUST_LOG=info
       - GLITCHTIP_DSN=${GLITCHTIP_DSN}
     volumes:
@@ -72,7 +72,7 @@ services:
       - a8n-network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.api.rule=Host(`api.a8n.tools`)"
+      - "traefik.http.routers.api.rule=Host(`api.example.com`)"
       - "traefik.http.routers.api.tls=true"
       - "traefik.http.routers.api.tls.certresolver=letsencrypt"
       - "traefik.http.services.api.loadbalancer.server.port=8080"
@@ -82,7 +82,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        - VITE_API_URL=https://api.a8n.tools
+        - VITE_API_URL=https://api.example.com
     container_name: a8n-tools-frontend
     restart: unless-stopped
     networks:
@@ -90,15 +90,15 @@ services:
     labels:
       - "traefik.enable=true"
       # Landing page
-      - "traefik.http.routers.landing.rule=Host(`a8n.tools`)"
+      - "traefik.http.routers.landing.rule=Host(`example.com`)"
       - "traefik.http.routers.landing.tls=true"
       - "traefik.http.routers.landing.tls.certresolver=letsencrypt"
       # App dashboard
-      - "traefik.http.routers.app.rule=Host(`app.a8n.tools`)"
+      - "traefik.http.routers.app.rule=Host(`app.example.com`)"
       - "traefik.http.routers.app.tls=true"
       - "traefik.http.routers.app.tls.certresolver=letsencrypt"
       # Admin panel
-      - "traefik.http.routers.admin.rule=Host(`admin.a8n.tools`)"
+      - "traefik.http.routers.admin.rule=Host(`admin.example.com`)"
       - "traefik.http.routers.admin.tls=true"
       - "traefik.http.routers.admin.tls.certresolver=letsencrypt"
       - "traefik.http.services.frontend.loadbalancer.server.port=80"
@@ -146,7 +146,7 @@ services:
       - a8n-network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.rus.rule=Host(`rus.a8n.tools`)"
+      - "traefik.http.routers.rus.rule=Host(`rus.example.com`)"
       - "traefik.http.routers.rus.tls=true"
       - "traefik.http.routers.rus.tls.certresolver=letsencrypt"
 
@@ -178,7 +178,7 @@ services:
       - a8n-network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.rustylinks.rule=Host(`rustylinks.a8n.tools`)"
+      - "traefik.http.routers.rustylinks.rule=Host(`rustylinks.example.com`)"
       - "traefik.http.routers.rustylinks.tls=true"
       - "traefik.http.routers.rustylinks.tls.certresolver=letsencrypt"
 
@@ -248,7 +248,7 @@ providers:
 certificatesResolvers:
   letsencrypt:
     acme:
-      email: admin@a8n.tools
+      email: admin@example.com
       storage: /letsencrypt/acme.json
       httpChallenge:
         entryPoint: web
@@ -444,8 +444,8 @@ sleep 10
 
 # Verify deployment
 echo "✅ Verifying deployment..."
-curl -sf https://api.a8n.tools/health > /dev/null && echo "API: OK" || echo "API: FAILED"
-curl -sf https://app.a8n.tools > /dev/null && echo "Frontend: OK" || echo "Frontend: FAILED"
+curl -sf https://api.example.com/health > /dev/null && echo "API: OK" || echo "API: FAILED"
+curl -sf https://app.example.com > /dev/null && echo "Frontend: OK" || echo "Frontend: FAILED"
 
 echo "🎉 Deployment complete!"
 ```
@@ -528,7 +528,7 @@ STRIPE_PRICE_ID=price_a8n_monthly_v1
 # Run: openssl pkey -in jwt_private.pem -pubout -out jwt_public.pem
 
 # Email
-SMTP_USERNAME=noreply@a8n.tools
+SMTP_USERNAME=noreply@example.com
 SMTP_PASSWORD=change_me
 STALWART_ADMIN_PASSWORD=change_me
 
@@ -538,7 +538,7 @@ TRAEFIK_DASHBOARD_AUTH=admin:$apr1$...
 # Monitoring
 GRAFANA_PASSWORD=change_me
 GLITCHTIP_SECRET_KEY=change_me
-GLITCHTIP_DSN=https://...@glitchtip.a8n.tools/1
+GLITCHTIP_DSN=https://...@glitchtip.example.com/1
 
 # App Databases
 RUS_DB_PASSWORD=change_me

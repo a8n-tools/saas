@@ -112,7 +112,7 @@ Load config from environment:
 ## Prompt 10.2: Email Template Base
 
 ```text
-Create the base email template with a8n.tools branding.
+Create the base email template with example.com branding.
 
 Create templates/emails/base.html:
 ```html
@@ -189,14 +189,14 @@ Create templates/emails/base.html:
   <div class="wrapper">
     <div class="card">
       <div class="header">
-        <a href="{{ base_url }}" class="logo">a8n.tools</a>
+        <a href="{{ base_url }}" class="logo">example.com</a>
       </div>
       <div class="content">
         {% block content %}{% endblock %}
       </div>
     </div>
     <div class="footer">
-      <p>© {{ year }} a8n.tools. All rights reserved.</p>
+      <p>© {{ year }} example.com. All rights reserved.</p>
       <p>
         <a href="{{ base_url }}/privacy">Privacy Policy</a> |
         <a href="{{ base_url }}/terms">Terms of Service</a>
@@ -209,13 +209,13 @@ Create templates/emails/base.html:
 
 Create templates/emails/base.txt:
 ```text
-a8n.tools
+example.com
 =========
 
 {% block content %}{% endblock %}
 
 ---
-© {{ year }} a8n.tools
+© {{ year }} example.com
 Privacy: {{ base_url }}/privacy
 Terms: {{ base_url }}/terms
 ```
@@ -232,7 +232,7 @@ Create templates for all transactional emails.
 ```html
 {% extends "base.html" %}
 {% block content %}
-<h1>Sign in to a8n.tools</h1>
+<h1>Sign in to example.com</h1>
 <p>Click the button below to sign in to your account. This link expires in 15 minutes.</p>
 <p style="text-align: center;">
   <a href="{{ magic_link_url }}" class="button">Sign In</a>
@@ -265,7 +265,7 @@ Create templates for all transactional emails.
 ```html
 {% extends "base.html" %}
 {% block content %}
-<h1>Welcome to a8n.tools! 🎉</h1>
+<h1>Welcome to example.com! 🎉</h1>
 <p>Thanks for subscribing! You now have access to all our developer tools.</p>
 <h2>What's included:</h2>
 <ul>
@@ -285,7 +285,7 @@ Create templates for all transactional emails.
 {% extends "base.html" %}
 {% block content %}
 <h1>Payment Failed</h1>
-<p>We couldn't process your payment for a8n.tools subscription.</p>
+<p>We couldn't process your payment for example.com subscription.</p>
 <p>Don't worry - you still have access for the next 30 days while you update your payment method.</p>
 <p style="text-align: center;">
   <a href="{{ billing_url }}" class="button">Update Payment Method</a>
@@ -330,7 +330,7 @@ impl EmailService {
         context.insert("year", &Utc::now().year());
 
         let (html, text) = self.render_template("magic_link", &context)?;
-        self.send_email(to, "Sign in to a8n.tools", html, text).await
+        self.send_email(to, "Sign in to example.com", html, text).await
     }
 
     pub async fn send_password_reset(
@@ -348,7 +348,7 @@ impl EmailService {
         context.insert("year", &Utc::now().year());
 
         let (html, text) = self.render_template("password_reset", &context)?;
-        self.send_email(to, "Reset your a8n.tools password", html, text).await
+        self.send_email(to, "Reset your example.com password", html, text).await
     }
 
     pub async fn send_welcome(
@@ -363,7 +363,7 @@ impl EmailService {
         context.insert("year", &Utc::now().year());
 
         let (html, text) = self.render_template("welcome", &context)?;
-        self.send_email(to, "Welcome to a8n.tools!", html, text).await
+        self.send_email(to, "Welcome to example.com!", html, text).await
     }
 
     pub async fn send_payment_failed(
@@ -517,13 +517,13 @@ stalwart:
     - a8n-network
   labels:
     - "traefik.enable=true"
-    - "traefik.http.routers.stalwart.rule=Host(`mail.a8n.tools`)"
+    - "traefik.http.routers.stalwart.rule=Host(`mail.example.com`)"
 ```
 
 Create stalwart/config.toml:
 ```toml
 [server]
-hostname = "mail.a8n.tools"
+hostname = "mail.example.com"
 
 [server.listener."smtp"]
 bind = ["0.0.0.0:25"]
@@ -554,10 +554,10 @@ store = "rocksdb"
 ```
 
 DNS records required:
-- MX record: a8n.tools -> mail.a8n.tools
-- SPF: v=spf1 ip4:YOUR_IP include:_spf.a8n.tools ~all
+- MX record: example.com -> mail.example.com
+- SPF: v=spf1 ip4:YOUR_IP include:_spf.example.com ~all
 - DKIM: Generate and add TXT record
-- DMARC: v=DMARC1; p=quarantine; rua=mailto:dmarc@a8n.tools
+- DMARC: v=DMARC1; p=quarantine; rua=mailto:dmarc@example.com
 ```
 
 ---

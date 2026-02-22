@@ -3,7 +3,7 @@
 Payment Failed
 --------------
 
-We couldn't process your payment for your a8n.tools subscription.
+We couldn't process your payment for your {{ app_name }} subscription.
 
 Don't worry - you still have access for the next {{ days_remaining }} days while you update your payment method.
 

@@ -380,7 +380,7 @@ pub fn generate_csrf_token() -> String {
 
 pub fn create_csrf_cookie(token: &str) -> Cookie {
     Cookie::build(CSRF_COOKIE_NAME, token.to_string())
-        .domain(".a8n.tools")
+        .domain(".example.com")
         .path("/")
         .http_only(false)  // JavaScript needs to read this
         .secure(true)
@@ -623,13 +623,13 @@ After completing all prompts in this section, verify:
 
 ```bash
 # Test security headers
-curl -I https://api.a8n.tools/health
+curl -I https://api.example.com/health
 
 # Test rate limiting
-for i in {1..10}; do curl -X POST https://api.a8n.tools/v1/auth/login; done
+for i in {1..10}; do curl -X POST https://api.example.com/v1/auth/login; done
 
 # Test CSRF
-curl -X POST https://api.a8n.tools/v1/subscriptions/checkout \
+curl -X POST https://api.example.com/v1/subscriptions/checkout \
   -H "Cookie: access_token=..." \
   # Should fail without CSRF token
 ```

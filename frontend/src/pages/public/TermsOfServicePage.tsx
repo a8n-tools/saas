@@ -1,3 +1,5 @@
+import { config } from '@/config'
+
 export function TermsOfServicePage() {
   return (
     <div className="container max-w-4xl py-12">
@@ -8,7 +10,7 @@ export function TermsOfServicePage() {
         <section>
           <h2 className="text-2xl font-semibold mb-4">1. Acceptance of Terms</h2>
           <p className="text-muted-foreground">
-            By accessing or using a8n.tools ("the Service"), you agree to be bound by these Terms of Service.
+            By accessing or using {config.appDomain || 'localhost'} ("the Service"), you agree to be bound by these Terms of Service.
             If you do not agree to these terms, please do not use the Service.
           </p>
         </section>
@@ -16,7 +18,7 @@ export function TermsOfServicePage() {
         <section>
           <h2 className="text-2xl font-semibold mb-4">2. Description of Service</h2>
           <p className="text-muted-foreground">
-            a8n.tools provides a membership-based platform offering access to developer productivity tools,
+            {config.appDomain || 'localhost'} provides a membership-based platform offering access to developer productivity tools,
             including but not limited to RUS (URL Shortener) and Rusty Links (Bookmark Management).
           </p>
         </section>
@@ -68,7 +70,7 @@ export function TermsOfServicePage() {
         <section>
           <h2 className="text-2xl font-semibold mb-4">7. Intellectual Property</h2>
           <p className="text-muted-foreground">
-            The Service and its original content, features, and functionality are owned by a8n.tools and are
+            The Service and its original content, features, and functionality are owned by {config.appDomain || 'localhost'} and are
             protected by international copyright, trademark, and other intellectual property laws. Our applications
             are built on open-source software, and we respect and comply with all applicable open-source licenses.
           </p>
@@ -85,7 +87,7 @@ export function TermsOfServicePage() {
         <section>
           <h2 className="text-2xl font-semibold mb-4">9. Limitation of Liability</h2>
           <p className="text-muted-foreground">
-            a8n.tools shall not be liable for any indirect, incidental, special, consequential, or punitive
+            {config.appDomain || 'localhost'} shall not be liable for any indirect, incidental, special, consequential, or punitive
             damages, including loss of profits, data, use, or other intangible losses, resulting from your
             access to or use of the Service. Our total liability shall not exceed the amount you paid for the
             Service in the twelve months prior to the claim.
@@ -121,8 +123,8 @@ export function TermsOfServicePage() {
           <h2 className="text-2xl font-semibold mb-4">13. Contact</h2>
           <p className="text-muted-foreground">
             For any questions about these Terms of Service, please contact us at{' '}
-            <a href="mailto:support@a8n.tools" className="text-primary hover:underline">
-              support@a8n.tools
+            <a href={`mailto:support@${config.appDomain || 'localhost'}`} className="text-primary hover:underline">
+              support@{config.appDomain || 'localhost'}
             </a>
             .
           </p>

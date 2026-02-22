@@ -3,7 +3,7 @@
 Your membership has been canceled
 ---------------------------------
 
-We're sorry to see you go. Your a8n.tools membership has been canceled and your access will end on {{ end_date }}.
+We're sorry to see you go. Your {{ app_name }} membership has been canceled and your access will end on {{ end_date }}.
 
 If you change your mind, you can rejoin at any time. However, please note that your original locked price may no longer be available.
 

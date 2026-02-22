@@ -125,6 +125,7 @@ impl EmailService {
             from_name: "localhost".to_string(),
             base_url: "http://localhost:5173".to_string(),
             enabled: false,
+            app_name: "localhost".to_string(),
         };
 
         // Create with minimal template setup for dev
@@ -199,6 +200,7 @@ impl EmailService {
     fn base_context(&self) -> Context {
         let mut context = Context::new();
         context.insert("base_url", &self.config.base_url);
+        context.insert("app_name", &self.config.app_name);
         context.insert("year", &Utc::now().year());
         context
     }
@@ -223,7 +225,7 @@ impl EmailService {
         context.insert("magic_link_url", &magic_link_url);
 
         let (html, text) = self.render_template("magic_link", &context)?;
-        self.send_email(email, "Sign in to a8n.tools", html, text).await
+        self.send_email(email, &format!("Sign in to {}", self.config.app_name), html, text).await
     }
 
     /// Send password reset email
@@ -246,7 +248,7 @@ impl EmailService {
         context.insert("reset_url", &reset_url);
 
         let (html, text) = self.render_template("password_reset", &context)?;
-        self.send_email(email, "Reset your a8n.tools password", html, text).await
+        self.send_email(email, &format!("Reset your {} password", self.config.app_name), html, text).await
     }
 
     /// Send account creation email
@@ -260,7 +262,7 @@ impl EmailService {
         context.insert("dashboard_url", &format!("{}/dashboard", self.config.base_url));
 
         let (html, text) = self.render_template("account_created", &context)?;
-        self.send_email(email, "Welcome to a8n.tools!", html, text).await
+        self.send_email(email, &format!("Welcome to {}!", self.config.app_name), html, text).await
     }
 
     /// Send welcome email after membership activation
@@ -275,7 +277,7 @@ impl EmailService {
         context.insert("price", &format!("{:.2}", price_cents as f64 / 100.0));
 
         let (html, text) = self.render_template("welcome", &context)?;
-        self.send_email(email, "Welcome to a8n.tools!", html, text).await
+        self.send_email(email, &format!("Welcome to {}!", self.config.app_name), html, text).await
     }
 
     /// Send payment failed email
@@ -333,7 +335,7 @@ impl EmailService {
         context.insert("resubscribe_url", &format!("{}/pricing", self.config.base_url));
 
         let (html, text) = self.render_template("membership_canceled", &context)?;
-        self.send_email(email, "Your a8n.tools membership has been canceled", html, text).await
+        self.send_email(email, &format!("Your {} membership has been canceled", self.config.app_name), html, text).await
     }
 
     /// Send payment succeeded (receipt) email
@@ -348,7 +350,7 @@ impl EmailService {
         context.insert("dashboard_url", &format!("{}/dashboard", self.config.base_url));
 
         let (html, text) = self.render_template("payment_succeeded", &context)?;
-        self.send_email(email, "Payment received - a8n.tools", html, text).await
+        self.send_email(email, &format!("Payment received - {}", self.config.app_name), html, text).await
     }
 }
 

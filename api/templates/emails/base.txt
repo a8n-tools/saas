@@ -1,9 +1,9 @@
-a8n.tools
+{{ app_name }}
 =========
 
 {% block content %}{% endblock %}
 
 ---
-(c) {{ year }} a8n.tools
+(c) {{ year }} {{ app_name }}
 Privacy: {{ base_url }}/privacy
 Terms: {{ base_url }}/terms

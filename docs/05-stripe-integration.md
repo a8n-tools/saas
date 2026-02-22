@@ -36,8 +36,8 @@ Create src/services/stripe.rs:
    - STRIPE_SECRET_KEY
    - STRIPE_WEBHOOK_SECRET
    - STRIPE_PRICE_ID (price_a8n_monthly_v1)
-   - STRIPE_SUCCESS_URL (https://app.a8n.tools/dashboard?checkout=success)
-   - STRIPE_CANCEL_URL (https://app.a8n.tools/pricing?checkout=canceled)
+   - STRIPE_SUCCESS_URL (https://app.example.com/dashboard?checkout=success)
+   - STRIPE_CANCEL_URL (https://app.example.com/pricing?checkout=canceled)
 
 3. StripeService struct:
    ```rust

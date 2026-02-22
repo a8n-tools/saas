@@ -208,7 +208,7 @@ export function RegisterPage() {
       <CardHeader>
         <CardTitle>Create an account</CardTitle>
         <CardDescription>
-          Get started with a8n.tools
+          Get started with example.com
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -796,7 +796,7 @@ export function SubscriptionRequiredPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="bg-slate-100 rounded-lg p-4">
-            <p className="font-medium">a8n.tools Subscription</p>
+            <p className="font-medium">example.com Subscription</p>
             <p className="text-2xl font-bold text-primary">$3/month</p>
             <p className="text-sm text-muted-foreground">
               Access all tools. Price locked forever.

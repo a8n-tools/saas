@@ -65,7 +65,7 @@ export function ApplicationsPage() {
         {applications.map((app) => {
           const Icon = appIcons[app.slug] || Link2
           const gradient = appGradients[app.slug] || 'from-primary to-indigo-500'
-          const baseDomain = config.appDomain || 'a8n.tools'
+          const baseDomain = config.appDomain || 'localhost'
           const appUrl = `${app.slug}.${baseDomain}`
 
           return (

@@ -16,9 +16,11 @@ pub struct Config {
     pub cors_origin: String,
     /// Environment (development, production)
     pub environment: String,
+    /// Application name used in emails, JWT issuer, etc.
+    pub app_name: String,
     /// Email configuration
     pub email: EmailConfig,
-    /// Cookie domain (e.g., ".a8n.tools" for production, empty for localhost)
+    /// Cookie domain (e.g., ".yourdomain.com" for production, empty for localhost)
     pub cookie_domain: Option<String>,
     /// Auto-ban configuration
     pub auto_ban: AutoBanConfig,
@@ -54,6 +56,8 @@ pub struct EmailConfig {
     pub base_url: String,
     /// Whether to actually send emails (false in dev mode)
     pub enabled: bool,
+    /// Application name for email subjects and templates
+    pub app_name: String,
 }
 
 impl EmailConfig {
@@ -96,6 +100,7 @@ impl EmailConfig {
             ),
             base_url: env::var("APP_URL").unwrap_or_else(|_| "http://localhost:5173".to_string()),
             enabled: (is_production && has_smtp) || force_enabled,
+            app_name: env::var("APP_NAME").unwrap_or_else(|_| "localhost".to_string()),
         }
     }
 }
@@ -183,7 +188,8 @@ impl Config {
         let cors_origin = env::var("CORS_ORIGIN")
             .unwrap_or_else(|_| "http://localhost:5173".to_string());
 
-        let environment = env::var("ENVIRONMENT").unwrap_or_else(|_| "development".to_string());
+        let environment = env::var("ENVIRONMENT").unwrap_or_else(|_| "production".to_string());
+        let app_name = env::var("APP_NAME").unwrap_or_else(|_| "localhost".to_string());
         let is_production = environment == "production";
         let email = EmailConfig::from_env(is_production);
 
@@ -200,6 +206,7 @@ impl Config {
             log_level,
             cors_origin,
             environment,
+            app_name,
             email,
             cookie_domain,
             auto_ban,
@@ -259,7 +266,7 @@ mod tests {
         assert_eq!(config.port, 8080);
         assert_eq!(config.log_level, "info");
         assert_eq!(config.cors_origin, "http://localhost:5173");
-        assert_eq!(config.environment, "development");
+        assert_eq!(config.environment, "production");
         assert!(!config.email.enabled);
         // In development mode without COOKIE_DOMAIN set, it should be None (for localhost)
         assert!(config.cookie_domain.is_none());

@@ -101,7 +101,7 @@ export function DashboardPage() {
         ) : (
           <div className="grid gap-4 md:grid-cols-2">
             {applications.map((app, index) => {
-              const baseDomain = config.appDomain || 'a8n.tools'
+              const baseDomain = config.appDomain || 'localhost'
               const appUrl = `${app.slug}.${baseDomain}`
               const gradients = [
                 'from-indigo-500 to-primary',

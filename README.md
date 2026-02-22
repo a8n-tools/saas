@@ -1,11 +1,11 @@
-# a8n.tools
+# example.com
 
 A SaaS platform hosting developer and productivity tools. We sell convenience, reliability, and managed hosting for
 open-source applications.
 
 ## Overview
 
-**a8n.tools** provides hosted versions of open-source developer tools with:
+**example.com** provides hosted versions of open-source developer tools with:
 
 - No server setup, maintenance, or updates required
 - Managed infrastructure with monitoring and backups
@@ -17,8 +17,8 @@ open-source applications.
 
 | Application | Description                  | Subdomain              |
 |-------------|------------------------------|------------------------|
-| RUS         | URL shortening with QR codes | `rus.a8n.tools`        |
-| Rusty Links | Bookmark management          | `rustylinks.a8n.tools` |
+| RUS         | URL shortening with QR codes | `rus.example.com`        |
+| Rusty Links | Bookmark management          | `rustylinks.example.com` |
 
 ## Tech Stack
 
@@ -244,13 +244,47 @@ async fn get_current_user() -> HttpResponse {
 | `HOST`                  | API server host                  | `0.0.0.0`               | No         |
 | `PORT`                  | API server port                  | `8080`                  | No         |
 | `RUST_LOG`              | Log level                        | `info`                  | No         |
-| `CORS_ORIGIN`           | Allowed CORS origin              | `https://app.a8n.tools` | No         |
+| `CORS_ORIGIN`           | Allowed CORS origin              | `https://app.example.com` | No         |
 | `ENVIRONMENT`           | Environment name                 | `development`           | No         |
 | `JWT_PRIVATE_KEY_PATH`  | Path to Ed25519 private key      | -                       | Yes (prod) |
 | `JWT_PUBLIC_KEY_PATH`   | Path to Ed25519 public key       | -                       | Yes (prod) |
 | `STRIPE_SECRET_KEY`     | Stripe API secret key            | -                       | Yes (prod) |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret    | -                       | Yes (prod) |
 | `STRIPE_PRICE_ID`       | Stripe price ID for subscription | -                       | Yes (prod) |
+
+## Health Checks
+
+Both the API and frontend images expose a `/health` endpoint but do **not** include a
+built-in `HEALTHCHECK` instruction. It is the deployer's responsibility to configure
+health checks in their compose file or orchestrator.
+
+| Service    | Endpoint  | Port | Healthy response   |
+|------------|-----------|------|--------------------|
+| `api`      | `/health` | 8080 | `200 OK`           |
+| `frontend` | `/health` | 8080 | `200 OK` "healthy" |
+
+### Docker Compose example
+
+```yaml
+services:
+  api:
+    image: your-registry/saas-api:latest
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
+
+  frontend:
+    image: your-registry/saas-frontend:latest
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
+```
 
 ## Architecture Decisions
 
@@ -273,17 +307,17 @@ async fn get_current_user() -> HttpResponse {
 - **Algorithm**: EdDSA (Ed25519) - faster and more secure than RS256
 - **Access Token**: 15 minutes - short-lived for security
 - **Refresh Token**: 30 days - stored in database for revocation
-- **Cookie Domain**: `.a8n.tools` - enables SSO across subdomains
+- **Cookie Domain**: `.example.com` - enables SSO across subdomains
 
 ### Subdomain Routing
 
 Traefik handles routing based on subdomain:
 
-- `a8n.tools` -> Marketing site
-- `app.a8n.tools` -> User dashboard
-- `api.a8n.tools` -> Backend API
-- `admin.a8n.tools` -> Admin panel
-- `*.a8n.tools` -> Individual applications
+- `example.com` -> Marketing site
+- `app.example.com` -> User dashboard
+- `api.example.com` -> Backend API
+- `admin.example.com` -> Admin panel
+- `*.example.com` -> Individual applications
 
 Will this work on any machine?
 
@@ -313,11 +347,11 @@ Almost nothing — your production docker-compose.yml is already set up correctl
 
 | Concern            | Dev (current)                | Production (already handled)                      |
 |--------------------|------------------------------|---------------------------------------------------|
-| DNS                | /etc/hosts → 127.0.0.1       | Real DNS records for *.a8n.tools                  |
+| DNS                | /etc/hosts → 127.0.0.1       | Real DNS records for *.example.com                  |
 | TLS                | None (HTTP)                  | Let's Encrypt via Traefik (already configured)    |
-| Cookie domain      | .a8n.test (explicit env var) | .a8n.tools (auto-set when ENVIRONMENT=production) |
+| Cookie domain      | .a8n.test (explicit env var) | .example.com (auto-set when ENVIRONMENT=production) |
 | Cookie Secure flag | false                        | true (from config.is_production())                |
-| CORS               | .a8n.test + .a8n.tools       | .a8n.tools (already in code)                      |
+| CORS               | .a8n.test + .example.com       | .example.com (already in code)                      |
 | Vite allowedHosts  | Needed for dev server        | N/A — production serves static files via nginx    |
 
 The only thing to confirm is that each child app in production shares the same JWT_SECRET env var as the main API. Your

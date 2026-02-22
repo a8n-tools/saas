@@ -2,9 +2,9 @@
 {% block title %}Payment Received{% endblock %}
 {% block content %}
 <h1>Payment Received</h1>
-<p>Thank you! We've received your payment of <strong>${{ amount }}</strong> for your a8n.tools subscription.</p>
+<p>Thank you! We've received your payment of <strong>${{ amount }}</strong> for your {{ app_name }} subscription.</p>
 
-<p>Your subscription is active and you have full access to all a8n.tools applications.</p>
+<p>Your subscription is active and you have full access to all {{ app_name }} applications.</p>
 
 <div class="button-container">
   <a href="{{ dashboard_url }}" class="button">Go to Dashboard</a>

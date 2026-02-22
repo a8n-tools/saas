@@ -2,8 +2,8 @@
 name = "a8n-api"
 version = "0.1.0"
 edition = "2021"
-authors = ["a8n.tools team"]
-description = "Backend API for a8n.tools SaaS platform"
+authors = ["a8n team"]
+description = "Backend API for SaaS platform"
 
 [dependencies]
 # Web framework

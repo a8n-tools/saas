@@ -831,7 +831,7 @@ act -j rust-tests            # Run GitHub Actions locally
 
 ## Conclusion
 
-This completes the a8n.tools implementation guide. Follow the documents in order:
+This completes the example.com implementation guide. Follow the documents in order:
 
 1. **00-project-overview.md** - Understand the project
 2. **01-project-setup.md** - Set up development environment

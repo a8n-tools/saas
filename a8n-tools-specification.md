@@ -1,4 +1,4 @@
-# a8n.tools — SaaS Platform Technical Specification
+# example.com — SaaS Platform Technical Specification
 
 **Version:** 1.0  
 **Date:** December 30, 2024  
@@ -37,7 +37,7 @@
 
 ### 1.1 Product Overview
 
-**a8n.tools** is a Software-as-a-Service platform that hosts developer and productivity tools. The platform provides managed, hosted versions of open-source applications, selling convenience, reliability, and support rather than proprietary software.
+**example.com** is a Software-as-a-Service platform that hosts developer and productivity tools. The platform provides managed, hosted versions of open-source applications, selling convenience, reliability, and support rather than proprietary software.
 
 ### 1.2 Value Proposition
 
@@ -106,12 +106,12 @@
 
 | Subdomain | Purpose |
 |-----------|---------|
-| `a8n.tools` | Marketing/landing page |
-| `app.a8n.tools` | User dashboard |
-| `api.a8n.tools` | Backend API |
-| `admin.a8n.tools` | Admin panel |
-| `rus.a8n.tools` | RUS application |
-| `rustylinks.a8n.tools` | Rusty Links application |
+| `example.com` | Marketing/landing page |
+| `app.example.com` | User dashboard |
+| `api.example.com` | Backend API |
+| `admin.example.com` | Admin panel |
+| `rus.example.com` | RUS application |
+| `rustylinks.example.com` | Rusty Links application |
 
 ### 3.2 Container Architecture
 
@@ -138,7 +138,7 @@ services:
 | Algorithm | EdDSA (Ed25519) |
 | Access Token Expiry | 15 minutes |
 | Refresh Token Expiry | 30 days |
-| Cookie Domain | `.a8n.tools` |
+| Cookie Domain | `.example.com` |
 | Cookie Flags | HttpOnly, Secure, SameSite=Lax |
 
 ### 3.4 JWT Payload
@@ -159,7 +159,7 @@ services:
 
 ### 3.5 Inter-App Authentication
 
-Apps validate JWTs locally using the platform's public key. No callback to the platform required. JWT is passed via HTTP-only cookie on `.a8n.tools` domain.
+Apps validate JWTs locally using the platform's public key. No callback to the platform required. JWT is passed via HTTP-only cookie on `.example.com` domain.
 
 ---
 
@@ -451,7 +451,7 @@ migrations/
 
 | Attribute | Value |
 |-----------|-------|
-| Base URL | `https://api.a8n.tools` |
+| Base URL | `https://api.example.com` |
 | Format | JSON |
 | Authentication | JWT via HTTP-only cookie |
 | Versioning | URL path (`/v1/...`) |
@@ -612,7 +612,7 @@ frontend/
 
 ### 8.1 Product Configuration
 
-- Product: a8n.tools Subscription
+- Product: example.com Subscription
 - Price: $3.00 USD / month
 - Price ID: `price_a8n_monthly_v1`
 
@@ -670,7 +670,7 @@ frontend/
 | Payment Succeeded | Successful payment |
 
 All templates include:
-- a8n.tools logo
+- example.com logo
 - Rust/orange color scheme
 - Dark mode support
 - Mobile-responsive design

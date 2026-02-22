@@ -1,8 +1,8 @@
-# a8n.tools - Project Overview & Blueprint
+# example.com - Project Overview & Blueprint
 
 ## Executive Summary
 
-**a8n.tools** is a SaaS platform hosting developer and productivity tools. It provides managed, hosted versions of open-source applications, selling convenience, reliability, and support.
+**example.com** is a SaaS platform hosting developer and productivity tools. It provides managed, hosted versions of open-source applications, selling convenience, reliability, and support.
 
 ### Value Proposition
 - **Convenience:** No server setup, maintenance, or updates required
@@ -37,12 +37,12 @@
 
 | Subdomain | Purpose |
 |-----------|---------|
-| `a8n.tools` | Marketing/landing page |
-| `app.a8n.tools` | User dashboard |
-| `api.a8n.tools` | Backend API |
-| `admin.a8n.tools` | Admin panel |
-| `rus.a8n.tools` | RUS application |
-| `rustylinks.a8n.tools` | Rusty Links application |
+| `example.com` | Marketing/landing page |
+| `app.example.com` | User dashboard |
+| `api.example.com` | Backend API |
+| `admin.example.com` | Admin panel |
+| `rus.example.com` | RUS application |
+| `rustylinks.example.com` | Rusty Links application |
 
 ---
 
@@ -126,7 +126,7 @@ Each step builds on the previous:
 - Algorithm: EdDSA (Ed25519)
 - Access Token: 15 minutes
 - Refresh Token: 30 days
-- Cookie Domain: `.a8n.tools`
+- Cookie Domain: `.example.com`
 - Flags: HttpOnly, Secure, SameSite=Lax
 
 ### Subscription Model

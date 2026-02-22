@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}a8n.tools{% endblock %}</title>
+  <title>{% block title %}{{ app_name }}{% endblock %}</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -104,14 +104,14 @@
   <div class="wrapper">
     <div class="card">
       <div class="header">
-        <a href="{{ base_url }}" class="logo">a8n.tools</a>
+        <a href="{{ base_url }}" class="logo">{{ app_name }}</a>
       </div>
       <div class="content">
         {% block content %}{% endblock %}
       </div>
     </div>
     <div class="footer">
-      <p>&copy; {{ year }} a8n.tools. All rights reserved.</p>
+      <p>&copy; {{ year }} {{ app_name }}. All rights reserved.</p>
       <p>
         <a href="{{ base_url }}/privacy">Privacy Policy</a> |
         <a href="{{ base_url }}/terms">Terms of Service</a>

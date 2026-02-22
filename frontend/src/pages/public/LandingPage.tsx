@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Link2, Bookmark, Zap, Shield, DollarSign, Terminal, ArrowRight } from 'lucide-react'
 import { useInView } from '@/hooks/useInView'
+import { config } from '@/config'
 
 const heroLines = [
   { plain: 'All access.', gradient: 'No clock.' },
@@ -41,16 +42,16 @@ const apps = [
   {
     icon: Link2,
     name: 'RUS',
+    slug: 'rus',
     description: 'URL shortener with QR generation. Self-hostable, API-first, zero bloat.',
-    url: 'https://rus.a8n.tools',
     gradient: 'from-indigo-500 to-primary',
     borderColor: 'border-indigo-500/20 hover:border-indigo-500/40',
   },
   {
     icon: Bookmark,
     name: 'Rusty Links',
+    slug: 'rustylinks',
     description: 'Bookmark manager for people with too many tabs. Tag, search, organize.',
-    url: 'https://rustylinks.a8n.tools',
     gradient: 'from-teal-500 to-indigo-500',
     borderColor: 'border-teal-500/20 hover:border-teal-500/40',
   },
@@ -171,7 +172,7 @@ export function LandingPage() {
                     {app.description}
                   </CardDescription>
                   <a
-                    href={app.url}
+                    href={config.appDomain ? `https://${app.slug}.${config.appDomain}` : '#'}
                     target="_blank"
                     rel="noopener noreferrer"
                     className={`mt-4 inline-flex items-center gap-1 text-sm text-gradient bg-gradient-to-r ${app.gradient} font-medium hover:underline`}

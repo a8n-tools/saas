@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**a8n.tools** is a SaaS platform hosting developer/productivity tools (URL shortener, bookmark manager). Rust API backend + React SPA frontend, with JWT-based SSO across subdomains (`*.a8n.tools`).
+**example.com** is a SaaS platform hosting developer/productivity tools (URL shortener, bookmark manager). Rust API backend + React SPA frontend, with JWT-based SSO across subdomains (`*.example.com`).
 
 ## Development Commands
 
@@ -96,7 +96,7 @@ React 18 + TypeScript + Vite + Tailwind CSS + shadcn/ui.
 
 ### Auth & SSO
 
-- JWT tokens stored in HTTP-only cookies on `.a8n.tools` domain (`.a8n.run` in dev)
+- JWT tokens stored in HTTP-only cookies on `.example.com` domain (`.a8n.run` in dev)
 - Access token: 15 min, Refresh token: 30 days
 - Cookie set/cleared via `AuthCookies` helper in `middleware/auth.rs`
 - Token extracted from `access_token` cookie first, then `Authorization: Bearer` header
