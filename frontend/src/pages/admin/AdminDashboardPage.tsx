@@ -146,6 +146,16 @@ export function AdminDashboardPage() {
   )
 }
 
+function formatUptime(seconds: number): string {
+  const days = Math.floor(seconds / 86400)
+  const hours = Math.floor((seconds % 86400) / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+
+  if (days > 0) return `${days}d ${hours}h`
+  if (hours > 0) return `${hours}h ${minutes}m`
+  return `${minutes}m`
+}
+
 function SystemHealth() {
   const { data: health, isLoading } = useQuery({
     queryKey: ['admin', 'health'],
@@ -175,7 +185,7 @@ function SystemHealth() {
         <div className="flex items-center justify-between">
           <span className="text-sm">Uptime</span>
           <span className="text-sm font-medium">
-            {Math.floor(health.uptime_seconds / 3600)}h {Math.floor((health.uptime_seconds % 3600) / 60)}m
+            {formatUptime(health.uptime_seconds)}
           </span>
         </div>
       )}
