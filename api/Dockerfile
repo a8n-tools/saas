@@ -1,7 +1,7 @@
 # Build stage
-FROM rust:1.92-alpine AS builder
+FROM rust:1.93-alpine AS builder
 
-WORKDIR /app
+WORKDIR /build
 
 # Install build dependencies
 RUN apk add --no-cache musl-dev pkgconfig openssl-dev openssl-libs-static
@@ -30,22 +30,22 @@ WORKDIR /app
 RUN apk add --no-cache ca-certificates tzdata
 
 # Create non-root user
-RUN adduser -D -u 1001 a8n
+RUN adduser -D -u 1001 appuser
 
 # Copy the binary from builder
-COPY --from=builder /app/target/release/a8n-api /app/a8n-api
+COPY --from=builder /build/target/release/a8n-api /app/a8n-api
 
 # Copy migrations and templates
-COPY --from=builder /app/migrations /app/migrations
-COPY --from=builder /app/templates /app/templates
+COPY --from=builder /build/migrations /app/migrations
+COPY --from=builder /build/templates /app/templates
 
 # Set ownership
-RUN chown -R a8n:a8n /app
+RUN chown -R appuser:appuser /app
 
-USER a8n
+USER appuser
 
-# Expose port
+LABEL org.opencontainers.image.source=https://dev.a8n.run/a8n-tools/saas
+
 EXPOSE 8080
 
-# Run the binary
-CMD ["/app/a8n-api"]
+ENTRYPOINT ["/app/a8n-api"]
