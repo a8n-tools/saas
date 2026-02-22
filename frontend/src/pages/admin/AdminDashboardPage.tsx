@@ -167,8 +167,8 @@ function SystemHealth() {
       </div>
       <div className="flex items-center justify-between">
         <span className="text-sm">Database</span>
-        <span className={`text-sm font-medium ${health?.database === 'connected' ? 'text-green-600' : 'text-red-600'}`}>
-          {health?.database === 'connected' ? 'Connected' : 'Disconnected'}
+        <span className={`text-sm font-medium ${health?.database === 'healthy' ? 'text-green-600' : 'text-red-600'}`}>
+          {health?.database === 'healthy' ? 'Connected' : 'Disconnected'}
         </span>
       </div>
       {health?.uptime_seconds && (
