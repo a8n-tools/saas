@@ -10,7 +10,11 @@ services:
       dockerfile: Dockerfile.dev
     container_name: a8n-tools-frontend
     restart: unless-stopped
+    env_file:
+      - path: ./frontend/.env
+        required: false
     environment:
+      # Docker-specific overrides (API is on host-mapped port 18080)
       VITE_API_URL: ${VITE_API_URL:-http://localhost:18080}
       VITE_APP_DOMAIN: ${VITE_APP_DOMAIN:-localhost}
     ports:
@@ -31,30 +35,15 @@ services:
       dockerfile: Dockerfile.dev
     container_name: a8n-tools-api
     restart: unless-stopped
+    env_file:
+      - path: ./api/.env
+        required: false
     environment:
-      # scheme://username:password@host:port/path/file.ext
+      # Docker-specific overrides
       DATABASE_URL: postgres://a8n:${POSTGRES_PASSWORD:-devpassword}@postgres:5432/a8n_platform
-      HOST: 0.0.0.0
-      PORT: 8080
       RUST_LOG: ${RUST_LOG:-debug}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
       ENVIRONMENT: development
-      JWT_SECRET: ${JWT_SECRET:-s3cr3tK3yAtL34st32Ch4r4ct3rsL0ng!}
-      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
-      # Email configuration
-      SMTP_HOST: ${SMTP_HOST:-}
-      SMTP_PORT: ${SMTP_PORT:-465}
-      SMTP_TLS: ${SMTP_TLS:-implicit}
-      SMTP_FROM: ${SMTP_FROM:-noreply@a8n.tools}
-      SMTP_USERNAME: ${SMTP_USERNAME:-}
-      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      EMAIL_ENABLED: ${EMAIL_ENABLED:-false}
-      APP_URL: ${APP_URL:-http://localhost:5173}
-      # Stripe
-      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
-      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
-      STRIPE_PRICE_ID: ${STRIPE_PRICE_ID:-}
-      STRIPE_BUSINESS_PRICE_ID: ${STRIPE_BUSINESS_PRICE_ID:-}
       STRIPE_SUCCESS_URL: ${APP_URL:-http://localhost:5173}/checkout/success
       STRIPE_CANCEL_URL: ${APP_URL:-http://localhost:5173}/pricing?checkout=canceled
     ports:
