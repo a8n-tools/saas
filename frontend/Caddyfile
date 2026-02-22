@@ -89,7 +89,9 @@
 	# Runtime config endpoint — injects env vars via Caddy templates
 	handle /config.js {
 		header Content-Type "application/javascript"
-		templates
+		templates {
+			mime application/javascript
+		}
 		respond `window.__RUNTIME_CONFIG__ = { apiUrl: "{{env "VITE_API_URL"}}", appDomain: "{{env "VITE_APP_DOMAIN"}}", showBusinessPricing: "{{env "VITE_SHOW_BUSINESS_PRICING"}}" };` 200
 	}
 

@@ -121,9 +121,9 @@ impl EmailService {
             smtp_tls: SmtpTls::Starttls,
             smtp_username: String::new(),
             smtp_password: String::new(),
-            from_email: "noreply@a8n.tools".to_string(),
-            from_name: "a8n.tools".to_string(),
-            base_url: "https://app.a8n.tools".to_string(),
+            from_email: "noreply@localhost".to_string(),
+            from_name: "localhost".to_string(),
+            base_url: "http://localhost:5173".to_string(),
             enabled: false,
         };
 

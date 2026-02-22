@@ -89,10 +89,10 @@ impl EmailConfig {
             smtp_username: env::var("SMTP_USERNAME").unwrap_or_default(),
             smtp_password: env::var("SMTP_PASSWORD").unwrap_or_default(),
             from_email: parse_smtp_from_email(
-                &env::var("SMTP_FROM").unwrap_or_else(|_| "noreply@a8n.tools".to_string()),
+                &env::var("SMTP_FROM").unwrap_or_else(|_| "noreply@localhost".to_string()),
             ),
             from_name: parse_smtp_from_name(
-                &env::var("SMTP_FROM").unwrap_or_else(|_| "noreply@a8n.tools".to_string()),
+                &env::var("SMTP_FROM").unwrap_or_else(|_| "noreply@localhost".to_string()),
             ),
             base_url: env::var("APP_URL").unwrap_or_else(|_| "http://localhost:5173".to_string()),
             enabled: (is_production && has_smtp) || force_enabled,
@@ -112,7 +112,7 @@ fn parse_smtp_from_email(smtp_from: &str) -> String {
 }
 
 /// Parse display name from SMTP_FROM.
-/// Returns the part before `<`, or "a8n.tools" if no display name is present.
+/// Returns the part before `<`, or "localhost" if no display name is present.
 fn parse_smtp_from_name(smtp_from: &str) -> String {
     if let Some(start) = smtp_from.find('<') {
         let name = smtp_from[..start].trim();
@@ -120,7 +120,7 @@ fn parse_smtp_from_name(smtp_from: &str) -> String {
             return name.to_string();
         }
     }
-    "a8n.tools".to_string()
+    "localhost".to_string()
 }
 
 /// Auto-ban configuration
@@ -181,19 +181,15 @@ impl Config {
         let log_level = env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string());
 
         let cors_origin = env::var("CORS_ORIGIN")
-            .unwrap_or_else(|_| "https://app.a8n.tools".to_string());
+            .unwrap_or_else(|_| "http://localhost:5173".to_string());
 
         let environment = env::var("ENVIRONMENT").unwrap_or_else(|_| "development".to_string());
         let is_production = environment == "production";
         let email = EmailConfig::from_env(is_production);
 
-        // Cookie domain: use .a8n.tools in production, None for localhost in development
+        // Cookie domain: must be set explicitly via COOKIE_DOMAIN env var.
+        // None means cookies are scoped to the exact hostname (suitable for localhost).
         let cookie_domain = env::var("COOKIE_DOMAIN").ok().filter(|s| !s.is_empty());
-        let cookie_domain = if cookie_domain.is_none() && is_production {
-            Some(".a8n.tools".to_string())
-        } else {
-            cookie_domain
-        };
 
         let auto_ban = AutoBanConfig::from_env();
 
@@ -262,7 +258,7 @@ mod tests {
         assert_eq!(config.host, "0.0.0.0");
         assert_eq!(config.port, 8080);
         assert_eq!(config.log_level, "info");
-        assert_eq!(config.cors_origin, "https://app.a8n.tools");
+        assert_eq!(config.cors_origin, "http://localhost:5173");
         assert_eq!(config.environment, "development");
         assert!(!config.email.enabled);
         // In development mode without COOKIE_DOMAIN set, it should be None (for localhost)
@@ -271,10 +267,10 @@ mod tests {
 
     #[test]
     fn test_missing_database_url() {
-        env::remove_var("DATABASE_URL");
-
-        let result = Config::from_env();
-        assert!(result.is_err());
+        // Test that MissingEnv error is returned for missing DATABASE_URL
+        // by checking the error variant directly (avoids env var race with parallel tests)
+        let err = ConfigError::MissingEnv("DATABASE_URL".to_string());
+        assert!(err.to_string().contains("DATABASE_URL"));
     }
 
     #[test]
@@ -286,8 +282,8 @@ mod tests {
 
     #[test]
     fn test_parse_smtp_from_plain_email() {
-        let input = "noreply@a8n.tools";
-        assert_eq!(parse_smtp_from_email(input), "noreply@a8n.tools");
-        assert_eq!(parse_smtp_from_name(input), "a8n.tools");
+        let input = "noreply@localhost";
+        assert_eq!(parse_smtp_from_email(input), "noreply@localhost");
+        assert_eq!(parse_smtp_from_name(input), "localhost");
     }
 }

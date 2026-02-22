@@ -2,7 +2,6 @@
 
 # Build API OCI image and push to Forgejo Container Registry.
 name: Build API image
-run-name: Build API
 
 on:
   push:
