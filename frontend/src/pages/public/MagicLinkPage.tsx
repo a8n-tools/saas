@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -136,7 +136,7 @@ function MagicLinkVerify({ token }: { token: string }) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useState(() => {
+  useEffect(() => {
     const verify = async () => {
       try {
         await authApi.verifyMagicLink({ token })
@@ -149,7 +149,7 @@ function MagicLinkVerify({ token }: { token: string }) {
       }
     }
     verify()
-  })
+  }, [token])
 
   if (isLoading) {
     return (
