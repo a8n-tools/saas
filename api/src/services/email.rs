@@ -231,7 +231,7 @@ impl EmailService {
     /// Send password reset email
     pub async fn send_password_reset(&self, email: &str, token: &str) -> Result<(), AppError> {
         let reset_url = format!(
-            "{}/auth/reset-password?token={}",
+            "{}/password-reset/confirm?token={}",
             self.config.base_url, token
         );
 
