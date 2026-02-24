@@ -44,8 +44,20 @@ services:
       RUST_LOG: ${RUST_LOG:-debug}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
       ENVIRONMENT: development
+      APP_NAME: ${APP_NAME:-a8n Tools}
+      JWT_SECRET: ${JWT_SECRET:-development-secret-key-min-32-chars-long!}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_PRICE_ID: ${STRIPE_PRICE_ID}
+      STRIPE_BUSINESS_PRICE_ID: ${STRIPE_BUSINESS_PRICE_ID}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
       STRIPE_SUCCESS_URL: ${APP_URL:-http://localhost:5173}/checkout/success
       STRIPE_CANCEL_URL: ${APP_URL:-http://localhost:5173}/pricing?checkout=canceled
+      EMAIL_ENABLED: ${EMAIL_ENABLED:-false}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_FROM: ${SMTP_FROM:-noreply@localhost}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
     ports:
       - "18080:8080"
     volumes:

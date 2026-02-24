@@ -37,6 +37,7 @@ export function MembershipPage() {
   const {
     membership,
     isLoading,
+    error,
     startCheckout,
     cancel,
     reactivate,
@@ -120,6 +121,13 @@ export function MembershipPage() {
           Manage your membership and billing.
         </p>
       </div>
+
+      {error && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
       {isPastDue && (
         <Alert variant="destructive">
