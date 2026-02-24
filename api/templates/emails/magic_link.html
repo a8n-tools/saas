@@ -1,9 +1,8 @@
 {% extends "base.html" %}
-{% block title %}Sign in to a8n.tools{% endblock %}
+{% block title %}Sign in to {{ app_name }}{% endblock %}
 {% block content %}
-<h1>Sign in to a8n.tools</h1>
-<p>Click below to sign in. This link expires in <span class="highlight">15 minutes</span>.</p>
-
+<h1>Sign in to {{ app_name }}</h1>
+<p>Click the button below to sign in to your account. This link expires in 15 minutes.</p>
 <div class="button-container">
   <a href="{{ magic_link_url }}" class="button">Sign In</a>
 </div>

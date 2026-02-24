@@ -1,10 +1,12 @@
-# a8n.tools
+# example.com
 
-A SaaS platform hosting developer and productivity tools. We sell convenience, reliability, and managed hosting for open-source applications.
+A SaaS platform hosting developer and productivity tools. We sell convenience, reliability, and managed hosting for
+open-source applications.
 
 ## Overview
 
-**a8n.tools** provides hosted versions of open-source developer tools with:
+**example.com** provides hosted versions of open-source developer tools with:
+
 - No server setup, maintenance, or updates required
 - Managed infrastructure with monitoring and backups
 - Dedicated support for subscribers
@@ -13,10 +15,10 @@ A SaaS platform hosting developer and productivity tools. We sell convenience, r
 
 ### Current Applications
 
-| Application  | Description                  | Subdomain              |
-|--------------|------------------------------|------------------------|
-| RUS          | URL shortening with QR codes | `rus.a8n.tools`        |
-| Rusty Links  | Bookmark management          | `rustylinks.a8n.tools` |
+| Application | Description                  | Subdomain              |
+|-------------|------------------------------|------------------------|
+| RUS         | URL shortening with QR codes | `rus.example.com`        |
+| Rusty Links | Bookmark management          | `rustylinks.example.com` |
 
 ## Tech Stack
 
@@ -37,7 +39,7 @@ A SaaS platform hosting developer and productivity tools. We sell convenience, r
 
 - Docker and Docker Compose
 - Rust toolchain (for local development)
-- Node.js 20+
+- Bun
 - Git
 
 ### Setup
@@ -55,17 +57,17 @@ A SaaS platform hosting developer and productivity tools. We sell convenience, r
 
 3. Start the development environment:
    ```bash
-   make dev
+   just dev
    ```
 
 4. Access the applications:
-   - Frontend: http://localhost:5173
-   - API: http://localhost:8080
-   - Traefik Dashboard: http://localhost:8081
+    - Frontend: http://localhost:5173
+    - API: http://localhost:8080
+    - Traefik Dashboard: http://localhost:8081
 
    With Traefik routing:
-   - Frontend: http://localhost
-   - API: http://api.localhost
+    - Frontend: http://localhost
+    - API: http://api.localhost
 
 5. Add to `/etc/hosts` (optional, for subdomain routing):
    ```
@@ -107,7 +109,7 @@ a8n-tools/
 ├── traefik/                # Traefik configuration
 ├── docs/                   # Documentation
 ├── docker-compose.dev.yml  # Development environment
-├── Makefile                # Development commands
+├── Justfile                # Development commands
 └── .env.example            # Environment template
 ```
 
@@ -128,63 +130,85 @@ frontend/src/
 ```
 
 ### Navigate to frontend directory
+
 cd frontend
 
 #### Run tests in watch mode (re-runs on file changes)
-npm test
+
+bun test
 
 #### Run tests once (CI mode)
-npm run test:run
+
+bun run test:run
 
 #### Run tests with coverage report
-npm run test:coverage
+
+bun run test:coverage
 
 ## Current Test Coverage
+
 auth.test.ts - 13 tests (login, register, logout, magic link, password reset)
 authStore.test.ts - 17 tests (state management, login/logout flow, error handling)
 
-
 ## Check if migrations are in sync
+
 Run this command if the _sqlx_migrations table was emptied on accident
 If this returns 0 but tables exist, you know there's a problem before the API crashes.
+
 ```
-docker exec a8n-postgres psql -U a8n -d a8n_platform -c \
+docker exec a8n-tools-postgres psql -U a8n -d a8n_platform -c \
    "SELECT COUNT(*) FROM _sqlx_migrations;"
 ```
+
+## Admin Setup
+
+To promote a user to admin, connect to the database and update their role:
+
+```bash
+just db-shell
+```
+
+```sql
+UPDATE users
+SET role = 'admin'
+WHERE email = 'your@email.com';
+```
+
+Once you have an admin account, you can promote additional users from the admin UI at the Users page.
 
 ## Development
 
 ### Available Commands
 
-Run `make help` to see all available commands:
+Run `just --list` to see all available commands:
 
 ```bash
 # Start development environment
-make dev
+just dev
 
 # Stop all services
-make down
+just down
 
 # View logs
-make logs
-make logs-api
-make logs-frontend
+just logs
+just logs-api
+just logs-frontend
 
 # Database operations
-make db-shell       # Connect to PostgreSQL
-make migrate        # Run migrations
-make migrate-create NAME=create_users  # Create new migration
+just db-shell       # Connect to PostgreSQL
+just migrate        # Run migrations
+just migrate-create create_users  # Create new migration
 
 # Testing
-make test           # Run all tests
-make test-api       # Run API tests only
-make test-frontend  # Run frontend tests only
+just test           # Run all tests
+just test-api       # Run API tests only
+just test-frontend  # Run frontend tests only
 
 # Build
-make build          # Build all Docker images
+just build          # Build all Docker images
 
 # Cleanup
-make clean          # Stop services and remove volumes
+just clean          # Stop services and remove volumes
 ```
 
 ### Adding a New API Endpoint
@@ -194,6 +218,7 @@ make clean          # Stop services and remove volumes
 3. Register the route in `api/src/routes/mod.rs`
 
 Example:
+
 ```rust
 // api/src/handlers/users.rs
 use actix_web::{get, web, HttpResponse};
@@ -219,13 +244,47 @@ async fn get_current_user() -> HttpResponse {
 | `HOST`                  | API server host                  | `0.0.0.0`               | No         |
 | `PORT`                  | API server port                  | `8080`                  | No         |
 | `RUST_LOG`              | Log level                        | `info`                  | No         |
-| `CORS_ORIGIN`           | Allowed CORS origin              | `https://app.a8n.tools` | No         |
+| `CORS_ORIGIN`           | Allowed CORS origin              | `https://app.example.com` | No         |
 | `ENVIRONMENT`           | Environment name                 | `development`           | No         |
 | `JWT_PRIVATE_KEY_PATH`  | Path to Ed25519 private key      | -                       | Yes (prod) |
 | `JWT_PUBLIC_KEY_PATH`   | Path to Ed25519 public key       | -                       | Yes (prod) |
 | `STRIPE_SECRET_KEY`     | Stripe API secret key            | -                       | Yes (prod) |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret    | -                       | Yes (prod) |
 | `STRIPE_PRICE_ID`       | Stripe price ID for subscription | -                       | Yes (prod) |
+
+## Health Checks
+
+Both the API and frontend images expose a `/health` endpoint but do **not** include a
+built-in `HEALTHCHECK` instruction. It is the deployer's responsibility to configure
+health checks in their compose file or orchestrator.
+
+| Service    | Endpoint  | Port | Healthy response   |
+|------------|-----------|------|--------------------|
+| `api`      | `/health` | 8080 | `200 OK`           |
+| `frontend` | `/health` | 8080 | `200 OK` "healthy" |
+
+### Docker Compose example
+
+```yaml
+services:
+  api:
+    image: your-registry/saas-api:latest
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
+
+  frontend:
+    image: your-registry/saas-frontend:latest
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
+```
 
 ## Architecture Decisions
 
@@ -248,62 +307,56 @@ async fn get_current_user() -> HttpResponse {
 - **Algorithm**: EdDSA (Ed25519) - faster and more secure than RS256
 - **Access Token**: 15 minutes - short-lived for security
 - **Refresh Token**: 30 days - stored in database for revocation
-- **Cookie Domain**: `.a8n.tools` - enables SSO across subdomains
+- **Cookie Domain**: `.example.com` - enables SSO across subdomains
 
 ### Subdomain Routing
 
 Traefik handles routing based on subdomain:
-- `a8n.tools` -> Marketing site
-- `app.a8n.tools` -> User dashboard
-- `api.a8n.tools` -> Backend API
-- `admin.a8n.tools` -> Admin panel
-- `*.a8n.tools` -> Individual applications
 
+- `example.com` -> Marketing site
+- `app.example.com` -> User dashboard
+- `api.example.com` -> Backend API
+- `admin.example.com` -> Admin panel
+- `*.example.com` -> Individual applications
 
-Will this work on any machine?                                                                                                                                        
-                                                                                                                                                                        
-  Almost — the only manual step is each developer needs to add the /etc/hosts entries:                                                                                  
-   
-  127.0.0.1 a8n.test                                                                                                                                                    
-  127.0.0.1 app.a8n.test                                                           
-  127.0.0.1 api.a8n.test
-  127.0.0.1 rus.a8n.test
+Will this work on any machine?
 
-  Everything else (Traefik routing, cookie domain, CORS) is baked into the compose files and code. So for any new dev machine it's: clone, add hosts entries, docker
-  compose up.
+Almost — the only manual step is each developer needs to add the /etc/hosts entries:
 
-  You could automate the hosts step with a Makefile target or a setup script if you wanted to reduce friction for the other two devs.
+- 127.0.0.1 a8n.test
+- 127.0.0.1 app.a8n.test
+- 127.0.0.1 api.a8n.test
+- 127.0.0.1 rus.a8n.test
 
-  The Firefox proxy method
+Everything else (Traefik routing, cookie domain, CORS) is baked into the compose files and code. So for any new dev
+machine it's: clone, add hosts entries, docker
+compose up.
 
-  That approach involves configuring Firefox (or a PAC file) to route *.a8n.test traffic through a local proxy. It avoids touching /etc/hosts but adds complexity. With
-  your current setup — /etc/hosts + Traefik — you get the same result more simply. No need for it.
+You could automate the hosts step with a Makefile target or a setup script if you wanted to reduce friction for the
+other two devs.
 
-  What changes for production?
+The Firefox proxy method
 
-  Almost nothing — your production docker-compose.yml is already set up correctly:
-  ┌────────────────────┬──────────────────────────────┬───────────────────────────────────────────────────┐
-  │      Concern       │        Dev (current)         │           Production (already handled)            │
-  ├────────────────────┼──────────────────────────────┼───────────────────────────────────────────────────┤
-  │ DNS                │ /etc/hosts → 127.0.0.1       │ Real DNS records for *.a8n.tools                  │
-  ├────────────────────┼──────────────────────────────┼───────────────────────────────────────────────────┤
-  │ TLS                │ None (HTTP)                  │ Let's Encrypt via Traefik (already configured)    │
-  ├────────────────────┼──────────────────────────────┼───────────────────────────────────────────────────┤
-  │ Cookie domain      │ .a8n.test (explicit env var) │ .a8n.tools (auto-set when ENVIRONMENT=production) │
-  ├────────────────────┼──────────────────────────────┼───────────────────────────────────────────────────┤
-  │ Cookie Secure flag │ false                        │ true (from config.is_production())                │
-  ├────────────────────┼──────────────────────────────┼───────────────────────────────────────────────────┤
-  │ CORS               │ .a8n.test + .a8n.tools       │ .a8n.tools (already in code)                      │
-  ├────────────────────┼──────────────────────────────┼───────────────────────────────────────────────────┤
-  │ Vite allowedHosts  │ Needed for dev server        │ N/A — production serves static files via nginx    │
-  └────────────────────┴──────────────────────────────┴───────────────────────────────────────────────────┘
-  The only thing to confirm is that each child app in production shares the same JWT_SECRET env var as the main API. Your production compose already has JWT_SECRET:
-  ${JWT_SECRET} on the API — just make sure RUS and any other child apps get the same value.
+That approach involves configuring Firefox (or a PAC file) to route *.a8n.test traffic through a local proxy. It avoids
+touching /etc/hosts but adds complexity. With
+your current setup — /etc/hosts + Traefik — you get the same result more simply. No need for it.
 
+What changes for production?
 
+Almost nothing — your production docker-compose.yml is already set up correctly:
 
+| Concern            | Dev (current)                | Production (already handled)                      |
+|--------------------|------------------------------|---------------------------------------------------|
+| DNS                | /etc/hosts → 127.0.0.1       | Real DNS records for *.example.com                  |
+| TLS                | None (HTTP)                  | Let's Encrypt via Traefik (already configured)    |
+| Cookie domain      | .a8n.test (explicit env var) | .example.com (auto-set when ENVIRONMENT=production) |
+| Cookie Secure flag | false                        | true (from config.is_production())                |
+| CORS               | .a8n.test + .example.com       | .example.com (already in code)                      |
+| Vite allowedHosts  | Needed for dev server        | N/A — production serves static files via nginx    |
 
-
+The only thing to confirm is that each child app in production shares the same JWT_SECRET env var as the main API. Your
+production compose already has JWT_SECRET:
+${JWT_SECRET} on the API — just make sure RUS and any other child apps get the same value.
 
 ## License
 

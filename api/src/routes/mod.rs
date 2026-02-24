@@ -26,6 +26,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .configure(admin::configure),
     );
 
-    // Health check at root level too
+    // Root-level endpoints
+    cfg.service(health::root_status);
     cfg.service(health::health_check);
 }

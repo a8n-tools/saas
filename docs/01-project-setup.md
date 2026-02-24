@@ -7,7 +7,7 @@ This document contains prompts for setting up the foundational project structure
 ## Prerequisites
 - Docker and Docker Compose installed
 - Rust toolchain (rustup)
-- Node.js 20+
+- Bun
 - Git
 
 ---
@@ -15,7 +15,7 @@ This document contains prompts for setting up the foundational project structure
 ## Prompt 1.1: Create Rust API Project Scaffold
 
 ```text
-Create a new Rust API project for a8n.tools platform with Actix-Web.
+Create a new Rust API project for example.com platform with Actix-Web.
 
 Project requirements:
 - Name: a8n-api
@@ -52,7 +52,7 @@ Create a basic main.rs that:
 1. Loads configuration from environment variables
 2. Sets up structured JSON logging with tracing
 3. Creates a database connection pool
-4. Configures CORS for .a8n.tools domain
+4. Configures CORS for .example.com domain
 5. Starts the server on configurable port (default 8080)
 6. Has a /health endpoint returning {"status": "ok"}
 
@@ -61,7 +61,7 @@ Create config.rs that loads:
 - HOST (default: 0.0.0.0)
 - PORT (default: 8080)
 - RUST_LOG (default: info)
-- CORS_ORIGIN (default: https://app.a8n.tools)
+- CORS_ORIGIN (default: https://app.example.com)
 
 Include proper error handling - don't use unwrap() in production code.
 
@@ -192,7 +192,7 @@ Write unit tests for response serialization.
 ## Prompt 1.4: Create Docker Development Environment
 
 ```text
-Create a Docker Compose development environment for a8n.tools.
+Create a Docker Compose development environment for example.com.
 
 Create docker-compose.dev.yml with these services:
 
@@ -223,7 +223,7 @@ Create a Dockerfile.dev for the API that:
 
 Create a Dockerfile.dev for frontend that:
 - Uses node:20-alpine
-- Runs npm run dev
+- Runs bun run dev
 
 Create a Makefile with commands:
 - `make dev` - Start development environment
@@ -298,7 +298,7 @@ Create comprehensive project documentation.
 Create README.md in project root with:
 
 1. **Project Overview**
-   - What a8n.tools is
+   - What example.com is
    - Tech stack summary
    - Project structure
 
@@ -324,7 +324,7 @@ Create README.md in project root with:
    - All Makefile commands
    - Manual docker-compose commands
    - Cargo commands for API
-   - npm commands for frontend
+   - bun commands for frontend
 
 6. **Architecture Decisions**
    - Why Actix-Web

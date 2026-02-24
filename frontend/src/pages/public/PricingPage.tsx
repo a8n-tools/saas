@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { config } from '@/config'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -22,7 +23,7 @@ const businessFeatures = [
   'Dedicated account manager',
 ]
 
-const showBusinessPricing = import.meta.env.VITE_SHOW_BUSINESS_PRICING === 'true'
+const showBusinessPricing = config.showBusinessPricing
 
 export function PricingPage() {
   return (

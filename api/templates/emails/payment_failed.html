@@ -1,10 +1,9 @@
 {% extends "base.html" %}
 {% block title %}Payment Failed{% endblock %}
 {% block content %}
-<h1>Payment failed</h1>
-<p>We couldn't process your latest payment for a8n.tools.</p>
-
-<p>No worries &mdash; you still have access for the next <span class="highlight">{{ days_remaining }} days</span> while you update your payment method.</p>
+<h1>Payment Failed</h1>
+<p>We couldn't process your payment for your {{ app_name }} subscription.</p>
+<p>Don't worry - you still have access for the next <strong>{{ days_remaining }} days</strong> while you update your payment method.</p>
 
 <div class="button-container">
   <a href="https://app.a8n.tools/membership" class="button">Update Payment Method</a>

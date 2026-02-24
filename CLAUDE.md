@@ -6,52 +6,52 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**a8n.tools** is a SaaS platform hosting developer/productivity tools (URL shortener, bookmark manager). Rust API backend + React SPA frontend, with JWT-based SSO across subdomains (`*.a8n.tools`).
+**example.com** is a SaaS platform hosting developer/productivity tools (URL shortener, bookmark manager). Rust API backend + React SPA frontend, with JWT-based SSO across subdomains (`*.example.com`).
 
 ## Development Commands
 
 ```bash
 # Start full dev environment (Postgres + API + Frontend via Docker Compose)
-make dev
+just dev
 
 # Stop / view logs / clean up
-make down
-make logs              # all services
-make logs-api          # API only
-make logs-frontend     # frontend only
-make clean             # stop + remove volumes
+just down
+just logs              # all services
+just logs-api          # API only
+just logs-frontend     # frontend only
+just clean             # stop + remove volumes
 
 # Database
-make db-shell                           # psql into a8n_platform
-make migrate                            # run migrations (cd api && cargo sqlx migrate run)
-make migrate-create NAME=add_feature    # create new migration file
+just db-shell                           # psql into a8n_platform
+just migrate                            # run migrations (cd api && cargo sqlx migrate run)
+just migrate-create add_feature         # create new migration file
 
 # Testing
-make test              # all tests
-make test-api          # cd api && cargo test
-make test-frontend     # cd frontend && npm test (vitest watch mode)
+just test              # all tests
+just test-api          # cd api && cargo test
+just test-frontend     # cd frontend && bun test (vitest watch mode)
 
 # Run a single Rust test
 cd api && cargo test test_name
 
 # Run a single frontend test file
-cd frontend && npx vitest run src/path/to/file.test.ts
+cd frontend && bunx vitest run src/path/to/file.test.ts
 
 # Frontend CI mode (no watch)
-cd frontend && npm run test:run
+cd frontend && bun run test:run
 
 # Frontend coverage
-cd frontend && npm run test:coverage
+cd frontend && bun run test:coverage
 
 # Linting
 cd api && cargo clippy
 cd api && cargo fmt
-cd frontend && npm run lint
+cd frontend && bun run lint
 
 # Build Docker images
-make build             # all
-make build-api
-make build-frontend
+just build             # all
+just build-api
+just build-frontend
 ```
 
 ## Architecture
@@ -96,7 +96,7 @@ React 18 + TypeScript + Vite + Tailwind CSS + shadcn/ui.
 
 ### Auth & SSO
 
-- JWT tokens stored in HTTP-only cookies on `.a8n.tools` domain (`.a8n.run` in dev)
+- JWT tokens stored in HTTP-only cookies on `.example.com` domain (`.a8n.run` in dev)
 - Access token: 15 min, Refresh token: 30 days
 - Cookie set/cleared via `AuthCookies` helper in `middleware/auth.rs`
 - Token extracted from `access_token` cookie first, then `Authorization: Bearer` header
@@ -108,7 +108,7 @@ PostgreSQL 16. Migrations in `api/migrations/` (sqlx, sequential numbering `2024
 
 ## CI/CD
 
-Forgejo Actions (`.forgejo/workflows/`). On push to `main`, builds OCI image using Nushell scripts in `oci-build/` and pushes to Forgejo Container Registry.
+Forgejo Actions (`.forgejo/workflows/`). On push to `main`, builds OCI images using `docker buildx build` with the project Dockerfiles and pushes to Forgejo Container Registry. Tag resolution uses `oci-build/get-tags.nu`.
 
 ## Conventions
 
@@ -120,8 +120,5 @@ Forgejo Actions (`.forgejo/workflows/`). On push to `main`, builds OCI image usi
 
 ## Dev Environment URLs
 
-- Frontend: http://localhost:5173 (or https://app.a8n.run via Traefik)
-- API: http://localhost:18080 (or https://api.a8n.run via Traefik)
-- Traefik dashboard: http://localhost:8081
-
-Requires external Traefik network `network-traefik-public` and `/etc/hosts` entries for `*.a8n.run` subdomains when using Traefik routing.
+- Frontend: http://localhost:5173
+- API: http://localhost:18080

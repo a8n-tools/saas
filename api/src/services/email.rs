@@ -8,7 +8,7 @@ use lettre::{
 };
 use tera::{Context, Tera};
 
-use crate::config::EmailConfig;
+use crate::config::{EmailConfig, SmtpTls};
 use crate::errors::AppError;
 
 /// Email service for sending transactional emails
@@ -30,33 +30,25 @@ impl EmailService {
                 config.smtp_password.clone(),
             );
 
-            // Port 465 uses implicit TLS (SMTPS), port 587 uses STARTTLS,
-            // port 25 uses plaintext (opportunistic TLS)
-            let transport = if config.smtp_port == 465 {
-                // Use SMTPS (implicit TLS) for port 465
-                AsyncSmtpTransport::<Tokio1Executor>::relay(&config.smtp_host)
-                    .map_err(|e| AppError::internal(format!("SMTP connection error: {}", e)))?
-                    .port(config.smtp_port)
-                    .credentials(creds)
-                    .tls(lettre::transport::smtp::client::Tls::Wrapper(
-                        lettre::transport::smtp::client::TlsParameters::new(config.smtp_host.clone())
-                            .map_err(|e| AppError::internal(format!("TLS error: {}", e)))?,
-                    ))
-                    .build()
-            } else if config.smtp_port == 25 {
-                // Port 25: STARTTLS (opportunistic)
-                AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(&config.smtp_host)
-                    .map_err(|e| AppError::internal(format!("SMTP connection error: {}", e)))?
-                    .port(config.smtp_port)
-                    .credentials(creds)
-                    .build()
-            } else {
-                // Port 587 etc: STARTTLS required
-                AsyncSmtpTransport::<Tokio1Executor>::relay(&config.smtp_host)
-                    .map_err(|e| AppError::internal(format!("SMTP connection error: {}", e)))?
-                    .port(config.smtp_port)
-                    .credentials(creds)
-                    .build()
+            let transport = match config.smtp_tls {
+                SmtpTls::Implicit => {
+                    AsyncSmtpTransport::<Tokio1Executor>::relay(&config.smtp_host)
+                        .map_err(|e| AppError::internal(format!("SMTP connection error: {}", e)))?
+                        .port(config.smtp_port)
+                        .credentials(creds)
+                        .tls(lettre::transport::smtp::client::Tls::Wrapper(
+                            lettre::transport::smtp::client::TlsParameters::new(config.smtp_host.clone())
+                                .map_err(|e| AppError::internal(format!("TLS error: {}", e)))?,
+                        ))
+                        .build()
+                }
+                SmtpTls::Starttls => {
+                    AsyncSmtpTransport::<Tokio1Executor>::relay(&config.smtp_host)
+                        .map_err(|e| AppError::internal(format!("SMTP connection error: {}", e)))?
+                        .port(config.smtp_port)
+                        .credentials(creds)
+                        .build()
+                }
             };
 
             Some(transport)
@@ -126,12 +118,14 @@ impl EmailService {
         let config = EmailConfig {
             smtp_host: "localhost".to_string(),
             smtp_port: 587,
+            smtp_tls: SmtpTls::Starttls,
             smtp_username: String::new(),
             smtp_password: String::new(),
-            from_email: "noreply@a8n.tools".to_string(),
-            from_name: "a8n.tools".to_string(),
-            base_url: "https://app.a8n.tools".to_string(),
+            from_email: "noreply@localhost".to_string(),
+            from_name: "localhost".to_string(),
+            base_url: "http://localhost:5173".to_string(),
             enabled: false,
+            app_name: "localhost".to_string(),
         };
 
         // Create with minimal template setup for dev
@@ -206,6 +200,7 @@ impl EmailService {
     fn base_context(&self) -> Context {
         let mut context = Context::new();
         context.insert("base_url", &self.config.base_url);
+        context.insert("app_name", &self.config.app_name);
         context.insert("year", &Utc::now().year());
         context
     }
@@ -230,7 +225,7 @@ impl EmailService {
         context.insert("magic_link_url", &magic_link_url);
 
         let (html, text) = self.render_template("magic_link", &context)?;
-        self.send_email(email, "Sign in to a8n.tools", html, text).await
+        self.send_email(email, &format!("Sign in to {}", self.config.app_name), html, text).await
     }
 
     /// Send password reset email
@@ -253,7 +248,7 @@ impl EmailService {
         context.insert("reset_url", &reset_url);
 
         let (html, text) = self.render_template("password_reset", &context)?;
-        self.send_email(email, "Reset your a8n.tools password", html, text).await
+        self.send_email(email, &format!("Reset your {} password", self.config.app_name), html, text).await
     }
 
     /// Send account creation email
@@ -267,7 +262,7 @@ impl EmailService {
         context.insert("dashboard_url", &format!("{}/dashboard", self.config.base_url));
 
         let (html, text) = self.render_template("account_created", &context)?;
-        self.send_email(email, "Welcome to a8n.tools!", html, text).await
+        self.send_email(email, &format!("Welcome to {}!", self.config.app_name), html, text).await
     }
 
     /// Send welcome email after membership activation
@@ -282,7 +277,7 @@ impl EmailService {
         context.insert("price", &format!("{:.2}", price_cents as f64 / 100.0));
 
         let (html, text) = self.render_template("welcome", &context)?;
-        self.send_email(email, "Welcome to a8n.tools!", html, text).await
+        self.send_email(email, &format!("Welcome to {}!", self.config.app_name), html, text).await
     }
 
     /// Send payment failed email
@@ -340,7 +335,7 @@ impl EmailService {
         context.insert("resubscribe_url", &format!("{}/pricing", self.config.base_url));
 
         let (html, text) = self.render_template("membership_canceled", &context)?;
-        self.send_email(email, "Your a8n.tools membership has been canceled", html, text).await
+        self.send_email(email, &format!("Your {} membership has been canceled", self.config.app_name), html, text).await
     }
 
     /// Send payment succeeded (receipt) email
@@ -355,7 +350,7 @@ impl EmailService {
         context.insert("dashboard_url", &format!("{}/dashboard", self.config.base_url));
 
         let (html, text) = self.render_template("payment_succeeded", &context)?;
-        self.send_email(email, "Payment received - a8n.tools", html, text).await
+        self.send_email(email, &format!("Payment received - {}", self.config.app_name), html, text).await
     }
 }
 

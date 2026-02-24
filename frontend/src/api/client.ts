@@ -1,7 +1,7 @@
 import type { ApiResponse, ApiError } from '@/types'
+import { config } from '@/config'
 
-// Always use /api for browser requests - Vite proxy handles forwarding to the API server
-const API_BASE_URL = '/api'
+const API_BASE_URL = config.apiUrl + '/v1'
 
 class ApiClient {
   private baseUrl: string
@@ -20,12 +20,25 @@ class ApiClient {
       ...options,
       credentials: 'include', // Include cookies for auth
       headers: {
+        'Accept': 'application/json',
         'Content-Type': 'application/json',
         ...options.headers,
       },
     }
 
     const response = await fetch(url, config)
+
+    // Reject non-JSON responses (e.g. Anubis challenge pages)
+    const contentType = response.headers.get('content-type') || ''
+    if (!contentType.includes('application/json')) {
+      throw {
+        success: false,
+        error: {
+          code: 'INVALID_RESPONSE',
+          message: 'Server returned a non-JSON response. Please refresh and try again.',
+        },
+      } satisfies ApiError
+    }
 
     if (!response.ok) {
       const error: ApiError = await response.json().catch(() => ({

@@ -1,4 +1,4 @@
-# a8n.tools Implementation Status
+# example.com Implementation Status
 
 > Auto-generated checklist tracking implementation progress against specification documents in `docs/`.
 > Last updated: January 6, 2026
@@ -31,7 +31,7 @@
 - [x] Database connection pool with health checks
 - [x] Config loading from environment variables
 - [x] Logging with tracing/structured JSON
-- [x] CORS configured for `.a8n.tools` domain
+- [x] CORS configured for `.example.com` domain
 - [x] Error handling with AppError enum
 - [x] Request ID middleware
 - [x] React frontend project (`frontend/`)

@@ -1,6 +1,6 @@
-# a8n.tools Architecture
+# example.com Architecture
 
-This document describes the system architecture of the a8n.tools platform.
+This document describes the system architecture of the example.com platform.
 
 ## System Overview
 
@@ -12,7 +12,7 @@ This document describes the system architecture of the a8n.tools platform.
                                                               ▼
                                     ┌─────────────────────────────────────────────────────────┐
                                     │                    Traefik (Reverse Proxy)              │
-                                    │         Wildcard SSL (*.a8n.tools)                      │
+                                    │         Wildcard SSL (*.example.com)                      │
                                     │         Rate Limiting | Security Headers               │
                                     └─────────────────────────────────────────────────────────┘
                                                               │
@@ -20,7 +20,7 @@ This document describes the system architecture of the a8n.tools platform.
                     │                 │                       │                    │                  │
                     ▼                 ▼                       ▼                    ▼                  ▼
             ┌───────────────┐ ┌───────────────┐ ┌─────────────────────┐ ┌───────────────┐ ┌───────────────┐
-            │  a8n.tools    │ │ app.a8n.tools │ │   api.a8n.tools     │ │ rus.a8n.tools │ │rustylinks...  │
+            │  example.com    │ │ app.example.com │ │   api.example.com     │ │ rus.example.com │ │rustylinks...  │
             │   Landing     │ │   Dashboard   │ │      API            │ │     RUS       │ │ Rusty Links   │
             │    (React)    │ │    (React)    │ │   (Actix-Web)       │ │   (Rust)      │ │    (Rust)     │
             └───────────────┘ └───────────────┘ └─────────────────────┘ └───────────────┘ └───────────────┘
@@ -47,7 +47,7 @@ This document describes the system architecture of the a8n.tools platform.
 - Adds security headers (HSTS, CSP, etc.)
 - Load balancing for horizontal scaling
 
-### Platform API (api.a8n.tools)
+### Platform API (api.example.com)
 
 The central API that handles:
 
@@ -63,9 +63,9 @@ The central API that handles:
 
 | App | Purpose |
 |-----|---------|
-| Landing (a8n.tools) | Marketing, pricing, public info |
-| Dashboard (app.a8n.tools) | User portal, app access, subscription |
-| Admin (admin.a8n.tools) | Administration panel |
+| Landing (example.com) | Marketing, pricing, public info |
+| Dashboard (app.example.com) | User portal, app access, subscription |
+| Admin (admin.example.com) | Administration panel |
 
 ### Individual Applications
 

@@ -276,7 +276,9 @@ impl AuthService {
             Some(user) => {
                 // Set email as verified
                 UserRepository::set_email_verified(&self.pool, user.id).await?;
-                UserRepository::find_by_id(&self.pool, user.id).await?.unwrap()
+                UserRepository::find_by_id(&self.pool, user.id)
+                    .await?
+                    .ok_or(AppError::not_found("User"))?
             }
             None => {
                 // Create new user (passwordless)

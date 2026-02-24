@@ -309,10 +309,10 @@ mod tests {
 
     #[test]
     fn test_auth_cookies_clear_with_domain() {
-        let cookies = AuthCookies::clear(true, Some(".a8n.tools"));
+        let cookies = AuthCookies::clear(true, Some(".example.com"));
         assert_eq!(cookies.len(), 2);
         for cookie in cookies {
-            assert_eq!(cookie.domain(), Some(".a8n.tools"));
+            assert_eq!(cookie.domain(), Some(".example.com"));
         }
     }
 }

@@ -52,7 +52,7 @@ build_api() {
 build_frontend() {
     log_info "Building Frontend image..."
     docker build \
-        --build-arg VITE_API_URL=https://api.a8n.tools \
+        --build-arg VITE_API_URL=${VITE_API_URL:?VITE_API_URL must be set} \
         --build-arg VITE_SHOW_BUSINESS_PRICING=false \
         -t "${REGISTRY}/saas-frontend:${VERSION}" \
         -t "${REGISTRY}/saas-frontend:latest" \

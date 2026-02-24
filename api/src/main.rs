@@ -1,6 +1,6 @@
 //! a8n-api - Main entry point
 //!
-//! This is the entry point for the a8n.tools backend API server.
+//! This is the entry point for the backend API server.
 
 use actix_cors::Cors;
 use actix_web::{middleware::Logger, web, App, HttpServer};
@@ -13,7 +13,12 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilte
 
 use a8n_api::{
     config::Config,
-    middleware::{request_id::RequestIdMiddleware, SecurityHeaders},
+    middleware::{
+        auto_ban::{self, AutoBanService},
+        request_id::RequestIdMiddleware,
+        AutoBanMiddleware, SecurityHeaders,
+    },
+    repositories::RateLimitRepository,
     routes,
     services::{AuthService, EmailService, JwtConfig, JwtService, StripeConfig, StripeService},
 };
@@ -75,7 +80,7 @@ async fn main() -> anyhow::Result<()> {
         }
         "development-secret-key-min-32-chars-long!".to_string()
     });
-    let jwt_config = JwtConfig::from_secret(&jwt_secret);
+    let jwt_config = JwtConfig::from_secret(&jwt_secret, &config.app_name);
     let jwt_service = Arc::new(JwtService::new(jwt_config));
 
     info!("JWT service initialized");
@@ -102,26 +107,107 @@ async fn main() -> anyhow::Result<()> {
 
     info!("Stripe service initialized");
 
+    // Initialize auto-ban service
+    let auto_ban_service = Arc::new(AutoBanService::new(config.auto_ban.clone(), pool.clone()));
+
+    // Load existing bans from DB
+    match auto_ban::load_active_bans(&pool).await {
+        Ok(bans) => {
+            auto_ban_service.load_bans(bans).await;
+        }
+        Err(e) => {
+            error!(error = %e, "Failed to load IP bans from database");
+        }
+    }
+
+    info!(
+        enabled = config.auto_ban.enabled,
+        threshold = config.auto_ban.threshold,
+        "Auto-ban service initialized"
+    );
+
     let server_addr = config.server_addr();
     let cors_origin = config.cors_origin.clone();
+
+    // Extract the domain from CORS_ORIGIN for subdomain matching
+    // e.g. "https://pugtsurani.net" → ".pugtsurani.net"
+    let cors_domain = cors_origin
+        .split("://")
+        .nth(1)
+        .unwrap_or("")
+        .split('/')
+        .next()
+        .unwrap_or("")
+        .split(':')
+        .next()
+        .map(|host| format!(".{host}"))
+        .unwrap_or_default();
+
     let config_data = config.clone();
+
+    // Spawn rate limit cleanup background task
+    let cleanup_pool = pool.clone();
+    tokio::spawn(async move {
+        info!("Rate limit cleanup task started");
+        let mut interval = tokio::time::interval(Duration::from_secs(3600));
+        loop {
+            interval.tick().await;
+            match RateLimitRepository::cleanup_expired(&cleanup_pool).await {
+                Ok(deleted) => {
+                    if deleted > 0 {
+                        info!(deleted, "Cleaned up expired rate limit entries");
+                    }
+                }
+                Err(e) => {
+                    error!(error = %e, "Failed to cleanup expired rate limit entries");
+                }
+            }
+        }
+    });
+
+    // Spawn auto-ban cleanup background task (every 5 minutes)
+    let ban_cleanup_pool = pool.clone();
+    let ban_cleanup_service = auto_ban_service.clone();
+    tokio::spawn(async move {
+        info!("Auto-ban cleanup task started");
+        let mut interval = tokio::time::interval(Duration::from_secs(300));
+        loop {
+            interval.tick().await;
+            // Clean in-memory state
+            ban_cleanup_service.cleanup_expired().await;
+            // Clean database
+            match auto_ban::cleanup_expired_bans(&ban_cleanup_pool).await {
+                Ok(deleted) => {
+                    if deleted > 0 {
+                        info!(deleted, "Cleaned up expired IP bans");
+                    }
+                }
+                Err(e) => {
+                    error!(error = %e, "Failed to cleanup expired IP bans");
+                }
+            }
+        }
+    });
 
     info!(address = %server_addr, "Starting HTTP server");
 
     // Start HTTP server
     HttpServer::new(move || {
         // Configure CORS
+        let domain = cors_domain.clone();
         let cors = Cors::default()
             .allowed_origin(&cors_origin)
-            .allowed_origin_fn(|origin, _req_head| {
-                // Allow all subdomains of a8n.tools and a8n.test (dev)
-                origin
-                    .as_bytes()
-                    .ends_with(b".a8n.tools")
-                    || origin.as_bytes() == b"https://a8n.tools"
-                    || origin.as_bytes().ends_with(b".a8n.test")
-                    || origin.as_bytes() == b"http://a8n.test"
-                    || origin.as_bytes().starts_with(b"http://localhost")
+            .allowed_origin_fn(move |origin, _req_head| {
+                let origin = origin.as_bytes();
+                // Allow localhost (development)
+                if origin.starts_with(b"http://localhost") {
+                    return true;
+                }
+                // Allow the configured domain and its subdomains
+                if !domain.is_empty() {
+                    return origin.ends_with(domain.as_bytes());
+                }
+                false
             })
             .allowed_methods(vec!["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
             .allowed_headers(vec![
@@ -143,6 +229,10 @@ async fn main() -> anyhow::Result<()> {
             .wrap(SecurityHeaders)
             .wrap(RequestIdMiddleware)
             .wrap(cors)
+            // Auto-ban runs outermost — rejects banned IPs before CORS processing
+            .wrap(AutoBanMiddleware::new(auto_ban_service.clone()))
+            // Explicit JSON body size limit (32 KB)
+            .app_data(web::JsonConfig::default().limit(32_768))
             // Add database pool to app state
             .app_data(web::Data::new(pool.clone()))
             // Add services to app state

@@ -1,6 +1,6 @@
-# Contributing to a8n.tools
+# Contributing to example.com
 
-Thank you for your interest in contributing to a8n.tools!
+Thank you for your interest in contributing to example.com!
 
 ## Getting Started
 
@@ -150,7 +150,7 @@ cd api && RUST_LOG=debug cargo test
 make test-frontend
 
 # Run with watch mode
-cd frontend && npm test -- --watch
+cd frontend && bun test -- --watch
 ```
 
 ## Code Review Process

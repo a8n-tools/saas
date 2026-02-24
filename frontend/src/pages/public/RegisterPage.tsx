@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { AlertCircle, Loader2, Check } from 'lucide-react'
+import { AlertCircle, Loader2, Check, CheckCircle2 } from 'lucide-react'
 
 const registerSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -40,6 +40,7 @@ export function RegisterPage() {
   const navigate = useNavigate()
   const { register: registerUser, error, clearError } = useAuthStore()
   const [isLoading, setIsLoading] = useState(false)
+  const [isSuccess, setIsSuccess] = useState(false)
 
   const {
     register,
@@ -57,7 +58,8 @@ export function RegisterPage() {
     clearError()
     try {
       await registerUser(data.email, data.password)
-      navigate('/dashboard')
+      setIsSuccess(true)
+      setTimeout(() => navigate('/dashboard'), 1500)
     } catch {
       // Error is handled by the store
     } finally {
@@ -68,6 +70,20 @@ export function RegisterPage() {
   return (
     <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center py-12">
       <Card className="w-full max-w-md">
+        {isSuccess ? (
+          <>
+            <CardHeader className="text-center">
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-500/20">
+                <CheckCircle2 className="h-6 w-6 text-green-500" />
+              </div>
+              <CardTitle className="text-2xl">Account created!</CardTitle>
+              <CardDescription>
+                Redirecting to your dashboard...
+              </CardDescription>
+            </CardHeader>
+          </>
+        ) : (
+        <>
         <CardHeader className="text-center">
           <CardTitle className="text-2xl">Create an account</CardTitle>
           <CardDescription>
@@ -162,6 +178,8 @@ export function RegisterPage() {
             .
           </p>
         </CardContent>
+        </>
+        )}
       </Card>
     </div>
   )

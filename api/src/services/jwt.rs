@@ -21,13 +21,13 @@ pub struct JwtConfig {
 
 impl JwtConfig {
     /// Create config from secret key (for development)
-    pub fn from_secret(secret: &str) -> Self {
+    pub fn from_secret(secret: &str, issuer: &str) -> Self {
         Self {
             encoding_key: EncodingKey::from_secret(secret.as_bytes()),
             decoding_key: DecodingKey::from_secret(secret.as_bytes()),
             access_token_expiry: Duration::minutes(15),
             refresh_token_expiry: Duration::days(30),
-            issuer: "a8n.tools".to_string(),
+            issuer: issuer.to_string(),
         }
     }
 }
@@ -204,7 +204,7 @@ mod tests {
 
     #[test]
     fn test_access_token_creation_and_verification() {
-        let config = JwtConfig::from_secret("test-secret-key-12345");
+        let config = JwtConfig::from_secret("test-secret-key-12345", "localhost");
         let service = JwtService::new(config);
         let user = create_test_user();
 
@@ -218,7 +218,7 @@ mod tests {
 
     #[test]
     fn test_refresh_token_creation() {
-        let config = JwtConfig::from_secret("test-secret-key-12345");
+        let config = JwtConfig::from_secret("test-secret-key-12345", "localhost");
         let service = JwtService::new(config);
         let user_id = Uuid::new_v4();
 
@@ -231,7 +231,7 @@ mod tests {
 
     #[test]
     fn test_token_hashing() {
-        let config = JwtConfig::from_secret("test-secret-key-12345");
+        let config = JwtConfig::from_secret("test-secret-key-12345", "localhost");
         let service = JwtService::new(config);
 
         let token = "test-token";

@@ -22,8 +22,8 @@ export const mockAdminUser = {
   role: 'admin' as const,
 }
 
-// Base API URL used by the client
-const API_BASE = '/api'
+// Must match the base URL used by apiClient
+const API_BASE = '/v1'
 
 export const handlers = [
   // Login

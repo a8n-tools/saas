@@ -37,7 +37,7 @@ services:
       - a8n-network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.dashboard.rule=Host(`traefik.a8n.tools`)"
+      - "traefik.http.routers.dashboard.rule=Host(`traefik.example.com`)"
       - "traefik.http.routers.dashboard.service=api@internal"
       - "traefik.http.routers.dashboard.middlewares=auth"
       - "traefik.http.middlewares.auth.basicauth.users=${TRAEFIK_DASHBOARD_AUTH}"
@@ -46,7 +46,7 @@ services:
     build:
       context: ./api
       dockerfile: Dockerfile
-    container_name: a8n-api
+    container_name: a8n-tools-api
     restart: unless-stopped
     environment:
       - DATABASE_URL=postgres://a8n:${DB_PASSWORD}@postgres:5432/a8n_platform
@@ -59,7 +59,7 @@ services:
       - SMTP_PORT=587
       - SMTP_USERNAME=${SMTP_USERNAME}
       - SMTP_PASSWORD=${SMTP_PASSWORD}
-      - BASE_URL=https://app.a8n.tools
+      - BASE_URL=https://app.example.com
       - RUST_LOG=info
       - GLITCHTIP_DSN=${GLITCHTIP_DSN}
     volumes:
@@ -72,7 +72,7 @@ services:
       - a8n-network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.api.rule=Host(`api.a8n.tools`)"
+      - "traefik.http.routers.api.rule=Host(`api.example.com`)"
       - "traefik.http.routers.api.tls=true"
       - "traefik.http.routers.api.tls.certresolver=letsencrypt"
       - "traefik.http.services.api.loadbalancer.server.port=8080"
@@ -82,30 +82,30 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        - VITE_API_URL=https://api.a8n.tools
-    container_name: a8n-frontend
+        - VITE_API_URL=https://api.example.com
+    container_name: a8n-tools-frontend
     restart: unless-stopped
     networks:
       - a8n-network
     labels:
       - "traefik.enable=true"
       # Landing page
-      - "traefik.http.routers.landing.rule=Host(`a8n.tools`)"
+      - "traefik.http.routers.landing.rule=Host(`example.com`)"
       - "traefik.http.routers.landing.tls=true"
       - "traefik.http.routers.landing.tls.certresolver=letsencrypt"
       # App dashboard
-      - "traefik.http.routers.app.rule=Host(`app.a8n.tools`)"
+      - "traefik.http.routers.app.rule=Host(`app.example.com`)"
       - "traefik.http.routers.app.tls=true"
       - "traefik.http.routers.app.tls.certresolver=letsencrypt"
       # Admin panel
-      - "traefik.http.routers.admin.rule=Host(`admin.a8n.tools`)"
+      - "traefik.http.routers.admin.rule=Host(`admin.example.com`)"
       - "traefik.http.routers.admin.tls=true"
       - "traefik.http.routers.admin.tls.certresolver=letsencrypt"
       - "traefik.http.services.frontend.loadbalancer.server.port=80"
 
   postgres:
     image: postgres:16-alpine
-    container_name: a8n-postgres
+    container_name: a8n-tools-postgres
     restart: unless-stopped
     environment:
       - POSTGRES_USER=a8n
@@ -146,7 +146,7 @@ services:
       - a8n-network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.rus.rule=Host(`rus.a8n.tools`)"
+      - "traefik.http.routers.rus.rule=Host(`rus.example.com`)"
       - "traefik.http.routers.rus.tls=true"
       - "traefik.http.routers.rus.tls.certresolver=letsencrypt"
 
@@ -178,7 +178,7 @@ services:
       - a8n-network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.rustylinks.rule=Host(`rustylinks.a8n.tools`)"
+      - "traefik.http.routers.rustylinks.rule=Host(`rustylinks.example.com`)"
       - "traefik.http.routers.rustylinks.tls=true"
       - "traefik.http.routers.rustylinks.tls.certresolver=letsencrypt"
 
@@ -248,7 +248,7 @@ providers:
 certificatesResolvers:
   letsencrypt:
     acme:
-      email: admin@a8n.tools
+      email: admin@example.com
       storage: /letsencrypt/acme.json
       httpChallenge:
         entryPoint: web
@@ -312,38 +312,39 @@ Create optimized production Dockerfiles.
 Create api/Dockerfile:
 ```dockerfile
 # Build stage
-FROM rust:1.75-alpine AS builder
-
-RUN apk add --no-cache musl-dev openssl-dev openssl-libs-static pkgconfig
+FROM rust:1.92-alpine AS builder
 
 WORKDIR /app
+
+RUN apk add --no-cache musl-dev pkgconfig openssl-dev openssl-libs-static
 
 # Cache dependencies
 COPY Cargo.toml Cargo.lock ./
 RUN mkdir src && echo "fn main() {}" > src/main.rs
-RUN cargo build --release && rm -rf src
+RUN cargo build --release && rm -rf src target/release/deps/a8n_api*
 
 # Build application
 COPY . .
-RUN touch src/main.rs && cargo build --release
+RUN cargo build --release
 
 # Runtime stage
-FROM alpine:3.19
-
-RUN apk add --no-cache ca-certificates libgcc
+FROM alpine:3.21
 
 WORKDIR /app
 
+RUN apk add --no-cache ca-certificates tzdata
+
 COPY --from=builder /app/target/release/a8n-api /app/a8n-api
 COPY --from=builder /app/migrations /app/migrations
+COPY --from=builder /app/templates /app/templates
 
-RUN adduser -D -u 1000 appuser
-USER appuser
+RUN adduser -D -u 1001 a8n
+USER a8n
 
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
+  CMD wget -q --spider http://localhost:8080/health || exit 1
 
 CMD ["/app/a8n-api"]
 ```
@@ -351,19 +352,19 @@ CMD ["/app/a8n-api"]
 Create frontend/Dockerfile:
 ```dockerfile
 # Build stage
-FROM node:20-alpine AS builder
+FROM oven/bun:alpine AS builder
 
 WORKDIR /app
 
-COPY package*.json ./
-RUN npm ci
+COPY package.json bun.lockb ./
+RUN bun install --frozen-lockfile
 
 COPY . .
 
 ARG VITE_API_URL
 ENV VITE_API_URL=$VITE_API_URL
 
-RUN npm run build
+RUN bun run build
 
 # Runtime stage
 FROM nginx:alpine
@@ -443,8 +444,8 @@ sleep 10
 
 # Verify deployment
 echo "✅ Verifying deployment..."
-curl -sf https://api.a8n.tools/health > /dev/null && echo "API: OK" || echo "API: FAILED"
-curl -sf https://app.a8n.tools > /dev/null && echo "Frontend: OK" || echo "Frontend: FAILED"
+curl -sf https://api.example.com/health > /dev/null && echo "API: OK" || echo "API: FAILED"
+curl -sf https://app.example.com > /dev/null && echo "Frontend: OK" || echo "Frontend: FAILED"
 
 echo "🎉 Deployment complete!"
 ```
@@ -460,7 +461,7 @@ mkdir -p "$BACKUP_DIR"
 echo "📦 Backing up databases..."
 
 # Platform database
-docker exec a8n-postgres pg_dump -U a8n a8n_platform | gzip > "$BACKUP_DIR/platform.sql.gz"
+docker exec a8n-tools-postgres pg_dump -U a8n a8n_platform | gzip > "$BACKUP_DIR/platform.sql.gz"
 
 # App databases
 docker exec a8n-rus-db pg_dump -U rus rus | gzip > "$BACKUP_DIR/rus.sql.gz"
@@ -492,7 +493,7 @@ fi
 
 echo "📦 Restoring databases..."
 
-gunzip -c "$BACKUP_DIR/platform.sql.gz" | docker exec -i a8n-postgres psql -U a8n a8n_platform
+gunzip -c "$BACKUP_DIR/platform.sql.gz" | docker exec -i a8n-tools-postgres psql -U a8n a8n_platform
 gunzip -c "$BACKUP_DIR/rus.sql.gz" | docker exec -i a8n-rus-db psql -U rus rus
 gunzip -c "$BACKUP_DIR/rustylinks.sql.gz" | docker exec -i a8n-rustylinks-db psql -U rustylinks rustylinks
 
@@ -527,7 +528,7 @@ STRIPE_PRICE_ID=price_a8n_monthly_v1
 # Run: openssl pkey -in jwt_private.pem -pubout -out jwt_public.pem
 
 # Email
-SMTP_USERNAME=noreply@a8n.tools
+SMTP_USERNAME=noreply@example.com
 SMTP_PASSWORD=change_me
 STALWART_ADMIN_PASSWORD=change_me
 
@@ -537,7 +538,7 @@ TRAEFIK_DASHBOARD_AUTH=admin:$apr1$...
 # Monitoring
 GRAFANA_PASSWORD=change_me
 GLITCHTIP_SECRET_KEY=change_me
-GLITCHTIP_DSN=https://...@glitchtip.a8n.tools/1
+GLITCHTIP_DSN=https://...@glitchtip.example.com/1
 
 # App Databases
 RUS_DB_PASSWORD=change_me
