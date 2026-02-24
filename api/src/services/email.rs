@@ -30,7 +30,8 @@ impl EmailService {
                 config.smtp_password.clone(),
             );
 
-            // Port 465 uses implicit TLS (SMTPS), port 587 uses STARTTLS
+            // Port 465 uses implicit TLS (SMTPS), port 587 uses STARTTLS,
+            // port 25 uses plaintext (opportunistic TLS)
             let transport = if config.smtp_port == 465 {
                 // Use SMTPS (implicit TLS) for port 465
                 AsyncSmtpTransport::<Tokio1Executor>::relay(&config.smtp_host)
@@ -42,8 +43,15 @@ impl EmailService {
                             .map_err(|e| AppError::internal(format!("TLS error: {}", e)))?,
                     ))
                     .build()
+            } else if config.smtp_port == 25 {
+                // Port 25: STARTTLS (opportunistic)
+                AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(&config.smtp_host)
+                    .map_err(|e| AppError::internal(format!("SMTP connection error: {}", e)))?
+                    .port(config.smtp_port)
+                    .credentials(creds)
+                    .build()
             } else {
-                // Use STARTTLS for other ports (587, 25, etc.)
+                // Port 587 etc: STARTTLS required
                 AsyncSmtpTransport::<Tokio1Executor>::relay(&config.smtp_host)
                     .map_err(|e| AppError::internal(format!("SMTP connection error: {}", e)))?
                     .port(config.smtp_port)

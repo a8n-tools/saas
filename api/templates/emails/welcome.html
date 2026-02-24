@@ -1,21 +1,23 @@
 {% extends "base.html" %}
 {% block title %}Welcome to a8n.tools!{% endblock %}
 {% block content %}
-<h1>Welcome to a8n.tools!</h1>
-<p>Thanks for subscribing! You now have access to all our developer tools.</p>
+<h1>You're in. Welcome to a8n.tools.</h1>
+<p>Thanks for subscribing! You now have full access to every tool on the platform.</p>
 
-<h2 style="font-size: 18px; margin-top: 24px;">What's included:</h2>
+<hr class="divider">
+
+<h2 style="font-size: 18px; margin-top: 24px; color: #e0e0e8;">What's included:</h2>
 <ul>
-  <li><strong>RUS</strong> - Fast URL shortening with QR codes</li>
-  <li><strong>Rusty Links</strong> - Bookmark management</li>
+  <li><strong>RUS</strong> &mdash; Fast URL shortening with QR codes</li>
+  <li><strong>Rusty Links</strong> &mdash; Bookmark management</li>
   <li>All future applications at no extra cost</li>
 </ul>
 
-<p>Your price of <strong>${{ price }}/month</strong> is locked forever.</p>
+<p>Your price of <span class="highlight">${{ price }}/month</span> is locked forever. No surprises.</p>
 
 <div class="button-container">
-  <a href="{{ dashboard_url }}" class="button">Go to Dashboard</a>
+  <a href="https://app.a8n.tools/dashboard" class="button">Go to Dashboard</a>
 </div>
 
-<p class="muted">If you have any questions, just reply to this email and we'll be happy to help.</p>
+<p class="muted">Questions? Just reply to this email.</p>
 {% endblock %}

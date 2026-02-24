@@ -10,7 +10,7 @@ use std::sync::Arc;
 use chrono::{Duration, Utc};
 
 use crate::errors::AppError;
-use crate::middleware::AdminUser;
+use crate::middleware::{AdminUser, AuthenticatedUser};
 use crate::models::{
     AuditAction, CreateAuditLog, CreatePasswordResetToken, CreateRefreshToken, MembershipStatus,
     UserResponse,
@@ -636,6 +636,28 @@ pub async fn mark_all_notifications_read(
     let request_id = get_request_id(&req);
 
     NotificationRepository::mark_all_as_read(&pool, admin.0.sub).await?;
+
+    Ok(success_no_data(request_id))
+}
+
+// =============================================================================
+// Test Email
+// =============================================================================
+
+/// POST /v1/admin/test-email
+/// Send a test welcome email to the authenticated user
+pub async fn send_test_email(
+    req: HttpRequest,
+    user: AuthenticatedUser,
+    email_service: web::Data<Arc<EmailService>>,
+) -> Result<HttpResponse, AppError> {
+    let request_id = get_request_id(&req);
+
+    email_service
+        .send_welcome(&user.0.email, 300)
+        .await?;
+
+    tracing::info!(email = %user.0.email, "Test email sent");
 
     Ok(success_no_data(request_id))
 }

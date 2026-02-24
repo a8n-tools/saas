@@ -1,14 +1,14 @@
 {% extends "base.html" %}
 {% block title %}Membership Canceled{% endblock %}
 {% block content %}
-<h1>Your membership has been canceled</h1>
-<p>We're sorry to see you go. Your a8n.tools membership has been canceled and your access will end on <strong>{{ end_date }}</strong>.</p>
+<h1>Membership canceled</h1>
+<p>Your a8n.tools membership has been canceled. Access continues until <span class="highlight">{{ end_date }}</span>.</p>
 
-<p>If you change your mind, you can rejoin at any time. However, please note that your original locked price may no longer be available.</p>
+<p>Changed your mind? You can rejoin anytime &mdash; but your original locked price may no longer be available.</p>
 
 <div class="button-container">
-  <a href="{{ resubscribe_url }}" class="button">Rejoin</a>
+  <a href="https://app.a8n.tools/membership" class="button">Rejoin</a>
 </div>
 
-<p class="muted">We'd love to hear why you're leaving. Reply to this email with any feedback - it helps us improve.</p>
+<p class="muted">We'd love to hear why you're leaving. Reply with any feedback &mdash; it helps us improve.</p>
 {% endblock %}

@@ -10,7 +10,7 @@ use std::sync::Arc;
 use crate::errors::AppError;
 use crate::models::{CreatePayment, CreateMembership, PaymentStatus, MembershipStatus};
 use crate::repositories::{PaymentRepository, MembershipRepository, UserRepository};
-use crate::services::StripeService;
+use crate::services::{EmailService, StripeService};
 
 /// POST /v1/webhooks/stripe
 /// Handle Stripe webhook events
@@ -19,6 +19,7 @@ pub async fn stripe_webhook(
     body: web::Bytes,
     pool: web::Data<PgPool>,
     stripe: web::Data<Arc<StripeService>>,
+    email: web::Data<Arc<EmailService>>,
 ) -> Result<HttpResponse, AppError> {
     // Get signature header
     let signature = req
@@ -46,7 +47,7 @@ pub async fn stripe_webhook(
     // Route to appropriate handler
     match event_type {
         "checkout.session.completed" => {
-            handle_checkout_completed(&event, &pool).await?;
+            handle_checkout_completed(&event, &pool, &email).await?;
         }
         "customer.subscription.created" => {
             handle_subscription_created(&event, &pool).await?;
@@ -55,13 +56,13 @@ pub async fn stripe_webhook(
             handle_subscription_updated(&event, &pool).await?;
         }
         "customer.subscription.deleted" => {
-            handle_subscription_deleted(&event, &pool).await?;
+            handle_subscription_deleted(&event, &pool, &email).await?;
         }
         "invoice.payment_succeeded" => {
-            handle_payment_succeeded(&event, &pool).await?;
+            handle_payment_succeeded(&event, &pool, &email).await?;
         }
         "invoice.payment_failed" => {
-            handle_payment_failed(&event, &pool).await?;
+            handle_payment_failed(&event, &pool, &email).await?;
         }
         _ => {
             tracing::debug!(event_type = %event_type, "Unhandled Stripe event type");
@@ -74,6 +75,7 @@ pub async fn stripe_webhook(
 async fn handle_checkout_completed(
     event: &serde_json::Value,
     pool: &PgPool,
+    email: &EmailService,
 ) -> Result<(), AppError> {
     let session = &event["data"]["object"];
 
@@ -103,6 +105,13 @@ async fn handle_checkout_completed(
     UserRepository::lock_price(pool, user_id, &price_id, amount).await?;
 
     tracing::info!(user_id = %user_id, "Checkout completed, membership activated");
+
+    // Send welcome email
+    if let Ok(Some(user)) = UserRepository::find_by_id(pool, user_id).await {
+        if let Err(e) = email.send_welcome(&user.email, amount).await {
+            tracing::error!(error = %e, user_id = %user_id, "Failed to send welcome email");
+        }
+    }
 
     Ok(())
 }
@@ -222,6 +231,7 @@ async fn handle_subscription_updated(
 async fn handle_subscription_deleted(
     event: &serde_json::Value,
     pool: &PgPool,
+    email: &EmailService,
 ) -> Result<(), AppError> {
     let subscription = &event["data"]["object"];
 
@@ -245,6 +255,13 @@ async fn handle_subscription_deleted(
             membership_id = %stripe_subscription_id,
             "Membership deleted"
         );
+
+        // Send cancellation email
+        if let Ok(Some(user)) = UserRepository::find_by_id(pool, membership.user_id).await {
+            if let Err(e) = email.send_membership_canceled(&user.email, membership.current_period_end).await {
+                tracing::error!(error = %e, user_id = %membership.user_id, "Failed to send membership canceled email");
+            }
+        }
     }
 
     Ok(())
@@ -253,6 +270,7 @@ async fn handle_subscription_deleted(
 async fn handle_payment_succeeded(
     event: &serde_json::Value,
     pool: &PgPool,
+    email: &EmailService,
 ) -> Result<(), AppError> {
     let invoice = &event["data"]["object"];
 
@@ -318,12 +336,18 @@ async fn handle_payment_succeeded(
         "Payment succeeded"
     );
 
+    // Send payment receipt email
+    if let Err(e) = email.send_payment_succeeded(&user.email, amount).await {
+        tracing::error!(error = %e, user_id = %user.id, "Failed to send payment succeeded email");
+    }
+
     Ok(())
 }
 
 async fn handle_payment_failed(
     event: &serde_json::Value,
     pool: &PgPool,
+    email: &EmailService,
 ) -> Result<(), AppError> {
     let invoice = &event["data"]["object"];
 
@@ -386,6 +410,11 @@ async fn handle_payment_failed(
             grace_period_end = %grace_end,
             "Payment failed, grace period started"
         );
+    }
+
+    // Send payment failed email
+    if let Err(e) = email.send_payment_failed(&user.email, 30).await {
+        tracing::error!(error = %e, user_id = %user.id, "Failed to send payment failed email");
     }
 
     Ok(())

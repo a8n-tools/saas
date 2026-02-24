@@ -2,10 +2,15 @@
 {% block title %}Sign in to a8n.tools{% endblock %}
 {% block content %}
 <h1>Sign in to a8n.tools</h1>
-<p>Click the button below to sign in to your account. This link expires in 15 minutes.</p>
+<p>Click below to sign in. This link expires in <span class="highlight">15 minutes</span>.</p>
+
 <div class="button-container">
   <a href="{{ magic_link_url }}" class="button">Sign In</a>
 </div>
-<p class="muted">If you didn't request this link, you can safely ignore this email.</p>
+
+<p class="muted">Didn't request this? You can safely ignore this email.</p>
+
+<hr class="divider">
+
 <p class="link-fallback">Or copy this link: {{ magic_link_url }}</p>
 {% endblock %}

@@ -1,14 +1,14 @@
 {% extends "base.html" %}
 {% block title %}Payment Received{% endblock %}
 {% block content %}
-<h1>Payment Received</h1>
-<p>Thank you! We've received your payment of <strong>${{ amount }}</strong> for your a8n.tools subscription.</p>
+<h1>Payment received</h1>
+<p>We've received your payment of <span class="highlight">${{ amount }}</span> for a8n.tools. You're all set.</p>
 
-<p>Your subscription is active and you have full access to all a8n.tools applications.</p>
+<p>Your subscription is active with full access to all applications.</p>
 
 <div class="button-container">
-  <a href="{{ dashboard_url }}" class="button">Go to Dashboard</a>
+  <a href="https://app.a8n.tools/dashboard" class="button">Go to Dashboard</a>
 </div>
 
-<p class="muted">This email serves as your receipt. If you need a formal invoice, you can access it from your subscription settings.</p>
+<p class="muted">This serves as your receipt. Need a formal invoice? Access it from your subscription settings.</p>
 {% endblock %}

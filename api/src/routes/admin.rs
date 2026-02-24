@@ -29,6 +29,8 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route("/applications/{app_id}", web::put().to(handlers::update_application))
             // Audit logs
             .route("/audit-logs", web::get().to(handlers::list_audit_logs))
+            // Test email
+            .route("/test-email", web::post().to(handlers::send_test_email))
             // Notifications
             .route("/notifications", web::get().to(handlers::list_notifications))
             .route("/notifications/{notification_id}/read", web::post().to(handlers::mark_notification_read))
