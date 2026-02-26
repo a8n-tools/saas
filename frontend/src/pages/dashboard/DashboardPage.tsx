@@ -1,13 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { config } from '@/config'
 import { useAuthStore } from '@/stores/authStore'
 import { useApplications } from '@/hooks/useApplications'
-import { apiClient } from '@/api/client'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { AppWindow, CreditCard, ExternalLink, Loader2, ArrowRight, Mail } from 'lucide-react'
+import { AppWindow, CreditCard, ExternalLink, Loader2, ArrowRight } from 'lucide-react'
 
 const taglines = [
   'All access. No clock.',
@@ -22,59 +21,20 @@ export function DashboardPage() {
   const { applications, isLoading } = useApplications()
   const tagline = useMemo(() => taglines[Math.floor(Math.random() * taglines.length)], [])
 
-  const [testEmailStatus, setTestEmailStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
-
   const hasActiveMembership =
     user?.membership_status === 'active' ||
     user?.membership_status === 'past_due'
 
-  const sendTestEmail = async () => {
-    setTestEmailStatus('sending')
-    try {
-      await apiClient.post('/admin/test-email')
-      setTestEmailStatus('sent')
-      setTimeout(() => setTestEmailStatus('idle'), 3000)
-    } catch {
-      setTestEmailStatus('error')
-      setTimeout(() => setTestEmailStatus('idle'), 3000)
-    }
-  }
-
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">
-            Welcome back
-            <span className="text-gradient bg-gradient-to-r from-primary to-indigo-500">!</span>
-          </h1>
-          <p className="mt-2 text-muted-foreground">
-            {tagline}
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={sendTestEmail}
-          disabled={testEmailStatus === 'sending'}
-          className={
-            testEmailStatus === 'sent'
-              ? 'border-green-500 text-green-600'
-              : testEmailStatus === 'error'
-              ? 'border-red-500 text-red-600'
-              : ''
-          }
-        >
-          {testEmailStatus === 'sending' ? (
-            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Sending...</>
-          ) : testEmailStatus === 'sent' ? (
-            'Email Sent!'
-          ) : testEmailStatus === 'error' ? (
-            'Failed'
-          ) : (
-            <><Mail className="mr-2 h-4 w-4" /> Test Email</>
-          )}
-        </Button>
+      <div>
+        <h1 className="text-3xl font-bold">
+          Welcome back
+          <span className="text-gradient bg-gradient-to-r from-primary to-indigo-500">!</span>
+        </h1>
+        <p className="mt-2 text-muted-foreground">
+          {tagline}
+        </p>
       </div>
 
       {/* Membership Status */}
