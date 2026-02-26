@@ -29,8 +29,7 @@ export function DashboardPage() {
     <div className="space-y-8">
       <div>
         <h1 className="text-3xl font-bold">
-          Welcome back
-          <span className="text-gradient bg-gradient-to-r from-primary to-indigo-500">!</span>
+          Welcome back!
         </h1>
         <p className="mt-2 text-muted-foreground">
           {tagline}
