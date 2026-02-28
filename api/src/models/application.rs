@@ -62,7 +62,7 @@ impl ApplicationResponse {
     }
 }
 
-/// Data for creating/updating an application (admin only)
+/// Data for creating an application (admin only)
 #[derive(Debug, Clone, Deserialize)]
 pub struct CreateApplication {
     pub name: String,
@@ -74,4 +74,19 @@ pub struct CreateApplication {
     pub health_check_url: Option<String>,
     pub version: Option<String>,
     pub source_code_url: Option<String>,
+}
+
+/// Data for updating an application (admin only)
+#[derive(Debug, Clone, Deserialize)]
+pub struct UpdateApplication {
+    pub display_name: Option<String>,
+    pub description: Option<String>,
+    pub icon_url: Option<String>,
+    pub source_code_url: Option<String>,
+    pub version: Option<String>,
+    pub container_name: Option<String>,
+    pub health_check_url: Option<String>,
+    pub is_active: Option<bool>,
+    pub maintenance_mode: Option<bool>,
+    pub maintenance_message: Option<String>,
 }

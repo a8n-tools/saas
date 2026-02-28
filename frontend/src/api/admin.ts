@@ -2,7 +2,6 @@ import { apiClient } from './client'
 import type {
   User,
   Membership,
-  Application,
   AdminNotification,
   PaginatedResponse,
 } from '@/types'
@@ -61,9 +60,35 @@ export interface UpdateUserRoleRequest {
   role: 'subscriber' | 'admin'
 }
 
+export interface AdminApplication {
+  id: string
+  name: string
+  slug: string
+  display_name: string
+  description: string | null
+  icon_url: string | null
+  is_active: boolean
+  maintenance_mode: boolean
+  maintenance_message: string | null
+  container_name: string
+  health_check_url: string | null
+  version: string | null
+  source_code_url: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface UpdateApplicationRequest {
+  display_name?: string
+  description?: string
+  icon_url?: string
+  source_code_url?: string
+  version?: string
+  container_name?: string
+  health_check_url?: string
   is_active?: boolean
-  is_maintenance?: boolean
+  maintenance_mode?: boolean
+  maintenance_message?: string
 }
 
 export interface GrantMembershipRequest {
@@ -120,12 +145,12 @@ export const adminApi = {
     apiClient.post('/admin/memberships/revoke', data),
 
   // Applications
-  getApplications: async (): Promise<Application[]> => {
-    const response = await apiClient.get<{ applications: Application[] }>('/admin/applications')
+  getApplications: async (): Promise<AdminApplication[]> => {
+    const response = await apiClient.get<{ applications: AdminApplication[] }>('/admin/applications')
     return response.applications
   },
 
-  updateApplication: (appId: string, data: UpdateApplicationRequest): Promise<Application> =>
+  updateApplication: (appId: string, data: UpdateApplicationRequest): Promise<AdminApplication> =>
     apiClient.put(`/admin/applications/${appId}`, data),
 
   // Audit Logs

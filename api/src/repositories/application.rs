@@ -4,7 +4,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::errors::AppError;
-use crate::models::Application;
+use crate::models::{Application, UpdateApplication};
 
 pub struct ApplicationRepository;
 
@@ -128,6 +128,47 @@ impl ApplicationRepository {
         .await?;
 
         Ok(())
+    }
+
+    /// Update application fields (admin)
+    pub async fn update(
+        pool: &PgPool,
+        app_id: Uuid,
+        data: &UpdateApplication,
+    ) -> Result<Application, AppError> {
+        let app = sqlx::query_as::<_, Application>(
+            r#"
+            UPDATE applications
+            SET display_name     = COALESCE($1, display_name),
+                description      = COALESCE($2, description),
+                icon_url         = COALESCE($3, icon_url),
+                source_code_url  = COALESCE($4, source_code_url),
+                version          = COALESCE($5, version),
+                container_name   = COALESCE($6, container_name),
+                health_check_url = COALESCE($7, health_check_url),
+                is_active        = COALESCE($8, is_active),
+                maintenance_mode = COALESCE($9, maintenance_mode),
+                maintenance_message = COALESCE($10, maintenance_message),
+                updated_at       = NOW()
+            WHERE id = $11
+            RETURNING *
+            "#,
+        )
+        .bind(data.display_name.as_deref())
+        .bind(data.description.as_deref())
+        .bind(data.icon_url.as_deref())
+        .bind(data.source_code_url.as_deref())
+        .bind(data.version.as_deref())
+        .bind(data.container_name.as_deref())
+        .bind(data.health_check_url.as_deref())
+        .bind(data.is_active)
+        .bind(data.maintenance_mode)
+        .bind(data.maintenance_message.as_deref())
+        .bind(app_id)
+        .fetch_one(pool)
+        .await?;
+
+        Ok(app)
     }
 
     /// List all applications (admin)

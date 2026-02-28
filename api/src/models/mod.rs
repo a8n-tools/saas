@@ -10,7 +10,7 @@ pub mod token;
 pub mod user;
 
 // Re-export commonly used types
-pub use application::{Application, ApplicationResponse, CreateApplication};
+pub use application::{Application, ApplicationResponse, CreateApplication, UpdateApplication};
 pub use audit::{
     AdminNotification, AuditAction, AuditLog, AuditSeverity, CreateAdminNotification,
     CreateAuditLog, NotificationType,
