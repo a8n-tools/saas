@@ -13,5 +13,8 @@ export default defineConfig({
     port: 5173,
     host: true,
     allowedHosts: ['app.a8n.run'],
+    watch: {
+      usePolling: true,
+    },
   },
 })

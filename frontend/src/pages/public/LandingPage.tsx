@@ -2,7 +2,6 @@ import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Link2, Bookmark, Zap, Shield, DollarSign, Terminal, ArrowRight } from 'lucide-react'
 import { useInView } from '@/hooks/useInView'
 import { config } from '@/config'
 
@@ -12,25 +11,27 @@ const heroLines = [
   { plain: 'Price locked.', gradient: 'Tools stocked.' },
   { plain: 'Locked in.', gradient: 'Lights on.' },
   { plain: 'Subscribed once', gradient: 'Sorted Forever.' },
+  { plain: 'One Price', gradient: 'For life.' },
+  { plain: 'Open source', gradient: 'For life.' },
 ]
 
 const features = [
   {
-    icon: Zap,
+    icon: 'fa-solid fa-bolt',
     title: 'Blazing Fast',
     description: 'Written in Rust. No garbage collector, no runtime overhead. Just raw speed.',
     gradient: 'from-primary to-primary/60',
     borderGradient: 'from-primary/50 via-primary/20 to-transparent',
   },
   {
-    icon: Shield,
+    icon: 'fa-solid fa-shield',
     title: 'Secure by Default',
     description: 'Memory-safe, type-safe, battle-tested. Sleep well at night.',
     gradient: 'from-indigo-500 to-indigo-500/60',
     borderGradient: 'from-indigo-500/50 via-indigo-500/20 to-transparent',
   },
   {
-    icon: DollarSign,
+    icon: 'fa-solid fa-dollar-sign',
     title: '$3/month. Forever.',
     description: 'One price, locked for life. No tiers. No surprises. No "enterprise" upsells.',
     gradient: 'from-teal-500 to-teal-500/60',
@@ -40,7 +41,7 @@ const features = [
 
 const apps = [
   {
-    icon: Link2,
+    icon: 'fa-solid fa-link',
     name: 'RUS',
     slug: 'rus',
     description: 'URL shortener with QR generation. Self-hostable, API-first, zero bloat.',
@@ -48,7 +49,7 @@ const apps = [
     borderColor: 'border-indigo-500/20 hover:border-indigo-500/40',
   },
   {
-    icon: Bookmark,
+    icon: 'fa-solid fa-bookmark',
     name: 'Rusty Links',
     slug: 'rustylinks',
     description: 'Bookmark manager for people with too many tabs. Tag, search, organize.',
@@ -67,16 +68,9 @@ export function LandingPage() {
     <div>
       {/* Hero Section */}
       <section className="relative overflow-hidden py-20 md:py-32">
-        {/* Gradient orbs — drifting */}
-        <div className="pointer-events-none absolute inset-0">
-          <div className="absolute -top-24 left-1/4 h-96 w-96 rounded-full bg-primary/15 blur-3xl hero-float-slow" />
-          <div className="absolute -top-24 right-1/4 h-96 w-96 rounded-full bg-indigo-500/15 blur-3xl hero-float-slower" />
-          <div className="absolute top-32 left-1/2 h-64 w-64 -translate-x-1/2 rounded-full bg-teal-500/10 blur-3xl hero-float-slow" />
-        </div>
-
         <div className="container relative flex flex-col items-center text-center">
-          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-indigo-300/30 bg-indigo-500/10 px-4 py-1.5 text-sm text-indigo-600 backdrop-blur-sm dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-400 hero-fade-up">
-            <Terminal className="h-3.5 w-3.5" />
+          <div className="mb-6 inline-flex items-center gap-2 rounded-full bg-zinc-800 px-4 py-1.5 text-sm text-zinc-300 dark:bg-zinc-800 dark:text-zinc-400 hero-fade-up">
+            <i className="fa-solid fa-terminal text-[0.875rem]" />
             Open source. Rust-powered. Fully managed.
           </div>
           <h1 className="text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl lg:text-7xl hero-fade-up-1">
@@ -93,7 +87,7 @@ export function LandingPage() {
           <div className="mt-10 flex flex-col gap-4 sm:flex-row hero-fade-up-3">
             <Link to="/register">
               <Button size="lg" className="w-full sm:w-auto gap-2 bg-gradient-to-r from-primary to-indigo-500 hover:from-primary/90 hover:to-indigo-500/90 border-0 text-white shadow-lg shadow-primary/25">
-                Get Started <ArrowRight className="h-4 w-4" />
+                Get Started <i className="fa-solid fa-arrow-right text-[1rem]" />
               </Button>
             </Link>
             <Link to="/pricing">
@@ -124,7 +118,7 @@ export function LandingPage() {
                 <Card className="relative border-0 bg-card/80 backdrop-blur-sm">
                   <CardHeader>
                     <div className={`flex h-12 w-12 items-center justify-center rounded-lg bg-gradient-to-br ${feature.gradient}`}>
-                      <feature.icon className="h-6 w-6 text-white" />
+                      <i className={`${feature.icon} text-xl text-white`} />
                     </div>
                     <CardTitle className="mt-4">{feature.title}</CardTitle>
                   </CardHeader>
@@ -142,10 +136,6 @@ export function LandingPage() {
 
       {/* Apps Section */}
       <section className="relative py-20">
-        <div className="pointer-events-none absolute inset-0">
-          <div className="absolute bottom-0 left-1/3 h-64 w-64 rounded-full bg-teal-500/10 blur-3xl" />
-          <div className="absolute bottom-0 right-1/3 h-64 w-64 rounded-full bg-indigo-500/10 blur-3xl" />
-        </div>
         <div
           ref={apps$.ref}
           className={`container relative scroll-fade-up ${apps$.inView ? 'in-view' : ''}`}
@@ -160,7 +150,7 @@ export function LandingPage() {
                 <CardHeader>
                   <div className="flex items-center gap-4">
                     <div className={`flex h-12 w-12 items-center justify-center rounded-lg bg-gradient-to-br ${app.gradient}`}>
-                      <app.icon className="h-6 w-6 text-white" />
+                      <i className={`${app.icon} text-xl text-white`} />
                     </div>
                     <div>
                       <CardTitle>{app.name}</CardTitle>
@@ -177,7 +167,7 @@ export function LandingPage() {
                     rel="noopener noreferrer"
                     className={`mt-4 inline-flex items-center gap-1 text-sm text-gradient bg-gradient-to-r ${app.gradient} font-medium hover:underline`}
                   >
-                    Learn more <ArrowRight className={`h-3.5 w-3.5 text-indigo-500`} />
+                    Learn more <i className="fa-solid fa-arrow-right text-xs text-indigo-500" />
                   </a>
                 </CardContent>
               </Card>
@@ -189,11 +179,6 @@ export function LandingPage() {
       {/* CTA Section */}
       <section className="relative overflow-hidden border-t border-border/50 py-20">
         <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 via-primary to-teal-500" />
-        {/* Subtle noise/glow overlay */}
-        <div className="pointer-events-none absolute inset-0">
-          <div className="absolute -top-20 left-1/4 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
-          <div className="absolute -bottom-20 right-1/4 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
-        </div>
         <div
           ref={cta$.ref}
           className={`container relative text-center scroll-fade-up ${cta$.inView ? 'in-view' : ''}`}
@@ -207,7 +192,7 @@ export function LandingPage() {
           <div className="mt-10 flex justify-center gap-4">
             <Link to="/register">
               <Button size="lg" variant="secondary" className="gap-2 shadow-lg">
-                Create Account <ArrowRight className="h-4 w-4" />
+                Create Account <i className="fa-solid fa-arrow-right text-[1rem]" />
               </Button>
             </Link>
           </div>

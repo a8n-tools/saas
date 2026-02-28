@@ -49,7 +49,7 @@ export interface PasswordResetRequest {
 
 export interface PasswordResetConfirmRequest {
   token: string
-  password: string
+  new_password: string
 }
 
 export interface AuthResponse {

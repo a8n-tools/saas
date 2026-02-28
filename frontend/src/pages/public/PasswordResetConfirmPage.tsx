@@ -57,7 +57,7 @@ export function PasswordResetConfirmPage() {
     setIsLoading(true)
     setError(null)
     try {
-      await authApi.confirmPasswordReset({ token, password: data.password })
+      await authApi.confirmPasswordReset({ token, new_password: data.password })
       navigate('/login?reset=success')
     } catch (err) {
       const apiError = err as { error?: { message?: string } }
