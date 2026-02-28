@@ -126,7 +126,7 @@ describe('authApi', () => {
     it('should reset password with valid token', async () => {
       const response = await authApi.confirmPasswordReset({
         token: 'valid-reset-token',
-        password: 'newpassword123',
+        new_password: 'newpassword123',
       })
 
       expect(response.message).toContain('Password has been reset')
@@ -136,7 +136,7 @@ describe('authApi', () => {
       await expect(
         authApi.confirmPasswordReset({
           token: 'invalid-token',
-          password: 'newpassword123',
+          new_password: 'newpassword123',
         })
       ).rejects.toMatchObject({
         error: {
