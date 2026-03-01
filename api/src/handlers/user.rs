@@ -12,7 +12,7 @@ use crate::middleware::{extract_client_ip, AuthenticatedUser};
 use crate::models::UserResponse;
 use crate::repositories::{TokenRepository, UserRepository};
 use crate::responses::{get_request_id, success, success_no_data};
-use crate::services::AuthService;
+use crate::services::{AuthService, EmailService};
 
 /// Request body for changing password
 #[derive(Debug, Deserialize)]
@@ -44,6 +44,7 @@ pub async fn change_password(
     req: HttpRequest,
     user: AuthenticatedUser,
     auth_service: web::Data<Arc<AuthService>>,
+    email_service: web::Data<Arc<EmailService>>,
     body: web::Json<ChangePasswordRequest>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
@@ -57,6 +58,15 @@ pub async fn change_password(
             ip_address,
         )
         .await?;
+
+    // Send password changed notification email (in background, don't wait)
+    let email = user.0.email.clone();
+    let email_svc = email_service.get_ref().clone();
+    tokio::spawn(async move {
+        if let Err(e) = email_svc.send_password_changed(&email).await {
+            tracing::error!(error = %e, email = %email, "Failed to send password changed email");
+        }
+    });
 
     Ok(success_no_data(request_id))
 }

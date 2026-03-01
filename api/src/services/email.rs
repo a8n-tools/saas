@@ -106,6 +106,11 @@ impl EmailService {
         templates.add_raw_template("payment_succeeded.txt", include_str!("../../templates/emails/payment_succeeded.txt"))
             .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
 
+        templates.add_raw_template("password_changed.html", include_str!("../../templates/emails/password_changed.html"))
+            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
+        templates.add_raw_template("password_changed.txt", include_str!("../../templates/emails/password_changed.txt"))
+            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
+
         Ok(Self {
             transport,
             templates,
@@ -263,6 +268,20 @@ impl EmailService {
 
         let (html, text) = self.render_template("account_created", &context)?;
         self.send_email(email, &format!("Welcome to {}!", self.config.app_name), html, text).await
+    }
+
+    /// Send password changed notification email
+    pub async fn send_password_changed(&self, email: &str) -> Result<(), AppError> {
+        if !self.config.enabled {
+            tracing::info!(email = %email, "Password changed email (dev mode - not sending)");
+            return Ok(());
+        }
+
+        let mut context = self.base_context();
+        context.insert("dashboard_url", &format!("{}/dashboard", self.config.base_url));
+
+        let (html, text) = self.render_template("password_changed", &context)?;
+        self.send_email(email, &format!("Your {} password was changed", self.config.app_name), html, text).await
     }
 
     /// Send welcome email after membership activation
