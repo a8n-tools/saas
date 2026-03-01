@@ -13,7 +13,7 @@ use crate::errors::AppError;
 use crate::middleware::{AdminUser, AuthenticatedUser};
 use crate::models::{
     AuditAction, CreateAuditLog, CreatePasswordResetToken, CreateRefreshToken, MembershipStatus,
-    UserResponse,
+    UpdateApplication, UserResponse,
 };
 use crate::repositories::{
     ApplicationRepository, AuditLogRepository, MembershipRepository, NotificationRepository,
@@ -292,15 +292,6 @@ pub async fn list_all_applications(
     Ok(success(serde_json::json!({ "applications": apps }), request_id))
 }
 
-/// Request body for updating application
-#[derive(Debug, Deserialize)]
-pub struct UpdateApplicationRequest {
-    pub is_active: Option<bool>,
-    pub maintenance_mode: Option<bool>,
-    pub maintenance_message: Option<String>,
-    pub version: Option<String>,
-}
-
 /// PUT /v1/admin/applications/{app_id}
 /// Update an application
 pub async fn update_application(
@@ -308,7 +299,7 @@ pub async fn update_application(
     _admin: AdminUser,
     pool: web::Data<PgPool>,
     path: web::Path<uuid::Uuid>,
-    body: web::Json<UpdateApplicationRequest>,
+    body: web::Json<UpdateApplication>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
     let app_id = path.into_inner();
@@ -318,28 +309,7 @@ pub async fn update_application(
         .await?
         .ok_or(AppError::not_found("Application"))?;
 
-    if let Some(active) = body.is_active {
-        ApplicationRepository::set_active(&pool, app_id, active).await?;
-    }
-
-    if let Some(maintenance) = body.maintenance_mode {
-        ApplicationRepository::set_maintenance_mode(
-            &pool,
-            app_id,
-            maintenance,
-            body.maintenance_message.as_deref(),
-        )
-        .await?;
-    }
-
-    if let Some(ref version) = body.version {
-        ApplicationRepository::update_version(&pool, app_id, version).await?;
-    }
-
-    // Get updated app
-    let app = ApplicationRepository::find_by_id(&pool, app_id)
-        .await?
-        .ok_or(AppError::not_found("Application"))?;
+    let app = ApplicationRepository::update(&pool, app_id, &body).await?;
 
     Ok(success(app, request_id))
 }

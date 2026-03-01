@@ -1,11 +1,18 @@
 import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Users, CreditCard, AlertTriangle, TrendingUp, Loader2, Activity } from 'lucide-react'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Users, CreditCard, AlertTriangle, AlertCircle, TrendingUp, Loader2, Activity } from 'lucide-react'
 import { adminApi, type AdminAuditLog } from '@/api/admin'
 import { formatRelativeTime } from '@/lib/utils'
+import type { ApiError } from '@/types'
+
+function getErrorMessage(error: unknown): string {
+  const apiError = error as ApiError | undefined
+  return apiError?.error?.message || 'Could not connect to the API. Please try again later.'
+}
 
 export function AdminDashboardPage() {
-  const { data: stats, isLoading: statsLoading } = useQuery({
+  const { data: stats, isLoading: statsLoading, isError: statsError, error: statsErrorData } = useQuery({
     queryKey: ['admin', 'stats'],
     queryFn: adminApi.getStats,
   })
@@ -27,6 +34,14 @@ export function AdminDashboardPage() {
           Overview of your platform.
         </p>
       </div>
+
+      {statsError && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Failed to load dashboard</AlertTitle>
+          <AlertDescription>{getErrorMessage(statsErrorData)}</AlertDescription>
+        </Alert>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
