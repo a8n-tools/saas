@@ -234,6 +234,7 @@ pub async fn verify_magic_link(
     req: HttpRequest,
     pool: web::Data<PgPool>,
     auth_service: web::Data<Arc<AuthService>>,
+    email_service: web::Data<Arc<crate::services::EmailService>>,
     body: web::Json<VerifyMagicLinkRequest>,
     config: web::Data<crate::config::Config>,
 ) -> Result<HttpResponse, AppError> {
@@ -245,9 +246,20 @@ pub async fn verify_magic_link(
     let ip_key = ip_address.map(|ip| ip.to_string()).unwrap_or_default();
     check_rate_limit(&pool, &ip_key, &RateLimitConfig::LOGIN).await?;
 
-    let (tokens, user) = auth_service
+    let (tokens, user, is_new_user) = auth_service
         .verify_magic_link(body.token.clone(), device_info, ip_address)
         .await?;
+
+    // Send account created email for new users (in background, don't wait)
+    if is_new_user {
+        let email = user.email.clone();
+        let email_svc = email_service.get_ref().clone();
+        tokio::spawn(async move {
+            if let Err(e) = email_svc.send_account_created(&email).await {
+                tracing::error!(error = %e, email = %email, "Failed to send account created email");
+            }
+        });
+    }
 
     let secure = config.is_production();
     let cookie_domain = config.cookie_domain.as_deref();
@@ -412,6 +424,7 @@ pub async fn confirm_password_reset(
     req: HttpRequest,
     pool: web::Data<PgPool>,
     auth_service: web::Data<Arc<AuthService>>,
+    email_service: web::Data<Arc<crate::services::EmailService>>,
     body: web::Json<PasswordResetConfirmRequest>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
@@ -421,9 +434,17 @@ pub async fn confirm_password_reset(
     let ip_key = ip_address.map(|ip| ip.to_string()).unwrap_or_default();
     check_rate_limit(&pool, &ip_key, &RateLimitConfig::LOGIN).await?;
 
-    auth_service
+    let email = auth_service
         .complete_password_reset(body.token.clone(), body.new_password.clone(), ip_address)
         .await?;
+
+    // Send password changed notification email (in background, don't wait)
+    let email_svc = email_service.get_ref().clone();
+    tokio::spawn(async move {
+        if let Err(e) = email_svc.send_password_changed(&email).await {
+            tracing::error!(error = %e, email = %email, "Failed to send password changed email");
+        }
+    });
 
     Ok(crate::responses::success_no_data(request_id))
 }

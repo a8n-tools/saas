@@ -251,12 +251,15 @@ impl AuthService {
     }
 
     /// Verify magic link and login
+    ///
+    /// Returns (tokens, user, is_new_user) so the caller can send
+    /// an account-created email for newly registered users.
     pub async fn verify_magic_link(
         &self,
         token: String,
         device_info: Option<String>,
         ip_address: Option<IpAddr>,
-    ) -> Result<(AuthTokens, UserResponse), AppError> {
+    ) -> Result<(AuthTokens, UserResponse, bool), AppError> {
         let token_hash = self.jwt.hash_token(&token);
 
         // Find token
@@ -272,17 +275,18 @@ impl AuthService {
         TokenRepository::mark_magic_link_token_used(&self.pool, magic_token.id).await?;
 
         // Find or create user
-        let user = match UserRepository::find_by_email(&self.pool, &magic_token.email).await? {
+        let (user, is_new_user) = match UserRepository::find_by_email(&self.pool, &magic_token.email).await? {
             Some(user) => {
                 // Set email as verified
                 UserRepository::set_email_verified(&self.pool, user.id).await?;
-                UserRepository::find_by_id(&self.pool, user.id)
+                let user = UserRepository::find_by_id(&self.pool, user.id)
                     .await?
-                    .ok_or(AppError::not_found("User"))?
+                    .ok_or(AppError::not_found("User"))?;
+                (user, false)
             }
             None => {
                 // Create new user (passwordless)
-                UserRepository::create(
+                let user = UserRepository::create(
                     &self.pool,
                     CreateUser {
                         email: magic_token.email.clone(),
@@ -290,7 +294,8 @@ impl AuthService {
                         role: UserRole::Subscriber,
                     },
                 )
-                .await?
+                .await?;
+                (user, true)
             }
         };
 
@@ -310,7 +315,7 @@ impl AuthService {
         )
         .await?;
 
-        Ok((tokens, UserResponse::from(user)))
+        Ok((tokens, UserResponse::from(user), is_new_user))
     }
 
     /// Request password reset
@@ -377,12 +382,15 @@ impl AuthService {
     }
 
     /// Complete password reset
+    ///
+    /// Returns the user's email so the caller can send a
+    /// password-changed notification.
     pub async fn complete_password_reset(
         &self,
         token: String,
         new_password: String,
         ip_address: Option<IpAddr>,
-    ) -> Result<(), AppError> {
+    ) -> Result<String, AppError> {
         // Validate new password
         self.password.validate_strength(&new_password)?;
 
@@ -427,7 +435,7 @@ impl AuthService {
         )
         .await?;
 
-        Ok(())
+        Ok(user.email)
     }
 
     /// Change password (for logged-in users)
