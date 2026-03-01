@@ -15,17 +15,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Loader2, AppWindow, ExternalLink, Pencil } from 'lucide-react'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Loader2, AppWindow, ExternalLink, Pencil, AlertCircle } from 'lucide-react'
 import { adminApi } from '@/api/admin'
 import type { AdminApplication, UpdateApplicationRequest } from '@/api/admin'
 import { config } from '@/config'
+import type { ApiError } from '@/types'
 
 export function AdminApplicationsPage() {
   const queryClient = useQueryClient()
   const [editingApp, setEditingApp] = useState<AdminApplication | null>(null)
   const [editForm, setEditForm] = useState<UpdateApplicationRequest>({})
 
-  const { data: applications, isLoading } = useQuery({
+  const { data: applications, isLoading, isError, error } = useQuery({
     queryKey: ['admin', 'applications'],
     queryFn: adminApi.getApplications,
   })
@@ -99,6 +101,14 @@ export function AdminApplicationsPage() {
           Manage platform applications.
         </p>
       </div>
+
+      {isError && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Failed to load applications</AlertTitle>
+          <AlertDescription>{(error as unknown as ApiError)?.error?.message || 'Could not connect to the API. Please try again later.'}</AlertDescription>
+        </Alert>
+      )}
 
       <div className="grid gap-6">
         {applications?.map((app) => (

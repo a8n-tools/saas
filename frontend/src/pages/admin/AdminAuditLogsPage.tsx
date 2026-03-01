@@ -5,14 +5,16 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { formatRelativeTime } from '@/lib/utils'
-import { FileText, User, CreditCard, Shield, LogIn, Loader2, KeyRound, Mail, UserPlus } from 'lucide-react'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { FileText, User, CreditCard, Shield, LogIn, Loader2, KeyRound, Mail, UserPlus, AlertCircle } from 'lucide-react'
 import { adminApi, type AdminAuditLog } from '@/api/admin'
+import type { ApiError } from '@/types'
 
 export function AdminAuditLogsPage() {
   const [page, setPage] = useState(1)
   const [adminOnly, setAdminOnly] = useState(false)
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ['admin', 'audit-logs', page, adminOnly],
     queryFn: () => adminApi.getAuditLogs(page, 50, { admin_only: adminOnly }),
   })
@@ -39,6 +41,14 @@ export function AdminAuditLogsPage() {
           View security events and user activity.
         </p>
       </div>
+
+      {isError && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Failed to load audit logs</AlertTitle>
+          <AlertDescription>{(error as unknown as ApiError)?.error?.message || 'Could not connect to the API. Please try again later.'}</AlertDescription>
+        </Alert>
+      )}
 
       <Card>
         <CardHeader>
