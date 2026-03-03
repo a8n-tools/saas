@@ -27,6 +27,11 @@ COPY Caddyfile /etc/caddy/Caddyfile
 # Copy built assets from builder
 COPY --from=builder /app/dist /usr/share/caddy
 
+# Run as non-root user
+RUN adduser -D -u 1001 appuser && \
+    chown -R appuser:appuser /usr/share/caddy
+USER appuser
+
 # Default port (configurable via PORT env var)
 ENV PORT=8080
 EXPOSE 8080

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { authApi } from '@/api'
 import { useAuthStore } from '@/stores/authStore'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -18,7 +19,8 @@ const passwordSchema = z.object({
     .min(12, 'Password must be at least 12 characters')
     .regex(/[a-z]/, 'Password must contain a lowercase letter')
     .regex(/[A-Z]/, 'Password must contain an uppercase letter')
-    .regex(/[0-9]/, 'Password must contain a number'),
+    .regex(/[0-9]/, 'Password must contain a number')
+    .regex(/[^a-zA-Z0-9]/, 'Password must contain a special character'),
   confirmPassword: z.string(),
 }).refine((data) => data.newPassword === data.confirmPassword, {
   message: "Passwords don't match",
@@ -32,6 +34,7 @@ const passwordRequirements = [
   { label: 'One lowercase letter', test: (p: string) => /[a-z]/.test(p) },
   { label: 'One uppercase letter', test: (p: string) => /[A-Z]/.test(p) },
   { label: 'One number', test: (p: string) => /[0-9]/.test(p) },
+  { label: 'One special character', test: (p: string) => /[^a-zA-Z0-9]/.test(p) },
 ]
 
 export function SettingsPage() {
@@ -52,17 +55,20 @@ export function SettingsPage() {
 
   const newPassword = watch('newPassword', '')
 
-  const onSubmit = async (_data: PasswordFormData) => {
+  const onSubmit = async (data: PasswordFormData) => {
     setIsLoading(true)
     setError(null)
     setSuccess(false)
     try {
-      // TODO: Implement password change API call
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      await authApi.changePassword({
+        current_password: data.currentPassword,
+        new_password: data.newPassword,
+      })
       setSuccess(true)
       reset()
-    } catch {
-      setError('Failed to update password')
+    } catch (err) {
+      const apiError = err as { error?: { message?: string } }
+      setError(apiError.error?.message || 'Failed to update password')
     } finally {
       setIsLoading(false)
     }

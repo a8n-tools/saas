@@ -34,4 +34,7 @@ export const authApi = {
 
   confirmPasswordReset: (data: PasswordResetConfirmRequest): Promise<{ message: string }> =>
     apiClient.post('/auth/password-reset/confirm', data),
+
+  changePassword: (data: { current_password: string; new_password: string }): Promise<void> =>
+    apiClient.put('/users/me/password', data),
 }

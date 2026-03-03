@@ -89,9 +89,13 @@ async fn handle_checkout_completed(
         .map_err(|_| AppError::validation("user_id", "Invalid UUID"))?;
 
     // Get price info
-    let amount = session["amount_total"]
-        .as_i64()
-        .unwrap_or(300) as i32;
+    let amount = match session["amount_total"].as_i64() {
+        Some(a) => a as i32,
+        None => {
+            tracing::warn!(user_id = %user_id, "Missing amount_total in checkout session, defaulting to 300");
+            300
+        }
+    };
 
     // Update user membership status and lock price
     UserRepository::update_membership_status(pool, user_id, MembershipStatus::Active).await?;
@@ -136,15 +140,21 @@ async fn handle_subscription_created(
         .ok_or(AppError::not_found("User"))?;
 
     // Parse dates
-    let period_start = subscription["current_period_start"]
-        .as_i64()
-        .map(|ts| chrono::DateTime::from_timestamp(ts, 0).unwrap_or_else(Utc::now))
-        .unwrap_or_else(Utc::now);
+    let period_start = match subscription["current_period_start"].as_i64() {
+        Some(ts) => chrono::DateTime::from_timestamp(ts, 0).unwrap_or_else(Utc::now),
+        None => {
+            tracing::warn!(subscription_id = %stripe_subscription_id, "Missing current_period_start, defaulting to now");
+            Utc::now()
+        }
+    };
 
-    let period_end = subscription["current_period_end"]
-        .as_i64()
-        .map(|ts| chrono::DateTime::from_timestamp(ts, 0).unwrap_or_else(Utc::now))
-        .unwrap_or_else(Utc::now);
+    let period_end = match subscription["current_period_end"].as_i64() {
+        Some(ts) => chrono::DateTime::from_timestamp(ts, 0).unwrap_or_else(Utc::now),
+        None => {
+            tracing::warn!(subscription_id = %stripe_subscription_id, "Missing current_period_end, defaulting to now");
+            Utc::now()
+        }
+    };
 
     let price_id = subscription["items"]["data"][0]["price"]["id"]
         .as_str()
@@ -241,14 +251,12 @@ async fn handle_subscription_deleted(
 
     // Find membership by Stripe ID
     if let Some(membership) = MembershipRepository::find_by_stripe_subscription_id(pool, stripe_subscription_id).await? {
-        // Update status to canceled
-        MembershipRepository::update_status(pool, membership.id, "canceled").await?;
-
-        // Update user membership status
-        UserRepository::update_membership_status(pool, membership.user_id, MembershipStatus::Canceled).await?;
-
-        // Clear any grace period
-        UserRepository::clear_grace_period(pool, membership.user_id).await?;
+        // Wrap related writes in a transaction
+        let mut tx = pool.begin().await?;
+        MembershipRepository::update_status(&mut *tx, membership.id, "canceled").await?;
+        UserRepository::update_membership_status(&mut *tx, membership.user_id, MembershipStatus::Canceled).await?;
+        UserRepository::clear_grace_period(&mut *tx, membership.user_id).await?;
+        tx.commit().await?;
 
         tracing::info!(
             user_id = %membership.user_id,
@@ -326,8 +334,10 @@ async fn handle_payment_succeeded(
 
     // Clear any grace period if exists
     if user.grace_period_start.is_some() {
-        UserRepository::clear_grace_period(pool, user.id).await?;
-        UserRepository::update_membership_status(pool, user.id, MembershipStatus::Active).await?;
+        let mut tx = pool.begin().await?;
+        UserRepository::clear_grace_period(&mut *tx, user.id).await?;
+        UserRepository::update_membership_status(&mut *tx, user.id, MembershipStatus::Active).await?;
+        tx.commit().await?;
     }
 
     tracing::info!(
@@ -402,8 +412,10 @@ async fn handle_payment_failed(
         let now = Utc::now();
         let grace_end = now + Duration::days(30);
 
-        UserRepository::set_grace_period(pool, user.id, now, grace_end).await?;
-        UserRepository::update_membership_status(pool, user.id, MembershipStatus::GracePeriod).await?;
+        let mut tx = pool.begin().await?;
+        UserRepository::set_grace_period(&mut *tx, user.id, now, grace_end).await?;
+        UserRepository::update_membership_status(&mut *tx, user.id, MembershipStatus::GracePeriod).await?;
+        tx.commit().await?;
 
         tracing::info!(
             user_id = %user.id,

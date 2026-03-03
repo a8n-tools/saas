@@ -2,6 +2,7 @@
 
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
+use sqlx::postgres::Postgres;
 use uuid::Uuid;
 
 use crate::errors::AppError;
@@ -114,11 +115,14 @@ impl UserRepository {
     }
 
     /// Update membership status
-    pub async fn update_membership_status(
-        pool: &PgPool,
+    pub async fn update_membership_status<'e, E>(
+        executor: E,
         user_id: Uuid,
         status: MembershipStatus,
-    ) -> Result<(), AppError> {
+    ) -> Result<(), AppError>
+    where
+        E: sqlx::Executor<'e, Database = Postgres>,
+    {
         sqlx::query(
             r#"
             UPDATE users
@@ -128,7 +132,7 @@ impl UserRepository {
         )
         .bind(status.as_str())
         .bind(user_id)
-        .execute(pool)
+        .execute(executor)
         .await?;
 
         Ok(())
@@ -160,11 +164,14 @@ impl UserRepository {
     }
 
     /// Update Stripe customer ID
-    pub async fn update_stripe_customer_id(
-        pool: &PgPool,
+    pub async fn update_stripe_customer_id<'e, E>(
+        executor: E,
         user_id: Uuid,
         customer_id: &str,
-    ) -> Result<(), AppError> {
+    ) -> Result<(), AppError>
+    where
+        E: sqlx::Executor<'e, Database = Postgres>,
+    {
         sqlx::query(
             r#"
             UPDATE users
@@ -174,7 +181,7 @@ impl UserRepository {
         )
         .bind(customer_id)
         .bind(user_id)
-        .execute(pool)
+        .execute(executor)
         .await?;
 
         Ok(())
@@ -204,12 +211,15 @@ impl UserRepository {
     }
 
     /// Set grace period
-    pub async fn set_grace_period(
-        pool: &PgPool,
+    pub async fn set_grace_period<'e, E>(
+        executor: E,
         user_id: Uuid,
         start: DateTime<Utc>,
         end: DateTime<Utc>,
-    ) -> Result<(), AppError> {
+    ) -> Result<(), AppError>
+    where
+        E: sqlx::Executor<'e, Database = Postgres>,
+    {
         sqlx::query(
             r#"
             UPDATE users
@@ -220,14 +230,20 @@ impl UserRepository {
         .bind(start)
         .bind(end)
         .bind(user_id)
-        .execute(pool)
+        .execute(executor)
         .await?;
 
         Ok(())
     }
 
     /// Clear grace period
-    pub async fn clear_grace_period(pool: &PgPool, user_id: Uuid) -> Result<(), AppError> {
+    pub async fn clear_grace_period<'e, E>(
+        executor: E,
+        user_id: Uuid,
+    ) -> Result<(), AppError>
+    where
+        E: sqlx::Executor<'e, Database = Postgres>,
+    {
         sqlx::query(
             r#"
             UPDATE users
@@ -236,7 +252,7 @@ impl UserRepository {
             "#,
         )
         .bind(user_id)
-        .execute(pool)
+        .execute(executor)
         .await?;
 
         Ok(())

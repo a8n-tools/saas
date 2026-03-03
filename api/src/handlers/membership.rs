@@ -77,10 +77,15 @@ pub async fn create_checkout(
     let request_id = get_request_id(&req);
     let tier = body.tier;
 
-    // Get user from database
-    let db_user = UserRepository::find_by_id(&pool, user.0.sub)
-        .await?
-        .ok_or(AppError::not_found("User"))?;
+    // Lock the user row to prevent concurrent Stripe customer creation
+    let mut tx = pool.begin().await?;
+    let db_user = sqlx::query_as::<_, crate::models::User>(
+        "SELECT * FROM users WHERE id = $1 AND deleted_at IS NULL FOR UPDATE",
+    )
+    .bind(user.0.sub)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or(AppError::not_found("User"))?;
 
     // Check if user already has active membership
     if db_user.membership_status == "active" {
@@ -92,10 +97,11 @@ pub async fn create_checkout(
         Some(id) => id,
         None => {
             let customer_id = stripe.create_customer(&db_user.email, db_user.id).await?;
-            UserRepository::update_stripe_customer_id(&pool, db_user.id, &customer_id).await?;
+            UserRepository::update_stripe_customer_id(&mut *tx, db_user.id, &customer_id).await?;
             customer_id
         }
     };
+    tx.commit().await?;
 
     // Create checkout session for the selected tier
     let (session_id, checkout_url) = stripe

@@ -108,7 +108,7 @@ fn add_security_headers(headers: &mut actix_web::http::header::HeaderMap) {
         HeaderName::from_static("content-security-policy"),
         HeaderValue::from_static(concat!(
             "default-src 'self'; ",
-            "script-src 'self' 'unsafe-inline' https://js.stripe.com; ",
+            "script-src 'self' https://js.stripe.com; ",
             "style-src 'self' 'unsafe-inline'; ",
             "img-src 'self' data: https:; ",
             "font-src 'self' data:; ",

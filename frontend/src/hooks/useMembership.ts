@@ -15,7 +15,10 @@ export function useMembership() {
 
   const startCheckout = async (tier: MembershipTier = 'personal') => {
     const checkoutUrl = await store.createCheckout(tier)
-    // Redirect to Stripe checkout
+    // Validate URL before redirecting to Stripe checkout
+    if (!checkoutUrl.startsWith('https://checkout.stripe.com/')) {
+      throw new Error('Invalid checkout URL')
+    }
     window.location.href = checkoutUrl
   }
 

@@ -295,6 +295,11 @@ impl AuthService {
                     },
                 )
                 .await?;
+                // Set email as verified since they proved ownership via magic link
+                UserRepository::set_email_verified(&self.pool, user.id).await?;
+                let user = UserRepository::find_by_id(&self.pool, user.id)
+                    .await?
+                    .ok_or(AppError::not_found("User"))?;
                 (user, true)
             }
         };
