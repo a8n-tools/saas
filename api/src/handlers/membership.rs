@@ -158,7 +158,7 @@ pub async fn cancel_membership(
         MembershipRepository::set_cancel_at_period_end(&pool, membership.id, true).await?;
     } else {
         // No Stripe subscription record — just update status directly
-        UserRepository::update_membership_status(&pool, user.0.sub, crate::models::MembershipStatus::Canceled).await?;
+        UserRepository::update_membership_status(pool.get_ref(), user.0.sub, crate::models::MembershipStatus::Canceled).await?;
     }
 
     // Fetch updated user
@@ -219,11 +219,11 @@ pub async fn cancel_membership_immediate(
             .cancel_subscription(&membership.stripe_subscription_id, false)
             .await?;
 
-        MembershipRepository::update_status(&pool, membership.id, "canceled").await?;
+        MembershipRepository::update_status(pool.get_ref(), membership.id, "canceled").await?;
     }
 
     // Update user status immediately
-    UserRepository::update_membership_status(&pool, user.0.sub, crate::models::MembershipStatus::Canceled).await?;
+    UserRepository::update_membership_status(pool.get_ref(), user.0.sub, crate::models::MembershipStatus::Canceled).await?;
 
     let updated_user = UserRepository::find_by_id(&pool, user.0.sub)
         .await?

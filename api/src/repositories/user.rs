@@ -6,7 +6,7 @@ use sqlx::postgres::Postgres;
 use uuid::Uuid;
 
 use crate::errors::AppError;
-use crate::models::{CreateUser, MembershipStatus, User, UserRole};
+use crate::models::{CreateUser, MembershipStatus, User};
 
 pub struct UserRepository;
 
@@ -326,7 +326,7 @@ impl UserRepository {
             conditions.push("LOWER(email) LIKE LOWER($3)".to_string());
         }
 
-        if let Some(status) = &status_filter {
+        if let Some(_status) = &status_filter {
             let idx = if search.is_some() { 4 } else { 3 };
             conditions.push(format!("subscription_status = ${}", idx));
         }

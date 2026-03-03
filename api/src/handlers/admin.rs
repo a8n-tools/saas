@@ -215,13 +215,13 @@ pub async fn grant_membership(
     let request_id = get_request_id(&req);
 
     // Update user membership status
-    UserRepository::update_membership_status(&pool, body.user_id, MembershipStatus::Active)
+    UserRepository::update_membership_status(pool.get_ref(), body.user_id, MembershipStatus::Active)
         .await?;
 
     // Lock price if requested
     if body.price_locked.unwrap_or(false) {
         let amount = body.locked_price_amount.unwrap_or(300);
-        UserRepository::lock_price(&pool, body.user_id, "price_admin_grant", amount).await?;
+        UserRepository::lock_price(pool.get_ref(), body.user_id, "price_admin_grant", amount).await?;
     }
 
     Ok(success_no_data(request_id))
@@ -237,11 +237,11 @@ pub async fn revoke_membership(
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
 
-    UserRepository::update_membership_status(&pool, body.user_id, MembershipStatus::Canceled)
+    UserRepository::update_membership_status(pool.get_ref(), body.user_id, MembershipStatus::Canceled)
         .await?;
 
     // Clear any grace period
-    UserRepository::clear_grace_period(&pool, body.user_id).await?;
+    UserRepository::clear_grace_period(pool.get_ref(), body.user_id).await?;
 
     Ok(success_no_data(request_id))
 }
