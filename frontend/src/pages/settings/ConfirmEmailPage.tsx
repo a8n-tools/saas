@@ -5,14 +5,13 @@ import { useAuthStore } from '@/stores/authStore'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { AlertCircle, Check, Loader2, Mail } from 'lucide-react'
+import { AlertCircle, Check, Loader2 } from 'lucide-react'
 
 export function ConfirmEmailPage() {
   const [searchParams] = useSearchParams()
   const token = searchParams.get('token')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState(false)
   const { logout } = useAuthStore()
 
   useEffect(() => {
@@ -23,7 +22,6 @@ export function ConfirmEmailPage() {
       setError(null)
       try {
         await authApi.confirmEmailChange({ token })
-        setSuccess(true)
         // Clear auth state since sessions were revoked
         logout()
       } catch (err) {
