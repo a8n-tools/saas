@@ -35,6 +35,12 @@ pub struct ConfirmEmailChangeBody {
     pub token: String,
 }
 
+/// Request body for confirming email verification
+#[derive(Debug, Deserialize)]
+pub struct ConfirmEmailVerificationBody {
+    pub token: String,
+}
+
 /// GET /v1/users/me
 /// Get current user profile
 pub async fn get_current_user(
@@ -214,6 +220,58 @@ pub async fn confirm_email_change(
 
     Ok(success(
         serde_json::json!({ "message": "Email address updated successfully. Please log in with your new email." }),
+        request_id,
+    ))
+}
+
+/// POST /v1/users/me/email/verify
+/// Request email verification (auth required, 2FA must be enabled)
+pub async fn request_email_verification(
+    req: HttpRequest,
+    user: AuthenticatedUser,
+    auth_service: web::Data<Arc<AuthService>>,
+    email_service: web::Data<Arc<EmailService>>,
+) -> Result<HttpResponse, AppError> {
+    let request_id = get_request_id(&req);
+    let ip_address = extract_client_ip(&req);
+
+    let token = auth_service
+        .request_email_verification(user.0.sub, ip_address)
+        .await?;
+
+    // Send verification email (fire and forget)
+    let email = user.0.email.clone();
+    let email_svc = email_service.get_ref().clone();
+    tokio::spawn(async move {
+        if let Err(e) = email_svc.send_email_verify(&email, &token).await {
+            tracing::error!(error = %e, email = %email, "Failed to send email verification");
+        }
+    });
+
+    Ok(success(
+        serde_json::json!({ "message": "Verification email sent. Please check your inbox." }),
+        request_id,
+    ))
+}
+
+/// POST /v1/users/me/email/verify/confirm
+/// Confirm email verification (token-based, no auth required)
+pub async fn confirm_email_verification(
+    req: HttpRequest,
+    auth_service: web::Data<Arc<AuthService>>,
+    body: web::Json<ConfirmEmailVerificationBody>,
+) -> Result<HttpResponse, AppError> {
+    let request_id = get_request_id(&req);
+    let ip_address = extract_client_ip(&req);
+
+    let email = auth_service
+        .confirm_email_verification(body.token.clone(), ip_address)
+        .await?;
+
+    tracing::info!(email = %email, "Email verified successfully");
+
+    Ok(success(
+        serde_json::json!({ "message": "Email verified successfully." }),
         request_id,
     ))
 }

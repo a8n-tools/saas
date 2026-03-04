@@ -196,3 +196,42 @@ pub struct CreateEmailChangeRequest {
     pub expires_at: DateTime<Utc>,
     pub ip_address: Option<IpNetwork>,
 }
+
+/// Email verification token database model
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct EmailVerificationToken {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    #[serde(skip_serializing)]
+    pub token_hash: String,
+    pub expires_at: DateTime<Utc>,
+    pub used_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub ip_address: Option<IpNetwork>,
+}
+
+impl EmailVerificationToken {
+    /// Check if the token is expired
+    pub fn is_expired(&self) -> bool {
+        self.expires_at < Utc::now()
+    }
+
+    /// Check if the token has been used
+    pub fn is_used(&self) -> bool {
+        self.used_at.is_some()
+    }
+
+    /// Check if the token is valid (not expired and not used)
+    pub fn is_valid(&self) -> bool {
+        !self.is_expired() && !self.is_used()
+    }
+}
+
+/// Data for creating a new email verification token
+#[derive(Debug, Clone)]
+pub struct CreateEmailVerificationToken {
+    pub user_id: Uuid,
+    pub token_hash: String,
+    pub expires_at: DateTime<Utc>,
+    pub ip_address: Option<IpNetwork>,
+}

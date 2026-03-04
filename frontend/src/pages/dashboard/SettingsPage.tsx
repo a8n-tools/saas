@@ -65,6 +65,11 @@ export function SettingsPage() {
   const [emailError, setEmailError] = useState<string | null>(null)
   const [emailSuccess, setEmailSuccess] = useState<string | null>(null)
 
+  // Email verification state
+  const [verifyLoading, setVerifyLoading] = useState(false)
+  const [verifyError, setVerifyError] = useState<string | null>(null)
+  const [verifySuccess, setVerifySuccess] = useState<string | null>(null)
+
   const {
     register,
     handleSubmit,
@@ -167,19 +172,58 @@ export function SettingsPage() {
             </div>
             <div>
               <Label className="text-muted-foreground">Email Verified</Label>
-              <p className="font-medium flex items-center gap-2">
+              <div className="space-y-2">
                 {user?.email_verified ? (
-                  <>
+                  <p className="font-medium flex items-center gap-2">
                     <Check className="h-4 w-4 text-teal-600 dark:text-teal-400" />
                     Verified
-                  </>
+                  </p>
                 ) : (
                   <>
-                    <AlertCircle className="h-4 w-4 text-yellow-600" />
-                    Not Verified
+                    <p className="font-medium flex items-center gap-2">
+                      <AlertCircle className="h-4 w-4 text-yellow-600" />
+                      Not Verified
+                    </p>
+                    {user?.two_factor_enabled ? (
+                      <>
+                        {verifyError && (
+                          <p className="text-sm text-destructive">{verifyError}</p>
+                        )}
+                        {verifySuccess && (
+                          <p className="text-sm text-teal-600 dark:text-teal-400">{verifySuccess}</p>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={verifyLoading}
+                          onClick={async () => {
+                            setVerifyLoading(true)
+                            setVerifyError(null)
+                            setVerifySuccess(null)
+                            try {
+                              const result = await authApi.requestEmailVerification()
+                              setVerifySuccess(result.message)
+                            } catch (err) {
+                              const apiError = err as { error?: { message?: string } }
+                              setVerifyError(apiError.error?.message || 'Failed to send verification email')
+                            } finally {
+                              setVerifyLoading(false)
+                            }
+                          }}
+                        >
+                          {verifyLoading && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                          <Mail className="mr-2 h-3 w-3" />
+                          Verify Email
+                        </Button>
+                      </>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        Enable 2FA to verify your email
+                      </p>
+                    )}
                   </>
                 )}
-              </p>
+              </div>
             </div>
             <div>
               <Label className="text-muted-foreground">Membership Status</Label>

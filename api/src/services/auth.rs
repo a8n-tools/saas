@@ -9,8 +9,9 @@ use uuid::Uuid;
 
 use crate::errors::AppError;
 use crate::models::{
-    AuditAction, CreateAuditLog, CreateEmailChangeRequest, CreateMagicLinkToken,
-    CreatePasswordResetToken, CreateRefreshToken, CreateUser, User, UserResponse, UserRole,
+    AuditAction, CreateAuditLog, CreateEmailChangeRequest, CreateEmailVerificationToken,
+    CreateMagicLinkToken, CreatePasswordResetToken, CreateRefreshToken, CreateUser, User,
+    UserResponse, UserRole,
 };
 use crate::repositories::{AuditLogRepository, TokenRepository, UserRepository};
 use crate::services::{JwtService, PasswordService};
@@ -763,6 +764,115 @@ impl AuthService {
         .await?;
 
         Ok((old_email, new_email))
+    }
+
+    /// Request email verification
+    ///
+    /// Generates a token and returns it so the caller can send the verification email.
+    /// Requires 2FA to be enabled and email to not already be verified.
+    pub async fn request_email_verification(
+        &self,
+        user_id: Uuid,
+        ip_address: Option<IpAddr>,
+    ) -> Result<String, AppError> {
+        let ip = ip_address.map(|ip| IpNetwork::from(ip));
+
+        let user = UserRepository::find_by_id(&self.pool, user_id)
+            .await?
+            .ok_or(AppError::not_found("User"))?;
+
+        if user.email_verified {
+            return Err(AppError::validation("email", "Email is already verified"));
+        }
+
+        if !user.two_factor_enabled {
+            return Err(AppError::validation(
+                "two_factor",
+                "Two-factor authentication must be enabled to verify your email",
+            ));
+        }
+
+        // Rate limit: 3 requests per hour
+        let since = Utc::now() - Duration::hours(1);
+        let count =
+            TokenRepository::count_recent_email_verification_tokens(&self.pool, user_id, since)
+                .await?;
+        if count >= 3 {
+            return Err(AppError::RateLimited { retry_after: 3600 });
+        }
+
+        // Generate token
+        let token = generate_secure_token(32);
+        let token_hash = self.jwt.hash_token(&token);
+        let expires_at = Utc::now() + Duration::hours(1);
+
+        // Store token
+        TokenRepository::create_email_verification_token(
+            &self.pool,
+            CreateEmailVerificationToken {
+                user_id,
+                token_hash,
+                expires_at,
+                ip_address: ip,
+            },
+        )
+        .await?;
+
+        // Audit log
+        AuditLogRepository::create(
+            &self.pool,
+            CreateAuditLog::new(AuditAction::EmailVerificationRequested)
+                .with_actor(user.id, &user.email, &user.role)
+                .with_ip(ip),
+        )
+        .await?;
+
+        Ok(token)
+    }
+
+    /// Confirm email verification using token
+    ///
+    /// Returns the user's email so the caller can log it.
+    pub async fn confirm_email_verification(
+        &self,
+        token: String,
+        ip_address: Option<IpAddr>,
+    ) -> Result<String, AppError> {
+        let ip = ip_address.map(|ip| IpNetwork::from(ip));
+        let token_hash = self.jwt.hash_token(&token);
+
+        // Find token
+        let verification_token =
+            TokenRepository::find_email_verification_token_by_hash(&self.pool, &token_hash)
+                .await?
+                .ok_or(AppError::InvalidCredentials)?;
+
+        if !verification_token.is_valid() {
+            return Err(AppError::TokenExpired);
+        }
+
+        // Get user
+        let user = UserRepository::find_by_id(&self.pool, verification_token.user_id)
+            .await?
+            .ok_or(AppError::not_found("User"))?;
+
+        // Mark token as used
+        TokenRepository::mark_email_verification_token_used(&self.pool, verification_token.id)
+            .await?;
+
+        // Set email as verified
+        UserRepository::set_email_verified(&self.pool, user.id).await?;
+
+        // Audit log
+        AuditLogRepository::create(
+            &self.pool,
+            CreateAuditLog::new(AuditAction::EmailVerified)
+                .with_actor(user.id, &user.email, &user.role)
+                .with_ip(ip),
+        )
+        .await?;
+
+        Ok(user.email)
     }
 
     /// Helper to create auth tokens

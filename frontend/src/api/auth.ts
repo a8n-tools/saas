@@ -48,6 +48,12 @@ export const authApi = {
   confirmEmailChange: (data: { token: string }): Promise<{ message: string }> =>
     apiClient.post('/users/me/email/confirm', data),
 
+  requestEmailVerification: (): Promise<{ message: string }> =>
+    apiClient.post('/users/me/email/verify'),
+
+  confirmEmailVerification: (data: { token: string }): Promise<{ message: string }> =>
+    apiClient.post('/users/me/email/verify/confirm', data),
+
   // 2FA endpoints
   setup2FA: (): Promise<TwoFactorSetupResponse> =>
     apiClient.post('/auth/2fa/setup'),

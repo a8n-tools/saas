@@ -23,7 +23,10 @@ pub use membership::{
     billing_portal, cancel_membership, cancel_membership_immediate, create_checkout,
     get_payment_history, get_membership, reactivate_membership, subscribe,
 };
-pub use user::{change_password, confirm_email_change, get_current_user, list_sessions, request_email_change, revoke_session};
+pub use user::{
+    change_password, confirm_email_change, confirm_email_verification, get_current_user,
+    list_sessions, request_email_change, request_email_verification, revoke_session,
+};
 pub use webhook::stripe_webhook;
 
 // Admin handlers

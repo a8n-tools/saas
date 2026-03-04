@@ -121,6 +121,11 @@ impl EmailService {
         templates.add_raw_template("email_change_notification.txt", include_str!("../../templates/emails/email_change_notification.txt"))
             .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
 
+        templates.add_raw_template("email_verify.html", include_str!("../../templates/emails/email_verify.html"))
+            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
+        templates.add_raw_template("email_verify.txt", include_str!("../../templates/emails/email_verify.txt"))
+            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
+
         Ok(Self {
             transport,
             templates,
@@ -403,6 +408,29 @@ impl EmailService {
 
         let (html, text) = self.render_template("email_change_notification", &context)?;
         self.send_email(old_email, &format!("Your {} email address was changed", self.config.app_name), html, text).await
+    }
+
+    /// Send email verification link
+    pub async fn send_email_verify(&self, email: &str, token: &str) -> Result<(), AppError> {
+        let verify_url = format!(
+            "{}/settings/verify-email?token={}",
+            self.config.base_url, token
+        );
+
+        if !self.config.enabled {
+            tracing::info!(
+                email = %email,
+                link = %verify_url,
+                "Email verify link (dev mode - not sending email)"
+            );
+            return Ok(());
+        }
+
+        let mut context = self.base_context();
+        context.insert("verify_url", &verify_url);
+
+        let (html, text) = self.render_template("email_verify", &context)?;
+        self.send_email(email, &format!("Verify your {} email address", self.config.app_name), html, text).await
     }
 
     /// Send payment succeeded (receipt) email

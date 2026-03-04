@@ -22,8 +22,9 @@ pub use membership::{
     StripeSubscriptionStatus, Membership, MembershipResponse,
 };
 pub use token::{
-    CreateEmailChangeRequest, CreateMagicLinkToken, CreatePasswordResetToken, CreateRefreshToken,
-    EmailChangeRequest, MagicLinkToken, PasswordResetToken, RefreshToken, SessionInfo,
+    CreateEmailChangeRequest, CreateEmailVerificationToken, CreateMagicLinkToken,
+    CreatePasswordResetToken, CreateRefreshToken, EmailChangeRequest, EmailVerificationToken,
+    MagicLinkToken, PasswordResetToken, RefreshToken, SessionInfo,
 };
 pub use totp::{RecoveryCode, UserTotp};
 pub use user::{CreateUser, MembershipStatus, User, UserResponse, UserRole};

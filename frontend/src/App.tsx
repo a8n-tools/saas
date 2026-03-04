@@ -36,6 +36,7 @@ import { AdminAuditLogsPage } from '@/pages/admin/AdminAuditLogsPage'
 
 // Settings pages (public, token-based)
 import { ConfirmEmailPage } from '@/pages/settings/ConfirmEmailPage'
+import { VerifyEmailPage } from '@/pages/settings/VerifyEmailPage'
 
 // Error pages
 import { NotFoundPage } from '@/pages/errors/NotFoundPage'
@@ -119,6 +120,7 @@ export default function App() {
         <Route path="/terms" element={<TermsOfServicePage />} />
         <Route path="/privacy" element={<PrivacyPolicyPage />} />
         <Route path="/settings/confirm-email" element={<ConfirmEmailPage />} />
+        <Route path="/settings/verify-email" element={<VerifyEmailPage />} />
         <Route path="/login/2fa" element={<TwoFactorVerifyPage />} />
       </Route>
 

@@ -186,6 +186,41 @@ export const handlers = [
     })
   }),
 
+  // Request email verification
+  http.post(`${API_BASE}/users/me/email/verify`, () => {
+    return HttpResponse.json({
+      success: true,
+      data: {
+        message: 'Verification email sent. Please check your inbox.',
+      },
+    })
+  }),
+
+  // Confirm email verification
+  http.post(`${API_BASE}/users/me/email/verify/confirm`, async ({ request }) => {
+    const body = await request.json() as { token: string }
+
+    if (body.token === 'valid-verify-token') {
+      return HttpResponse.json({
+        success: true,
+        data: {
+          message: 'Email verified successfully.',
+        },
+      })
+    }
+
+    return HttpResponse.json(
+      {
+        success: false,
+        error: {
+          code: 'INVALID_TOKEN',
+          message: 'Invalid or expired token',
+        },
+      },
+      { status: 400 }
+    )
+  }),
+
   // Confirm password reset
   http.post(`${API_BASE}/auth/password-reset/confirm`, async ({ request }) => {
     const body = await request.json() as { token: string; password: string }

@@ -40,6 +40,8 @@ pub enum AuditAction {
     TwoFactorVerified,
     TwoFactorRecoveryCodeUsed,
     TwoFactorRecoveryCodesRegenerated,
+    EmailVerificationRequested,
+    EmailVerified,
 }
 
 impl AuditAction {
@@ -74,6 +76,8 @@ impl AuditAction {
             AuditAction::TwoFactorVerified => "two_factor_verified",
             AuditAction::TwoFactorRecoveryCodeUsed => "two_factor_recovery_code_used",
             AuditAction::TwoFactorRecoveryCodesRegenerated => "two_factor_recovery_codes_regenerated",
+            AuditAction::EmailVerificationRequested => "email_verification_requested",
+            AuditAction::EmailVerified => "email_verified",
         }
     }
 
