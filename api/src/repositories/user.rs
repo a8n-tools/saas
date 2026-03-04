@@ -258,6 +258,29 @@ impl UserRepository {
         Ok(())
     }
 
+    /// Update user's email address
+    pub async fn update_email(
+        pool: &PgPool,
+        user_id: Uuid,
+        new_email: &str,
+        set_verified: bool,
+    ) -> Result<(), AppError> {
+        sqlx::query(
+            r#"
+            UPDATE users
+            SET email = $1, email_verified = $2, updated_at = NOW()
+            WHERE id = $3
+            "#,
+        )
+        .bind(new_email)
+        .bind(set_verified)
+        .bind(user_id)
+        .execute(pool)
+        .await?;
+
+        Ok(())
+    }
+
     /// Update last login timestamp
     pub async fn update_last_login(pool: &PgPool, user_id: Uuid) -> Result<(), AppError> {
         sqlx::query(

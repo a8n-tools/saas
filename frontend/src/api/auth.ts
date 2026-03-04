@@ -37,4 +37,10 @@ export const authApi = {
 
   changePassword: (data: { current_password: string; new_password: string }): Promise<void> =>
     apiClient.put('/users/me/password', data),
+
+  requestEmailChange: (data: { new_email: string; current_password?: string }): Promise<{ message: string }> =>
+    apiClient.post('/users/me/email', data),
+
+  confirmEmailChange: (data: { token: string }): Promise<{ message: string }> =>
+    apiClient.post('/users/me/email/confirm', data),
 }

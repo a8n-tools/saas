@@ -13,12 +13,26 @@ use crate::models::UserResponse;
 use crate::repositories::{TokenRepository, UserRepository};
 use crate::responses::{get_request_id, success, success_no_data};
 use crate::services::{AuthService, EmailService};
+use crate::validation::validate_email;
 
 /// Request body for changing password
 #[derive(Debug, Deserialize)]
 pub struct ChangePasswordRequest {
     pub current_password: String,
     pub new_password: String,
+}
+
+/// Request body for requesting email change
+#[derive(Debug, Deserialize)]
+pub struct RequestEmailChangeBody {
+    pub new_email: String,
+    pub current_password: Option<String>,
+}
+
+/// Request body for confirming email change
+#[derive(Debug, Deserialize)]
+pub struct ConfirmEmailChangeBody {
+    pub token: String,
 }
 
 /// GET /v1/users/me
@@ -123,4 +137,83 @@ pub async fn revoke_session(
     TokenRepository::revoke_refresh_token(&pool, session_id).await?;
 
     Ok(success_no_data(request_id))
+}
+
+/// POST /v1/users/me/email
+/// Request email change
+pub async fn request_email_change(
+    req: HttpRequest,
+    user: AuthenticatedUser,
+    auth_service: web::Data<Arc<AuthService>>,
+    email_service: web::Data<Arc<EmailService>>,
+    body: web::Json<RequestEmailChangeBody>,
+) -> Result<HttpResponse, AppError> {
+    let request_id = get_request_id(&req);
+    let ip_address = extract_client_ip(&req);
+
+    // Validate email format
+    validate_email(&body.new_email)?;
+
+    let (old_email, token) = auth_service
+        .request_email_change(
+            user.0.sub,
+            body.new_email.clone(),
+            body.current_password.clone(),
+            ip_address,
+        )
+        .await?;
+
+    match token {
+        Some(token) => {
+            // Verified user: send verification email to new address
+            let new_email = body.new_email.clone();
+            let email_svc = email_service.get_ref().clone();
+            tokio::spawn(async move {
+                if let Err(e) = email_svc.send_email_change_verify(&new_email, &token).await {
+                    tracing::error!(error = %e, email = %new_email, "Failed to send email change verification");
+                }
+            });
+
+            Ok(success(
+                serde_json::json!({ "message": "Verification email sent to your new address. Please check your inbox." }),
+                request_id,
+            ))
+        }
+        None => {
+            // Unverified user: email changed immediately
+            Ok(success(
+                serde_json::json!({ "message": "Email address updated successfully." }),
+                request_id,
+            ))
+        }
+    }
+}
+
+/// POST /v1/users/me/email/confirm
+/// Confirm email change (token-based, no auth required)
+pub async fn confirm_email_change(
+    req: HttpRequest,
+    auth_service: web::Data<Arc<AuthService>>,
+    email_service: web::Data<Arc<EmailService>>,
+    body: web::Json<ConfirmEmailChangeBody>,
+) -> Result<HttpResponse, AppError> {
+    let request_id = get_request_id(&req);
+    let ip_address = extract_client_ip(&req);
+
+    let (old_email, new_email) = auth_service
+        .confirm_email_change(body.token.clone(), ip_address)
+        .await?;
+
+    // Send notification to old email (fire and forget)
+    let email_svc = email_service.get_ref().clone();
+    tokio::spawn(async move {
+        if let Err(e) = email_svc.send_email_change_notification(&old_email, &new_email).await {
+            tracing::error!(error = %e, email = %old_email, "Failed to send email change notification");
+        }
+    });
+
+    Ok(success(
+        serde_json::json!({ "message": "Email address updated successfully. Please log in with your new email." }),
+        request_id,
+    ))
 }

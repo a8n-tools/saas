@@ -32,6 +32,9 @@ import { AdminMembershipsPage } from '@/pages/admin/AdminMembershipsPage'
 import { AdminApplicationsPage } from '@/pages/admin/AdminApplicationsPage'
 import { AdminAuditLogsPage } from '@/pages/admin/AdminAuditLogsPage'
 
+// Settings pages (public, token-based)
+import { ConfirmEmailPage } from '@/pages/settings/ConfirmEmailPage'
+
 // Error pages
 import { NotFoundPage } from '@/pages/errors/NotFoundPage'
 import { MembershipRequiredPage } from '@/pages/errors/MembershipRequiredPage'
@@ -108,6 +111,7 @@ export default function App() {
         <Route path="/password-reset/confirm" element={<PasswordResetConfirmPage />} />
         <Route path="/terms" element={<TermsOfServicePage />} />
         <Route path="/privacy" element={<PrivacyPolicyPage />} />
+        <Route path="/settings/confirm-email" element={<ConfirmEmailPage />} />
       </Route>
 
       {/* Protected dashboard routes */}

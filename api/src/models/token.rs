@@ -149,3 +149,50 @@ pub struct CreatePasswordResetToken {
     pub expires_at: DateTime<Utc>,
     pub ip_address: Option<IpNetwork>,
 }
+
+/// Email change request database model
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct EmailChangeRequest {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub new_email: String,
+    #[serde(skip_serializing)]
+    pub token_hash: String,
+    pub expires_at: DateTime<Utc>,
+    pub confirmed_at: Option<DateTime<Utc>>,
+    pub canceled_at: Option<DateTime<Utc>>,
+    pub ip_address: Option<IpNetwork>,
+    pub created_at: DateTime<Utc>,
+}
+
+impl EmailChangeRequest {
+    /// Check if the request is expired
+    pub fn is_expired(&self) -> bool {
+        self.expires_at < Utc::now()
+    }
+
+    /// Check if the request has been confirmed
+    pub fn is_confirmed(&self) -> bool {
+        self.confirmed_at.is_some()
+    }
+
+    /// Check if the request has been canceled
+    pub fn is_canceled(&self) -> bool {
+        self.canceled_at.is_some()
+    }
+
+    /// Check if the request is valid (not expired, confirmed, or canceled)
+    pub fn is_valid(&self) -> bool {
+        !self.is_expired() && !self.is_confirmed() && !self.is_canceled()
+    }
+}
+
+/// Data for creating a new email change request
+#[derive(Debug, Clone)]
+pub struct CreateEmailChangeRequest {
+    pub user_id: Uuid,
+    pub new_email: String,
+    pub token_hash: String,
+    pub expires_at: DateTime<Utc>,
+    pub ip_address: Option<IpNetwork>,
+}

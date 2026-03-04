@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
-import { User, Lock, Shield, Check, Loader2, AlertCircle } from 'lucide-react'
+import { User, Lock, Shield, Check, Loader2, AlertCircle, Mail } from 'lucide-react'
 
 const passwordSchema = z.object({
   currentPassword: z.string().min(1, 'Current password is required'),
@@ -29,6 +29,13 @@ const passwordSchema = z.object({
 
 type PasswordFormData = z.infer<typeof passwordSchema>
 
+const emailSchema = z.object({
+  newEmail: z.string().email('Invalid email address'),
+  currentPassword: z.string().optional(),
+})
+
+type EmailFormData = z.infer<typeof emailSchema>
+
 const passwordRequirements = [
   { label: 'At least 12 characters', test: (p: string) => p.length >= 12 },
   { label: 'One lowercase letter', test: (p: string) => /[a-z]/.test(p) },
@@ -43,6 +50,11 @@ export function SettingsPage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
 
+  // Email change state
+  const [emailLoading, setEmailLoading] = useState(false)
+  const [emailError, setEmailError] = useState<string | null>(null)
+  const [emailSuccess, setEmailSuccess] = useState<string | null>(null)
+
   const {
     register,
     handleSubmit,
@@ -54,6 +66,34 @@ export function SettingsPage() {
   })
 
   const newPassword = watch('newPassword', '')
+
+  const {
+    register: registerEmail,
+    handleSubmit: handleEmailSubmit,
+    reset: resetEmail,
+    formState: { errors: emailErrors },
+  } = useForm<EmailFormData>({
+    resolver: zodResolver(emailSchema),
+  })
+
+  const onEmailSubmit = async (data: EmailFormData) => {
+    setEmailLoading(true)
+    setEmailError(null)
+    setEmailSuccess(null)
+    try {
+      const result = await authApi.requestEmailChange({
+        new_email: data.newEmail,
+        current_password: data.currentPassword || undefined,
+      })
+      setEmailSuccess(result.message)
+      resetEmail()
+    } catch (err) {
+      const apiError = err as { error?: { message?: string } }
+      setEmailError(apiError.error?.message || 'Failed to update email')
+    } finally {
+      setEmailLoading(false)
+    }
+  }
 
   const onSubmit = async (data: PasswordFormData) => {
     setIsLoading(true)
@@ -133,6 +173,75 @@ export function SettingsPage() {
               </p>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Change Email */}
+      <Card className="border-border/50">
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-teal-500">
+              <Mail className="h-4 w-4 text-white" />
+            </div>
+            <CardTitle>Change Email</CardTitle>
+          </div>
+          <CardDescription>
+            Update your email address.{' '}
+            {user?.email_verified
+              ? 'A verification email will be sent to your new address.'
+              : 'Your email will be updated immediately.'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleEmailSubmit(onEmailSubmit)} className="space-y-4 max-w-md">
+            {emailError && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{emailError}</AlertDescription>
+              </Alert>
+            )}
+            {emailSuccess && (
+              <Alert>
+                <Check className="h-4 w-4" />
+                <AlertDescription>{emailSuccess}</AlertDescription>
+              </Alert>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="newEmail">New Email Address</Label>
+              <Input
+                id="newEmail"
+                type="email"
+                placeholder="Enter your new email"
+                {...registerEmail('newEmail')}
+              />
+              {emailErrors.newEmail && (
+                <p className="text-sm text-destructive">
+                  {emailErrors.newEmail.message}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="emailCurrentPassword">Current Password</Label>
+              <Input
+                id="emailCurrentPassword"
+                type="password"
+                placeholder="Enter your current password"
+                {...registerEmail('currentPassword')}
+              />
+              {emailErrors.currentPassword && (
+                <p className="text-sm text-destructive">
+                  {emailErrors.currentPassword.message}
+                </p>
+              )}
+            </div>
+
+            <Button type="submit" disabled={emailLoading} className="bg-gradient-to-r from-primary to-teal-500 text-white border-0">
+              {emailLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Change Email
+            </Button>
+          </form>
         </CardContent>
       </Card>
 

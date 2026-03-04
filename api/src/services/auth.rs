@@ -9,8 +9,8 @@ use uuid::Uuid;
 
 use crate::errors::AppError;
 use crate::models::{
-    AuditAction, CreateAuditLog, CreateMagicLinkToken, CreatePasswordResetToken,
-    CreateRefreshToken, CreateUser, User, UserResponse, UserRole,
+    AuditAction, CreateAuditLog, CreateEmailChangeRequest, CreateMagicLinkToken,
+    CreatePasswordResetToken, CreateRefreshToken, CreateUser, User, UserResponse, UserRole,
 };
 use crate::repositories::{AuditLogRepository, TokenRepository, UserRepository};
 use crate::services::{JwtService, PasswordService};
@@ -484,6 +484,221 @@ impl AuthService {
         .await?;
 
         Ok(())
+    }
+
+    /// Request email change
+    ///
+    /// For verified users: creates a verification token and returns it.
+    /// For unverified users: changes email immediately and returns None.
+    /// Returns (old_email, Option<token>) so caller can send appropriate emails.
+    pub async fn request_email_change(
+        &self,
+        user_id: Uuid,
+        new_email: String,
+        current_password: Option<String>,
+        ip_address: Option<IpAddr>,
+    ) -> Result<(String, Option<String>), AppError> {
+        let ip = ip_address.map(|ip| IpNetwork::from(ip));
+
+        // Get user
+        let user = UserRepository::find_by_id(&self.pool, user_id)
+            .await?
+            .ok_or(AppError::not_found("User"))?;
+
+        // Check if new email is same as current
+        if user.email.to_lowercase() == new_email.to_lowercase() {
+            return Err(AppError::validation("email", "New email must be different from current email"));
+        }
+
+        // Check if new email is already taken
+        if UserRepository::find_by_email(&self.pool, &new_email)
+            .await?
+            .is_some()
+        {
+            return Err(AppError::conflict("Email already registered"));
+        }
+
+        // If user has a password, require it for verification
+        if user.password_hash.is_some() {
+            let password = current_password
+                .ok_or(AppError::validation("current_password", "Password is required to change email"))?;
+            let password_hash = user.password_hash.as_ref().unwrap();
+            if !self.password.verify(&password, password_hash)? {
+                return Err(AppError::validation("current_password", "Current password is incorrect"));
+            }
+        }
+
+        let old_email = user.email.clone();
+
+        if user.email_verified {
+            // Rate limit: 3 requests per hour
+            let since = Utc::now() - Duration::hours(1);
+            let count = TokenRepository::count_recent_email_change_requests(&self.pool, user_id, since).await?;
+            if count >= 3 {
+                return Err(AppError::RateLimited { retry_after: 3600 });
+            }
+
+            // Cancel any pending requests
+            TokenRepository::cancel_pending_email_change_requests(&self.pool, user_id).await?;
+
+            // Generate token
+            let token = generate_secure_token(32);
+            let token_hash = self.jwt.hash_token(&token);
+            let expires_at = Utc::now() + Duration::hours(1);
+
+            // Store request
+            TokenRepository::create_email_change_request(
+                &self.pool,
+                CreateEmailChangeRequest {
+                    user_id,
+                    new_email,
+                    token_hash,
+                    expires_at,
+                    ip_address: ip,
+                },
+            )
+            .await?;
+
+            // Audit log
+            AuditLogRepository::create(
+                &self.pool,
+                CreateAuditLog::new(AuditAction::EmailChangeRequested)
+                    .with_actor(user.id, &user.email, &user.role)
+                    .with_ip(ip),
+            )
+            .await?;
+
+            Ok((old_email, Some(token)))
+        } else {
+            // Unverified user: change email immediately, using a transaction
+            // to prevent race conditions on the unique email constraint
+            let mut tx = self.pool.begin().await?;
+
+            // Lock the user row to prevent concurrent email changes
+            sqlx::query("SELECT id FROM users WHERE id = $1 FOR UPDATE")
+                .bind(user_id)
+                .execute(&mut *tx)
+                .await?;
+
+            // Re-check email availability inside the transaction
+            let existing: Option<(Uuid,)> = sqlx::query_as(
+                "SELECT id FROM users WHERE LOWER(email) = LOWER($1) AND deleted_at IS NULL"
+            )
+                .bind(&new_email)
+                .fetch_optional(&mut *tx)
+                .await?;
+            if existing.is_some() {
+                return Err(AppError::conflict("Email already registered"));
+            }
+
+            sqlx::query("UPDATE users SET email = $1, email_verified = $2, updated_at = NOW() WHERE id = $3")
+                .bind(&new_email)
+                .bind(false)
+                .bind(user_id)
+                .execute(&mut *tx)
+                .await?;
+
+            // Revoke all refresh tokens (force re-login with new email)
+            sqlx::query("UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL")
+                .bind(user_id)
+                .execute(&mut *tx)
+                .await?;
+
+            tx.commit().await?;
+
+            // Audit log (outside transaction, non-critical)
+            AuditLogRepository::create(
+                &self.pool,
+                CreateAuditLog::new(AuditAction::EmailChangeCompleted)
+                    .with_actor(user.id, &user.email, &user.role)
+                    .with_ip(ip)
+                    .with_metadata(serde_json::json!({ "new_email": new_email, "immediate": true })),
+            )
+            .await?;
+
+            Ok((old_email, None))
+        }
+    }
+
+    /// Confirm email change using verification token
+    ///
+    /// Returns (old_email, new_email) so caller can send notification.
+    pub async fn confirm_email_change(
+        &self,
+        token: String,
+        ip_address: Option<IpAddr>,
+    ) -> Result<(String, String), AppError> {
+        let ip = ip_address.map(|ip| IpNetwork::from(ip));
+        let token_hash = self.jwt.hash_token(&token);
+
+        // Find request (outside transaction for early rejection)
+        let request = TokenRepository::find_email_change_request_by_hash(&self.pool, &token_hash)
+            .await?
+            .ok_or(AppError::InvalidCredentials)?;
+
+        if !request.is_valid() {
+            return Err(AppError::TokenExpired);
+        }
+
+        let new_email = request.new_email.clone();
+
+        // Use a transaction with row locking to prevent race conditions
+        let mut tx = self.pool.begin().await?;
+
+        // Lock the user row to prevent concurrent email changes
+        let user: User = sqlx::query_as(
+            "SELECT * FROM users WHERE id = $1 AND deleted_at IS NULL FOR UPDATE"
+        )
+            .bind(request.user_id)
+            .fetch_optional(&mut *tx)
+            .await?
+            .ok_or(AppError::not_found("User"))?;
+
+        let old_email = user.email.clone();
+
+        // Re-check email availability inside the transaction
+        let existing: Option<(Uuid,)> = sqlx::query_as(
+            "SELECT id FROM users WHERE LOWER(email) = LOWER($1) AND deleted_at IS NULL"
+        )
+            .bind(&new_email)
+            .fetch_optional(&mut *tx)
+            .await?;
+        if existing.is_some() {
+            return Err(AppError::conflict("Email already registered"));
+        }
+
+        // Update email (set verified since they proved ownership)
+        sqlx::query("UPDATE users SET email = $1, email_verified = TRUE, updated_at = NOW() WHERE id = $2")
+            .bind(&new_email)
+            .bind(user.id)
+            .execute(&mut *tx)
+            .await?;
+
+        // Confirm the request
+        sqlx::query("UPDATE email_change_requests SET confirmed_at = NOW() WHERE id = $1")
+            .bind(request.id)
+            .execute(&mut *tx)
+            .await?;
+
+        // Revoke all refresh tokens (force re-login)
+        sqlx::query("UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL")
+            .bind(user.id)
+            .execute(&mut *tx)
+            .await?;
+
+        tx.commit().await?;
+
+        // Audit log (outside transaction, non-critical)
+        AuditLogRepository::create(
+            &self.pool,
+            CreateAuditLog::new(AuditAction::EmailChangeCompleted)
+                .with_actor(user.id, &old_email, &user.role)
+                .with_ip(ip)
+                .with_metadata(serde_json::json!({ "old_email": old_email, "new_email": new_email })),
+        )
+        .await?;
+
+        Ok((old_email, new_email))
     }
 
     /// Helper to create auth tokens
