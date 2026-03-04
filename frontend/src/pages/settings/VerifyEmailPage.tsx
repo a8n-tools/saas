@@ -12,7 +12,6 @@ export function VerifyEmailPage() {
   const token = searchParams.get('token')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [verified, setVerified] = useState(false)
 
   useEffect(() => {
     if (!token) return
@@ -22,7 +21,6 @@ export function VerifyEmailPage() {
       setError(null)
       try {
         await authApi.confirmEmailVerification({ token })
-        setVerified(true)
         // Refresh user data if logged in
         useAuthStore.getState().refreshUser()
       } catch (err) {
