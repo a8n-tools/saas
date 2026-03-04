@@ -15,6 +15,7 @@ export interface User {
   email: string
   role: UserRole
   email_verified: boolean
+  two_factor_enabled: boolean
   membership_status: MembershipStatus
   membership_tier: MembershipTier | null
   price_locked: boolean
@@ -55,6 +56,25 @@ export interface PasswordResetConfirmRequest {
 export interface AuthResponse {
   user: User
   access_token: string
+}
+
+export interface TwoFactorChallengeResponse {
+  requires_2fa: true
+  challenge_token: string
+}
+
+export interface TwoFactorSetupResponse {
+  otpauth_uri: string
+  secret: string
+}
+
+export interface RecoveryCodesResponse {
+  codes: string[]
+}
+
+export interface TwoFactorStatusResponse {
+  enabled: boolean
+  recovery_codes_remaining: number
 }
 
 // Membership types - matches API's MembershipResponse

@@ -4,6 +4,8 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { authApi } from '@/api'
+import { useAuthStore } from '@/stores/authStore'
+import type { TwoFactorChallengeResponse } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -139,8 +141,16 @@ function MagicLinkVerify({ token }: { token: string }) {
   useEffect(() => {
     const verify = async () => {
       try {
-        await authApi.verifyMagicLink({ token })
-        window.location.href = '/dashboard'
+        const response = await authApi.verifyMagicLink({ token })
+        if ('requires_2fa' in response && (response as TwoFactorChallengeResponse).requires_2fa) {
+          const challenge = response as TwoFactorChallengeResponse
+          useAuthStore.setState({
+            pendingChallenge: { challenge_token: challenge.challenge_token },
+          })
+          window.location.href = '/login/2fa'
+        } else {
+          window.location.href = '/dashboard'
+        }
       } catch (err) {
         const apiError = err as { error?: { message?: string } }
         setError(apiError.error?.message || 'Invalid or expired magic link')

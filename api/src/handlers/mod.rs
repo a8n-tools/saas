@@ -6,6 +6,7 @@ pub mod admin;
 pub mod application;
 pub mod auth;
 pub mod membership;
+pub mod totp;
 pub mod user;
 pub mod webhook;
 
@@ -14,6 +15,9 @@ pub use application::{get_application, list_applications};
 pub use auth::{
     confirm_password_reset, login, logout, logout_all, refresh_token, register,
     request_magic_link, request_password_reset, verify_magic_link, verify_password_reset_token,
+};
+pub use totp::{
+    confirm_2fa, disable_2fa, get_2fa_status, regenerate_recovery_codes, setup_2fa, verify_2fa,
 };
 pub use membership::{
     billing_portal, cancel_membership, cancel_membership_immediate, create_checkout,

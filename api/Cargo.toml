@@ -65,6 +65,11 @@ async-stripe = { version = "0.37", features = ["runtime-tokio-hyper", "checkout"
 hmac = "0.12"
 hex = "0.4"
 
+# TOTP two-factor authentication
+totp-rs = { version = "5", features = ["gen_secret", "otpauth"] }
+aes-gcm = "0.10"
+data-encoding = "2"
+
 # Email
 lettre = { version = "0.11", features = ["tokio1-native-tls", "builder"] }
 tera = "1"

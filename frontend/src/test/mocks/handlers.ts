@@ -6,6 +6,7 @@ export const mockUser = {
   email: 'test@example.com',
   role: 'subscriber' as const,
   email_verified: true,
+  two_factor_enabled: false,
   membership_status: 'active' as const,
   membership_tier: 'personal' as const,
   price_locked: false,

@@ -10,8 +10,11 @@ describe('authApi', () => {
         password: 'password123',
       })
 
-      expect(response.user).toEqual(mockUser)
-      expect(response.access_token).toBe('mock-access-token')
+      expect('user' in response).toBe(true)
+      if ('user' in response) {
+        expect(response.user).toEqual(mockUser)
+        expect(response.access_token).toBe('mock-access-token')
+      }
     })
 
     it('should throw error on invalid credentials', async () => {
@@ -94,8 +97,11 @@ describe('authApi', () => {
         token: 'valid-token',
       })
 
-      expect(response.user).toEqual(mockUser)
-      expect(response.access_token).toBe('mock-access-token')
+      expect('user' in response).toBe(true)
+      if ('user' in response) {
+        expect(response.user).toEqual(mockUser)
+        expect(response.access_token).toBe('mock-access-token')
+      }
     })
 
     it('should throw error on invalid token', async () => {

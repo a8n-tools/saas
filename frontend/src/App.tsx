@@ -17,6 +17,7 @@ import { PasswordResetPage } from '@/pages/public/PasswordResetPage'
 import { PasswordResetConfirmPage } from '@/pages/public/PasswordResetConfirmPage'
 import { TermsOfServicePage } from '@/pages/public/TermsOfServicePage'
 import { PrivacyPolicyPage } from '@/pages/public/PrivacyPolicyPage'
+import { TwoFactorVerifyPage } from '@/pages/public/TwoFactorVerifyPage'
 
 // Dashboard pages
 import { DashboardPage } from '@/pages/dashboard/DashboardPage'
@@ -24,6 +25,7 @@ import { ApplicationsPage } from '@/pages/dashboard/ApplicationsPage'
 import { MembershipPage } from '@/pages/dashboard/MembershipPage'
 import { CheckoutSuccessPage } from '@/pages/dashboard/CheckoutSuccessPage'
 import { SettingsPage } from '@/pages/dashboard/SettingsPage'
+import { TwoFactorSetupPage } from '@/pages/dashboard/TwoFactorSetupPage'
 
 // Admin pages
 import { AdminDashboardPage } from '@/pages/admin/AdminDashboardPage'
@@ -41,7 +43,7 @@ import { MembershipRequiredPage } from '@/pages/errors/MembershipRequiredPage'
 
 // Protected route wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuthStore()
+  const { user, isAuthenticated, isLoading } = useAuthStore()
 
   // Refresh user data once on mount to get latest info from backend
   useEffect(() => {
@@ -61,6 +63,11 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />
+  }
+
+  // Enforce 2FA for admin users
+  if (user?.role === 'admin' && !user.two_factor_enabled) {
+    return <Navigate to="/settings/2fa/setup" replace />
   }
 
   return <>{children}</>
@@ -112,6 +119,7 @@ export default function App() {
         <Route path="/terms" element={<TermsOfServicePage />} />
         <Route path="/privacy" element={<PrivacyPolicyPage />} />
         <Route path="/settings/confirm-email" element={<ConfirmEmailPage />} />
+        <Route path="/login/2fa" element={<TwoFactorVerifyPage />} />
       </Route>
 
       {/* Protected dashboard routes */}
@@ -127,6 +135,7 @@ export default function App() {
         <Route path="/membership" element={<MembershipPage />} />
         <Route path="/checkout/success" element={<CheckoutSuccessPage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/settings/2fa/setup" element={<TwoFactorSetupPage />} />
         <Route path="/membership-required" element={<MembershipRequiredPage />} />
       </Route>
 

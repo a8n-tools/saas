@@ -36,7 +36,13 @@ export function LoginPage() {
     clearError()
     try {
       await login(data.email, data.password)
-      navigate('/dashboard')
+      // Check if 2FA is required
+      const { pendingChallenge } = useAuthStore.getState()
+      if (pendingChallenge) {
+        navigate('/login/2fa')
+      } else {
+        navigate('/dashboard')
+      }
     } catch {
       // Error is handled by the store
     } finally {

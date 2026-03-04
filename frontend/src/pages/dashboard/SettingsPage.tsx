@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -11,7 +11,15 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
-import { User, Lock, Shield, Check, Loader2, AlertCircle, Mail } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { User, Lock, Shield, Check, Loader2, AlertCircle, Mail, ShieldCheck, ShieldOff, KeyRound } from 'lucide-react'
 
 const passwordSchema = z.object({
   currentPassword: z.string().min(1, 'Current password is required'),
@@ -349,25 +357,295 @@ export function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Security */}
+      {/* Security / Two-Factor Authentication */}
+      <TwoFactorCard />
+    </div>
+  )
+}
+
+function TwoFactorCard() {
+  const navigate = useNavigate()
+  const { user } = useAuthStore()
+  const [status, setStatus] = useState<{ enabled: boolean; recovery_codes_remaining: number } | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
+
+  // Disable dialog
+  const [showDisable, setShowDisable] = useState(false)
+  const [disablePassword, setDisablePassword] = useState('')
+  const [disableLoading, setDisableLoading] = useState(false)
+
+  // Regenerate dialog
+  const [showRegenerate, setShowRegenerate] = useState(false)
+  const [regenPassword, setRegenPassword] = useState('')
+  const [regenLoading, setRegenLoading] = useState(false)
+  const [newCodes, setNewCodes] = useState<string[] | null>(null)
+
+  useEffect(() => {
+    authApi.get2FAStatus()
+      .then(setStatus)
+      .catch(() => setStatus(null))
+      .finally(() => setIsLoading(false))
+  }, [])
+
+  const handleDisable = async () => {
+    setDisableLoading(true)
+    setError(null)
+    try {
+      await authApi.disable2FA({ password: disablePassword })
+      setStatus({ enabled: false, recovery_codes_remaining: 0 })
+      setShowDisable(false)
+      setDisablePassword('')
+      setSuccess('Two-factor authentication has been disabled.')
+      useAuthStore.getState().refreshUser()
+    } catch (err) {
+      const apiError = err as { error?: { message?: string } }
+      setError(apiError.error?.message || 'Failed to disable 2FA')
+    } finally {
+      setDisableLoading(false)
+    }
+  }
+
+  const handleRegenerate = async () => {
+    setRegenLoading(true)
+    setError(null)
+    try {
+      const response = await authApi.regenerateRecoveryCodes({ password: regenPassword })
+      setNewCodes(response.codes)
+      setRegenPassword('')
+      // Update status count
+      setStatus((prev) => prev ? { ...prev, recovery_codes_remaining: response.codes.length } : prev)
+    } catch (err) {
+      const apiError = err as { error?: { message?: string } }
+      setError(apiError.error?.message || 'Failed to regenerate codes')
+    } finally {
+      setRegenLoading(false)
+    }
+  }
+
+  const isAdmin = user?.role === 'admin'
+
+  return (
+    <>
       <Card className="border-border/50">
         <CardHeader>
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-teal-500 to-indigo-500">
               <Shield className="h-4 w-4 text-white" />
             </div>
-            <CardTitle>Security</CardTitle>
+            <CardTitle>Two-Factor Authentication</CardTitle>
           </div>
           <CardDescription>
-            Security settings and active sessions.
+            Add an extra layer of security to your account with TOTP-based two-factor authentication.
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground">
-            Session management and two-factor authentication coming soon.
-          </p>
+        <CardContent className="space-y-4">
+          {error && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          {success && (
+            <Alert>
+              <Check className="h-4 w-4" />
+              <AlertDescription>{success}</AlertDescription>
+            </Alert>
+          )}
+
+          {isLoading ? (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading...
+            </div>
+          ) : status?.enabled ? (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+                <span className="font-medium">Enabled</span>
+                <Badge variant="default" className="bg-teal-600">Active</Badge>
+              </div>
+
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <KeyRound className="h-4 w-4" />
+                <span>{status.recovery_codes_remaining} recovery codes remaining</span>
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setShowRegenerate(true)
+                    setNewCodes(null)
+                    setError(null)
+                  }}
+                >
+                  <KeyRound className="mr-2 h-4 w-4" />
+                  Regenerate Recovery Codes
+                </Button>
+                {!isAdmin && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => {
+                      setShowDisable(true)
+                      setError(null)
+                    }}
+                  >
+                    <ShieldOff className="mr-2 h-4 w-4" />
+                    Disable 2FA
+                  </Button>
+                )}
+              </div>
+              {isAdmin && (
+                <p className="text-xs text-muted-foreground">
+                  Admin accounts cannot disable two-factor authentication.
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <ShieldOff className="h-5 w-5 text-muted-foreground" />
+                <span className="font-medium text-muted-foreground">Not enabled</span>
+              </div>
+              <Button
+                onClick={() => navigate('/settings/2fa/setup')}
+                className="bg-gradient-to-r from-teal-500 to-indigo-500 text-white border-0"
+              >
+                <Shield className="mr-2 h-4 w-4" />
+                Enable Two-Factor Authentication
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
-    </div>
+
+      {/* Disable 2FA Dialog */}
+      <Dialog open={showDisable} onOpenChange={setShowDisable}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Disable Two-Factor Authentication</DialogTitle>
+            <DialogDescription>
+              Enter your password to confirm. This will remove the extra security from your account.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {error && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+            <div className="space-y-2">
+              <Label htmlFor="disable-password">Password</Label>
+              <Input
+                id="disable-password"
+                type="password"
+                value={disablePassword}
+                onChange={(e) => setDisablePassword(e.target.value)}
+                autoFocus
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDisable(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDisable}
+              disabled={disableLoading || !disablePassword}
+            >
+              {disableLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Disable 2FA
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Regenerate Recovery Codes Dialog */}
+      <Dialog open={showRegenerate} onOpenChange={(open) => {
+        setShowRegenerate(open)
+        if (!open) setNewCodes(null)
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {newCodes ? 'New Recovery Codes' : 'Regenerate Recovery Codes'}
+            </DialogTitle>
+            <DialogDescription>
+              {newCodes
+                ? 'Save these codes in a safe place. Your old codes are no longer valid.'
+                : 'Enter your password to generate new recovery codes. This will invalidate all existing codes.'}
+            </DialogDescription>
+          </DialogHeader>
+          {newCodes ? (
+            <div className="space-y-4 py-4">
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  Save these codes now. You won't be able to see them again.
+                </AlertDescription>
+              </Alert>
+              <div className="grid grid-cols-2 gap-2 rounded-lg bg-muted p-4">
+                {newCodes.map((code, i) => (
+                  <code key={i} className="text-center font-mono text-sm py-1">
+                    {code}
+                  </code>
+                ))}
+              </div>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => navigator.clipboard.writeText(newCodes.join('\n'))}
+              >
+                Copy Codes
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4 py-4">
+              {error && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+              <div className="space-y-2">
+                <Label htmlFor="regen-password">Password</Label>
+                <Input
+                  id="regen-password"
+                  type="password"
+                  value={regenPassword}
+                  onChange={(e) => setRegenPassword(e.target.value)}
+                  autoFocus
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            {newCodes ? (
+              <Button onClick={() => setShowRegenerate(false)}>Done</Button>
+            ) : (
+              <>
+                <Button variant="outline" onClick={() => setShowRegenerate(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleRegenerate}
+                  disabled={regenLoading || !regenPassword}
+                >
+                  {regenLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Regenerate
+                </Button>
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }

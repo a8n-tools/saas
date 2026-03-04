@@ -23,6 +23,18 @@ pub struct AuthTokens {
     pub expires_in: i64,
 }
 
+/// Result of a login attempt — either full success or 2FA challenge
+pub enum LoginResult {
+    Success(AuthTokens, UserResponse),
+    TwoFactorRequired { challenge_token: String },
+}
+
+/// Result of magic link verification
+pub enum MagicLinkResult {
+    Success(AuthTokens, UserResponse, bool),
+    TwoFactorRequired { challenge_token: String, is_new_user: bool },
+}
+
 /// Authentication service
 pub struct AuthService {
     pool: PgPool,
@@ -93,7 +105,7 @@ impl AuthService {
         password: String,
         device_info: Option<String>,
         ip_address: Option<IpAddr>,
-    ) -> Result<(AuthTokens, UserResponse), AppError> {
+    ) -> Result<LoginResult, AppError> {
         // Find user
         let user = UserRepository::find_by_email(&self.pool, &email)
             .await?
@@ -114,6 +126,12 @@ impl AuthService {
             return Err(AppError::InvalidCredentials);
         }
 
+        // Check if 2FA is enabled
+        if user.two_factor_enabled {
+            let challenge_token = self.jwt.create_2fa_challenge_token(user.id)?;
+            return Ok(LoginResult::TwoFactorRequired { challenge_token });
+        }
+
         // Create tokens
         let tokens = self.create_tokens(&user, device_info.clone(), ip_address).await?;
 
@@ -131,7 +149,7 @@ impl AuthService {
         )
         .await?;
 
-        Ok((tokens, UserResponse::from(user)))
+        Ok(LoginResult::Success(tokens, UserResponse::from(user)))
     }
 
     /// Refresh tokens
@@ -259,7 +277,7 @@ impl AuthService {
         token: String,
         device_info: Option<String>,
         ip_address: Option<IpAddr>,
-    ) -> Result<(AuthTokens, UserResponse, bool), AppError> {
+    ) -> Result<MagicLinkResult, AppError> {
         let token_hash = self.jwt.hash_token(&token);
 
         // Find token
@@ -304,6 +322,12 @@ impl AuthService {
             }
         };
 
+        // Check if 2FA is enabled
+        if user.two_factor_enabled {
+            let challenge_token = self.jwt.create_2fa_challenge_token(user.id)?;
+            return Ok(MagicLinkResult::TwoFactorRequired { challenge_token, is_new_user });
+        }
+
         // Create tokens
         let tokens = self.create_tokens(&user, device_info, ip_address).await?;
 
@@ -320,7 +344,47 @@ impl AuthService {
         )
         .await?;
 
-        Ok((tokens, UserResponse::from(user), is_new_user))
+        Ok(MagicLinkResult::Success(tokens, UserResponse::from(user), is_new_user))
+    }
+
+    /// Complete 2FA login after challenge token + TOTP/recovery code verification
+    pub async fn complete_2fa_login(
+        &self,
+        challenge_token: &str,
+        device_info: Option<String>,
+        ip_address: Option<IpAddr>,
+    ) -> Result<(AuthTokens, UserResponse), AppError> {
+        // Verify challenge token
+        let claims = self.jwt.verify_2fa_challenge_token(challenge_token)?;
+        let user_id = claims.sub;
+
+        // Get user
+        let user = UserRepository::find_by_id(&self.pool, user_id)
+            .await?
+            .ok_or(AppError::InvalidCredentials)?;
+
+        if user.is_deleted() {
+            return Err(AppError::InvalidCredentials);
+        }
+
+        // Create tokens
+        let tokens = self.create_tokens(&user, device_info.clone(), ip_address).await?;
+
+        // Update last login
+        UserRepository::update_last_login(&self.pool, user.id).await?;
+
+        // Audit log
+        let ip = ip_address.map(|ip| IpNetwork::from(ip));
+        AuditLogRepository::create(
+            &self.pool,
+            CreateAuditLog::new(AuditAction::UserLogin)
+                .with_actor(user.id, &user.email, &user.role)
+                .with_ip(ip)
+                .with_metadata(serde_json::json!({ "method": "2fa", "device_info": device_info })),
+        )
+        .await?;
+
+        Ok((tokens, UserResponse::from(user)))
     }
 
     /// Request password reset

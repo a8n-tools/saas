@@ -7,6 +7,7 @@ pub mod audit;
 pub mod membership;
 pub mod rate_limit;
 pub mod token;
+pub mod totp;
 pub mod user;
 
 // Re-export commonly used types
@@ -24,4 +25,5 @@ pub use token::{
     CreateEmailChangeRequest, CreateMagicLinkToken, CreatePasswordResetToken, CreateRefreshToken,
     EmailChangeRequest, MagicLinkToken, PasswordResetToken, RefreshToken, SessionInfo,
 };
+pub use totp::{RecoveryCode, UserTotp};
 pub use user::{CreateUser, MembershipStatus, User, UserResponse, UserRole};

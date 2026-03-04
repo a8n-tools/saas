@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { User } from '@/types'
+import type { User, TwoFactorChallengeResponse } from '@/types'
 import { authApi } from '@/api'
 
 interface AuthState {
@@ -8,6 +8,7 @@ interface AuthState {
   isAuthenticated: boolean
   isLoading: boolean
   error: string | null
+  pendingChallenge: { challenge_token: string } | null
 
   // Actions
   setUser: (user: User | null) => void
@@ -18,6 +19,17 @@ interface AuthState {
   logout: () => Promise<void>
   refreshUser: () => Promise<void>
   clearError: () => void
+  verify2FA: (code: string) => Promise<void>
+  clearPendingChallenge: () => void
+}
+
+function isTwoFactorChallenge(response: unknown): response is TwoFactorChallengeResponse {
+  return (
+    typeof response === 'object' &&
+    response !== null &&
+    'requires_2fa' in response &&
+    (response as TwoFactorChallengeResponse).requires_2fa === true
+  )
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -27,6 +39,7 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       isLoading: true,
       error: null,
+      pendingChallenge: null,
 
       setUser: (user) =>
         set({
@@ -41,19 +54,56 @@ export const useAuthStore = create<AuthState>()(
 
       clearError: () => set({ error: null }),
 
+      clearPendingChallenge: () => set({ pendingChallenge: null }),
+
       login: async (email, password) => {
         set({ isLoading: true, error: null })
         try {
           const response = await authApi.login({ email, password })
-          set({
-            user: response.user,
-            isAuthenticated: true,
-            isLoading: false,
-          })
+          if (isTwoFactorChallenge(response)) {
+            set({
+              pendingChallenge: { challenge_token: response.challenge_token },
+              isLoading: false,
+            })
+          } else {
+            set({
+              user: response.user,
+              isAuthenticated: true,
+              isLoading: false,
+              pendingChallenge: null,
+            })
+          }
         } catch (err) {
           const error = err as { error?: { message?: string } }
           set({
             error: error.error?.message || 'Login failed',
+            isLoading: false,
+          })
+          throw err
+        }
+      },
+
+      verify2FA: async (code: string) => {
+        const { pendingChallenge } = get()
+        if (!pendingChallenge) {
+          throw new Error('No pending 2FA challenge')
+        }
+        set({ isLoading: true, error: null })
+        try {
+          const response = await authApi.verify2FA({
+            challenge_token: pendingChallenge.challenge_token,
+            code,
+          })
+          set({
+            user: response.user,
+            isAuthenticated: true,
+            isLoading: false,
+            pendingChallenge: null,
+          })
+        } catch (err) {
+          const error = err as { error?: { message?: string } }
+          set({
+            error: error.error?.message || 'Verification failed',
             isLoading: false,
           })
           throw err
@@ -89,6 +139,7 @@ export const useAuthStore = create<AuthState>()(
             user: null,
             isAuthenticated: false,
             isLoading: false,
+            pendingChallenge: null,
           })
         }
       },

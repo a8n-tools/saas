@@ -35,6 +35,11 @@ pub enum AuditAction {
     AdminUserDeactivated,
     AdminUserActivated,
     ApplicationMaintenanceToggled,
+    TwoFactorEnabled,
+    TwoFactorDisabled,
+    TwoFactorVerified,
+    TwoFactorRecoveryCodeUsed,
+    TwoFactorRecoveryCodesRegenerated,
 }
 
 impl AuditAction {
@@ -64,6 +69,11 @@ impl AuditAction {
             AuditAction::AdminUserDeactivated => "admin_user_deactivated",
             AuditAction::AdminUserActivated => "admin_user_activated",
             AuditAction::ApplicationMaintenanceToggled => "application_maintenance_toggled",
+            AuditAction::TwoFactorEnabled => "two_factor_enabled",
+            AuditAction::TwoFactorDisabled => "two_factor_disabled",
+            AuditAction::TwoFactorVerified => "two_factor_verified",
+            AuditAction::TwoFactorRecoveryCodeUsed => "two_factor_recovery_code_used",
+            AuditAction::TwoFactorRecoveryCodesRegenerated => "two_factor_recovery_codes_regenerated",
         }
     }
 

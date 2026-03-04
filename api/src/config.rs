@@ -24,6 +24,8 @@ pub struct Config {
     pub cookie_domain: Option<String>,
     /// Auto-ban configuration
     pub auto_ban: AutoBanConfig,
+    /// TOTP encryption key (32 bytes) for encrypting TOTP secrets at rest
+    pub totp_encryption_key: [u8; 32],
 }
 
 /// SMTP TLS mode
@@ -199,6 +201,8 @@ impl Config {
 
         let auto_ban = AutoBanConfig::from_env();
 
+        let totp_encryption_key = Self::load_totp_encryption_key(&environment);
+
         let config = Self {
             database_url,
             host,
@@ -210,6 +214,7 @@ impl Config {
             email,
             cookie_domain,
             auto_ban,
+            totp_encryption_key,
         };
 
         info!(
@@ -225,6 +230,27 @@ impl Config {
     /// Returns true if running in production environment
     pub fn is_production(&self) -> bool {
         self.environment == "production"
+    }
+
+    /// Load TOTP encryption key from TOTP_ENCRYPTION_KEY env var (hex-encoded 32 bytes).
+    /// In development, defaults to 32 zero bytes.
+    fn load_totp_encryption_key(environment: &str) -> [u8; 32] {
+        match env::var("TOTP_ENCRYPTION_KEY") {
+            Ok(hex_str) => {
+                let bytes = hex::decode(hex_str.trim())
+                    .expect("TOTP_ENCRYPTION_KEY must be valid hex");
+                let key: [u8; 32] = bytes
+                    .try_into()
+                    .expect("TOTP_ENCRYPTION_KEY must be exactly 32 bytes (64 hex chars)");
+                key
+            }
+            Err(_) => {
+                if environment == "production" {
+                    panic!("TOTP_ENCRYPTION_KEY must be set in production");
+                }
+                [0u8; 32]
+            }
+        }
     }
 
     /// Get the server bind address
