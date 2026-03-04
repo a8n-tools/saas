@@ -175,14 +175,14 @@ pub async fn request_email_change(
             });
 
             Ok(success(
-                serde_json::json!({ "message": "Verification email sent to your new address. Please check your inbox." }),
+                serde_json::json!({ "message": "Verification email sent to your new address. Please check your inbox.", "requires_relogin": false }),
                 request_id,
             ))
         }
         None => {
-            // Unverified user: email changed immediately
+            // Unverified user: email changed immediately, sessions revoked
             Ok(success(
-                serde_json::json!({ "message": "Email address updated successfully." }),
+                serde_json::json!({ "message": "Email address updated successfully. Please log in with your new email.", "requires_relogin": true }),
                 request_id,
             ))
         }
