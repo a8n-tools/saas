@@ -15,7 +15,7 @@ type SetupStep = 'scan' | 'verify' | 'recovery'
 export function TwoFactorSetupPage() {
   const navigate = useNavigate()
   const [step, setStep] = useState<SetupStep>('scan')
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   // Setup data
