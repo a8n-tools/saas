@@ -103,6 +103,10 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/dashboard" replace />
   }
 
+  if (!user.two_factor_enabled) {
+    return <Navigate to="/settings/2fa/setup" replace />
+  }
+
   return <>{children}</>
 }
 
