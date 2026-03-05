@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 
 // Layouts
@@ -45,6 +45,7 @@ import { MembershipRequiredPage } from '@/pages/errors/MembershipRequiredPage'
 // Protected route wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, isLoading } = useAuthStore()
+  const location = useLocation()
 
   // Refresh user data once on mount to get latest info from backend
   useEffect(() => {
@@ -66,8 +67,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/login" replace />
   }
 
-  // Enforce 2FA for admin users
-  if (user?.role === 'admin' && !user.two_factor_enabled) {
+  // Enforce 2FA for admin users (skip if already on the setup page)
+  if (user?.role === 'admin' && !user.two_factor_enabled && location.pathname !== '/settings/2fa/setup') {
     return <Navigate to="/settings/2fa/setup" replace />
   }
 
