@@ -65,7 +65,7 @@ export function MagicLinkPage() {
             <CardTitle className="text-2xl">Check your email</CardTitle>
             <CardDescription>
               We've sent a magic link to your email address. Click the link to
-              sign in.
+              sign in or create your account.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -92,7 +92,7 @@ export function MagicLinkPage() {
           </div>
           <CardTitle className="text-2xl">Sign in with Magic Link</CardTitle>
           <CardDescription>
-            We'll email you a link to sign in without a password.
+            We'll email you a link to sign in or create an account — no password needed.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -125,7 +125,11 @@ export function MagicLinkPage() {
 
           <p className="mt-6 text-center text-sm text-muted-foreground">
             <Link to="/login" className="text-primary hover:underline">
-              Back to regular login
+              Sign in with password
+            </Link>
+            {' · '}
+            <Link to="/register" className="text-primary hover:underline">
+              Create account with password
             </Link>
           </p>
         </CardContent>
