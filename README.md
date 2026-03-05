@@ -62,17 +62,7 @@ open-source applications.
 
 4. Access the applications:
     - Frontend: http://localhost:5173
-    - API: http://localhost:8080
-    - Traefik Dashboard: http://localhost:8081
-
-   With Traefik routing:
-    - Frontend: http://localhost
-    - API: http://api.localhost
-
-5. Add to `/etc/hosts` (optional, for subdomain routing):
-   ```
-   127.0.0.1 localhost api.localhost admin.localhost
-   ```
+    - API: http://localhost:18080
 
 ## Project Structure
 
@@ -108,7 +98,7 @@ a8n-tools/
 │   └── rustylinks/
 ├── traefik/                # Traefik configuration
 ├── docs/                   # Documentation
-├── docker-compose.dev.yml  # Development environment
+├── compose.dev.yml         # Development environment
 ├── Justfile                # Development commands
 └── .env.example            # Environment template
 ```
@@ -129,26 +119,18 @@ frontend/src/
       └── authStore.test.ts  # Auth store tests
 ```
 
-### Navigate to frontend directory
-
+```bash
 cd frontend
 
-#### Run tests in watch mode (re-runs on file changes)
-
+# Run tests in watch mode (re-runs on file changes)
 bun test
 
-#### Run tests once (CI mode)
-
+# Run tests once (CI mode)
 bun run test:run
 
-#### Run tests with coverage report
-
+# Run tests with coverage report
 bun run test:coverage
-
-## Current Test Coverage
-
-auth.test.ts - 13 tests (login, register, logout, magic link, password reset)
-authStore.test.ts - 17 tests (state management, login/logout flow, error handling)
+```
 
 ## Check if migrations are in sync
 
@@ -220,13 +202,16 @@ just clean          # Stop services and remove volumes
 Example:
 
 ```rust
-// api/src/handlers/users.rs
-use actix_web::{get, web, HttpResponse};
-use crate::responses::success;
+// api/src/handlers/example.rs
+use actix_web::{web, HttpRequest, HttpResponse};
+use crate::errors::AppError;
+use crate::responses::{get_request_id, success};
 
-#[get("/users/me")]
-async fn get_current_user() -> HttpResponse {
-    // Handler implementation
+pub async fn get_item(
+    req: HttpRequest,
+) -> Result<HttpResponse, AppError> {
+    let request_id = get_request_id(&req);
+    Ok(success(serde_json::json!({ "item": "value" }), request_id))
 }
 ```
 
@@ -238,19 +223,40 @@ async fn get_current_user() -> HttpResponse {
 
 ## Environment Variables
 
-| Variable                | Description                      | Default                 | Required   |
-|-------------------------|----------------------------------|-------------------------|------------|
-| `DATABASE_URL`          | PostgreSQL connection string     | -                       | Yes        |
-| `HOST`                  | API server host                  | `0.0.0.0`               | No         |
-| `PORT`                  | API server port                  | `8080`                  | No         |
-| `RUST_LOG`              | Log level                        | `info`                  | No         |
-| `CORS_ORIGIN`           | Allowed CORS origin              | `https://app.example.com` | No         |
-| `ENVIRONMENT`           | Environment name                 | `development`           | No         |
-| `JWT_PRIVATE_KEY_PATH`  | Path to Ed25519 private key      | -                       | Yes (prod) |
-| `JWT_PUBLIC_KEY_PATH`   | Path to Ed25519 public key       | -                       | Yes (prod) |
-| `STRIPE_SECRET_KEY`     | Stripe API secret key            | -                       | Yes (prod) |
-| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret    | -                       | Yes (prod) |
-| `STRIPE_PRICE_ID`       | Stripe price ID for subscription | -                       | Yes (prod) |
+### API (Backend)
+
+| Variable                  | Description                                        | Default                   | Required   |
+|---------------------------|----------------------------------------------------|---------------------------|------------|
+| `DATABASE_URL`            | PostgreSQL connection string                       | -                         | Yes        |
+| `HOST`                    | API server host                                    | `0.0.0.0`                 | No         |
+| `PORT`                    | API server port                                    | `8080`                    | No         |
+| `RUST_LOG`                | Log level                                          | `info`                    | No         |
+| `ENVIRONMENT`             | `production` or `development`                      | `production`              | No         |
+| `APP_NAME`                | App name used in email subjects and templates      | `localhost`               | No         |
+| `APP_URL`                 | Frontend base URL for email links                  | Falls back to `CORS_ORIGIN`, then `http://localhost:5173` | No |
+| `CORS_ORIGIN`             | Allowed CORS origin (frontend URL)                 | `http://localhost:5173`   | No         |
+| `COOKIE_DOMAIN`           | Cookie domain for cross-subdomain auth (e.g. `.example.com`) | None (exact hostname) | Yes (prod) |
+| `JWT_SECRET`              | Shared JWT signing secret                          | -                         | Yes (prod) |
+| `TOTP_ENCRYPTION_KEY`     | Hex-encoded 32-byte key for encrypting TOTP secrets | Zero bytes (dev only)    | Yes (prod) |
+| `STRIPE_SECRET_KEY`       | Stripe API secret key                              | -                         | Yes (prod) |
+| `STRIPE_WEBHOOK_SECRET`   | Stripe webhook signing secret                      | -                         | Yes (prod) |
+| `STRIPE_PRICE_ID`         | Stripe price ID for subscription                   | -                         | Yes (prod) |
+| `SMTP_HOST`               | SMTP server hostname                               | `localhost`               | No         |
+| `SMTP_PORT`               | SMTP server port                                   | `465`                     | No         |
+| `SMTP_FROM`               | Sender email (format: `Name <email>` or `email`)   | `noreply@localhost`       | No         |
+| `SMTP_USERNAME`           | SMTP auth username                                 | -                         | No         |
+| `SMTP_PASSWORD`           | SMTP auth password                                 | -                         | No         |
+| `EMAIL_ENABLED`           | Force enable email sending in dev                  | `false`                   | No         |
+
+### Frontend
+
+| Variable                    | Description                              | Default                   | Required   |
+|-----------------------------|------------------------------------------|---------------------------|------------|
+| `VITE_API_URL`              | API base URL                             | `http://localhost:18080`  | Yes (prod) |
+| `VITE_APP_DOMAIN`           | Application domain                       | `localhost`               | No         |
+| `VITE_SHOW_BUSINESS_PRICING`| Show business pricing tier               | `false`                   | No         |
+
+Frontend env vars are injected at runtime via a Caddy template endpoint (obfuscated path), not baked into the build. This allows deploying the same image to different environments by changing container env vars.
 
 ## Health Checks
 
@@ -319,44 +325,19 @@ Traefik handles routing based on subdomain:
 - `admin.example.com` -> Admin panel
 - `*.example.com` -> Individual applications
 
-Will this work on any machine?
+### Dev vs Production
 
-Almost — the only manual step is each developer needs to add the /etc/hosts entries:
-
-- 127.0.0.1 a8n.test
-- 127.0.0.1 app.a8n.test
-- 127.0.0.1 api.a8n.test
-- 127.0.0.1 rus.a8n.test
-
-Everything else (Traefik routing, cookie domain, CORS) is baked into the compose files and code. So for any new dev
-machine it's: clone, add hosts entries, docker
-compose up.
-
-You could automate the hosts step with a Makefile target or a setup script if you wanted to reduce friction for the
-other two devs.
-
-The Firefox proxy method
-
-That approach involves configuring Firefox (or a PAC file) to route *.a8n.test traffic through a local proxy. It avoids
-touching /etc/hosts but adds complexity. With
-your current setup — /etc/hosts + Traefik — you get the same result more simply. No need for it.
-
-What changes for production?
-
-Almost nothing — your production docker-compose.yml is already set up correctly:
-
-| Concern            | Dev (current)                | Production (already handled)                      |
+| Concern            | Dev                          | Production                                        |
 |--------------------|------------------------------|---------------------------------------------------|
-| DNS                | /etc/hosts → 127.0.0.1       | Real DNS records for *.example.com                  |
-| TLS                | None (HTTP)                  | Let's Encrypt via Traefik (already configured)    |
-| Cookie domain      | .a8n.test (explicit env var) | .example.com (auto-set when ENVIRONMENT=production) |
-| Cookie Secure flag | false                        | true (from config.is_production())                |
-| CORS               | .a8n.test + .example.com       | .example.com (already in code)                      |
-| Vite allowedHosts  | Needed for dev server        | N/A — production serves static files via nginx    |
+| DNS                | `localhost`                  | Real DNS records for `*.example.com`              |
+| TLS                | None (HTTP)                  | Let's Encrypt via Traefik                         |
+| Cookie domain      | None (exact hostname)        | `.example.com` (set via `COOKIE_DOMAIN`)          |
+| Cookie Secure flag | `false`                      | `true` (when `ENVIRONMENT=production`)            |
+| CORS               | `http://localhost:5173`      | Frontend URL (set via `CORS_ORIGIN`)              |
+| Frontend serving   | Vite dev server              | Static files via Caddy                            |
+| Email links        | `http://localhost:5173`      | Derived from `APP_URL` or `CORS_ORIGIN`           |
 
-The only thing to confirm is that each child app in production shares the same JWT_SECRET env var as the main API. Your
-production compose already has JWT_SECRET:
-${JWT_SECRET} on the API — just make sure RUS and any other child apps get the same value.
+Each child app (RUS, Rusty Links) must share the same `JWT_SECRET` as the main API for SSO to work.
 
 ## License
 

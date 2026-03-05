@@ -86,8 +86,8 @@
 	header X-Frame-Options "SAMEORIGIN"
 	header X-Content-Type-Options "nosniff"
 
-	# Runtime config endpoint — injects env vars via Caddy templates
-	handle /config.js {
+	# Runtime config — injects env vars via Caddy templates (obfuscated path)
+	handle /9f464c6c243c74560320c79216f4f685.js {
 		header Content-Type "application/javascript"
 		templates {
 			mime application/javascript
