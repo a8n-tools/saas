@@ -17,6 +17,10 @@ const appGradients: Record<string, string> = {
   rustylinks: 'from-teal-500 to-indigo-500',
 }
 
+const appSubdomains: Record<string, string> = {
+  rustylinks: 'links',
+}
+
 export function ApplicationsPage() {
   const { user } = useAuthStore()
   const { applications, isLoading } = useApplications()
@@ -66,7 +70,8 @@ export function ApplicationsPage() {
           const Icon = appIcons[app.slug] || Link2
           const gradient = appGradients[app.slug] || 'from-primary to-indigo-500'
           const baseDomain = config.appDomain || 'localhost'
-          const appUrl = `${app.slug}.${baseDomain}`
+          const subdomain = appSubdomains[app.slug] || app.slug
+          const appUrl = `${subdomain}.${baseDomain}`
 
           return (
             <Card

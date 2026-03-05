@@ -36,7 +36,7 @@ export function Footer() {
               </li>
               <li>
                 <a
-                  href={config.appDomain ? `https://rustylinks.${config.appDomain}` : '#'}
+                  href={config.appDomain ? `https://links.${config.appDomain}` : '#'}
                   className="text-muted-foreground hover:text-foreground transition-colors"
                 >
                   Rusty Links
