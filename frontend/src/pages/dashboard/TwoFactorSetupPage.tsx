@@ -26,12 +26,7 @@ export function TwoFactorSetupPage() {
   const [copied, setCopied] = useState(false)
   const [acknowledged, setAcknowledged] = useState(false)
 
-  const setupStarted = useRef(false)
-
-  useEffect(() => {
-    if (setupStarted.current) return
-    setupStarted.current = true
-
+  const startSetup = () => {
     setIsLoading(true)
     setError(null)
     authApi.setup2FA()
@@ -47,6 +42,14 @@ export function TwoFactorSetupPage() {
       .finally(() => {
         setIsLoading(false)
       })
+  }
+
+  const setupStarted = useRef(false)
+
+  useEffect(() => {
+    if (setupStarted.current) return
+    setupStarted.current = true
+    startSetup()
   }, [])
 
   const confirmSetup = async () => {
@@ -160,7 +163,11 @@ export function TwoFactorSetupPage() {
                   Continue
                 </Button>
               </>
-            ) : null}
+            ) : (
+              <Button variant="outline" onClick={startSetup}>
+                Try Again
+              </Button>
+            )}
           </CardContent>
         </Card>
       </div>
