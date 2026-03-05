@@ -228,7 +228,7 @@ impl EmailService {
     /// Send magic link email
     pub async fn send_magic_link(&self, email: &str, token: &str) -> Result<(), AppError> {
         let magic_link_url = format!(
-            "{}/auth/magic-link?token={}",
+            "{}/magic-link?token={}",
             self.config.base_url, token
         );
 

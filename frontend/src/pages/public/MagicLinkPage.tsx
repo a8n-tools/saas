@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { authApi } from '@/api'
 import { useAuthStore } from '@/stores/authStore'
-import type { TwoFactorChallengeResponse } from '@/types'
+import type { AuthResponse, TwoFactorChallengeResponse } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -153,6 +153,12 @@ function MagicLinkVerify({ token }: { token: string }) {
           })
           window.location.href = '/login/2fa'
         } else {
+          const authResponse = response as AuthResponse
+          useAuthStore.setState({
+            user: authResponse.user,
+            isAuthenticated: true,
+            isLoading: false,
+          })
           window.location.href = '/dashboard'
         }
       } catch (err) {
