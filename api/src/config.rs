@@ -100,7 +100,9 @@ impl EmailConfig {
             from_name: parse_smtp_from_name(
                 &env::var("SMTP_FROM").unwrap_or_else(|_| "noreply@localhost".to_string()),
             ),
-            base_url: env::var("APP_URL").unwrap_or_else(|_| "http://localhost:5173".to_string()),
+            base_url: env::var("APP_URL")
+                .or_else(|_| env::var("CORS_ORIGIN"))
+                .unwrap_or_else(|_| "http://localhost:5173".to_string()),
             enabled: (is_production && has_smtp) || force_enabled,
             app_name: env::var("APP_NAME").unwrap_or_else(|_| "localhost".to_string()),
         }
