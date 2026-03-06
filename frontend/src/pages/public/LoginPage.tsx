@@ -45,6 +45,14 @@ export function LoginPage() {
   const [searchParams] = useSearchParams()
   const { login, isAuthenticated, error, clearError } = useAuthStore()
   const [isLoading, setIsLoading] = useState(false)
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<LoginFormData>({
+    resolver: zodResolver(loginSchema),
+  })
+
   const redirectUrl = getRedirectUrl(searchParams)
   const isExternal = redirectUrl.startsWith('http')
 
@@ -63,14 +71,6 @@ export function LoginPage() {
     }
     return <Navigate to={redirectUrl} replace />
   }
-
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<LoginFormData>({
-    resolver: zodResolver(loginSchema),
-  })
 
   const onSubmit = async (data: LoginFormData) => {
     setIsLoading(true)
