@@ -76,25 +76,38 @@ export function LoginPage() {
   }, [isExternal, redirectUrl, navigate])
 
   // When a redirect param is present, check if the user has a valid session
-  // (they may have cookies but isAuthenticated=false in localStorage)
+  // via cookies (access token or refresh token), since localStorage may not
+  // reflect the actual auth state.
   useEffect(() => {
     if (!hasRedirect) return
     if (isAuthenticated) {
-      doRedirect()
+      setCheckingSession(false)
       return
     }
-    // refreshUser() bails early if isAuthenticated is false, so call the API directly
-    authApi.me()
-      .then((user) => {
+
+    async function checkSession() {
+      try {
+        // Try the access token first
+        const user = await authApi.me()
         useAuthStore.getState().setUser(user)
-      })
-      .catch(() => {
-        // No valid session — show login form
-      })
-      .finally(() => setCheckingSession(false))
+      } catch {
+        try {
+          // Access token expired — try refreshing, then fetch user
+          await authApi.refresh()
+          const user = await authApi.me()
+          useAuthStore.getState().setUser(user)
+        } catch {
+          // No valid session
+        }
+      } finally {
+        setCheckingSession(false)
+      }
+    }
+
+    checkSession()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // After session check or store hydration, redirect if authenticated
+  // Redirect once authenticated (after session check or login)
   useEffect(() => {
     if (isAuthenticated && hasRedirect) {
       doRedirect()
