@@ -438,17 +438,17 @@ pub async fn logout_redirect(
 
     let secure = config.is_production();
     let cookie_domain = config.cookie_domain.as_deref();
+    let clear_cookies = AuthCookies::clear(secure, cookie_domain);
 
     // Clear cookies and redirect
-    let mut response = HttpResponse::Found()
-        .insert_header(("Location", target_url.as_str()))
-        .finish();
-
-    for cookie in AuthCookies::clear(secure, cookie_domain) {
-        response.add_cookie(&cookie).ok();
+    let mut builder = HttpResponse::Found();
+    for cookie in clear_cookies {
+        builder.cookie(cookie);
     }
 
-    Ok(response)
+    Ok(builder
+        .insert_header(("Location", target_url.as_str()))
+        .finish())
 }
 
 /// POST /v1/auth/logout-all
