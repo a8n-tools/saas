@@ -47,6 +47,7 @@ export function LoginPage() {
     resolver: zodResolver(loginSchema),
   })
 
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const redirectUrl = getRedirectUrl(searchParams)
   const isExternal = redirectUrl.startsWith('http')
   // "checked" flag means the API already verified we're not logged in — show the form
@@ -67,6 +68,11 @@ export function LoginPage() {
   }, [isExternal, redirectUrl, navigate])
 
   useEffect(() => {
+    // Already logged in with no external redirect — go to dashboard
+    if (isAuthenticated && !isExternal) {
+      navigate('/dashboard', { replace: true })
+      return
+    }
     if (shouldAutoRedirect) {
       sessionStorage.setItem(redirectKey, '1')
       const apiBase = config.apiUrl || ''
