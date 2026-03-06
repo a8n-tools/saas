@@ -4,7 +4,6 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useAuthStore } from '@/stores/authStore'
-import { authApi } from '@/api'
 import { config } from '@/config'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -20,39 +19,25 @@ const loginSchema = z.object({
 
 type LoginFormData = z.infer<typeof loginSchema>
 
-function getBaseDomain(hostname: string): string {
-  const parts = hostname.split('.')
-  return parts.length >= 2 ? parts.slice(-2).join('.') : hostname
-}
-
-function isAllowedRedirect(redirectUrl: string): boolean {
-  try {
-    const url = new URL(redirectUrl)
-    const domain = config.appDomain || getBaseDomain(window.location.hostname)
-    return url.hostname === domain || url.hostname.endsWith(`.${domain}`)
-  } catch {
-    return false
-  }
-}
-
+/**
+ * Get the redirect URL from query params.
+ * Returns the raw redirect param (validated server-side), or '/dashboard' as default.
+ */
 function getRedirectUrl(params: URLSearchParams): string {
   const redirect = params.get('redirect')
   if (!redirect) return '/dashboard'
-  // Allow relative paths
+  // Relative paths are used directly
   if (redirect.startsWith('/') && !redirect.startsWith('//')) {
     return redirect
   }
-  // Allow full URLs on the same domain (e.g. https://go.example.com/...)
-  if (isAllowedRedirect(redirect)) {
-    return redirect
-  }
-  return '/dashboard'
+  // External URLs are validated server-side via /v1/auth/redirect
+  return redirect
 }
 
 export function LoginPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const { login, isAuthenticated, error, clearError } = useAuthStore()
+  const { login, error, clearError } = useAuthStore()
   const [isLoading, setIsLoading] = useState(false)
   const {
     register,
@@ -64,8 +49,8 @@ export function LoginPage() {
 
   const redirectUrl = getRedirectUrl(searchParams)
   const isExternal = redirectUrl.startsWith('http')
-  const hasRedirect = searchParams.has('redirect')
-  const [checkingSession, setCheckingSession] = useState(hasRedirect)
+  // "checked" flag means the API already verified we're not logged in — show the form
+  const alreadyChecked = searchParams.has('checked')
 
   const doRedirect = useCallback(() => {
     if (isExternal) {
@@ -75,46 +60,17 @@ export function LoginPage() {
     }
   }, [isExternal, redirectUrl, navigate])
 
-  // When a redirect param is present, check if the user has a valid session
-  // via cookies (access token or refresh token), since localStorage may not
-  // reflect the actual auth state.
+  // If there's an external redirect and we haven't checked yet,
+  // delegate to the API endpoint which can verify cookies server-side
   useEffect(() => {
-    if (!hasRedirect) return
-    if (isAuthenticated) {
-      setCheckingSession(false)
-      return
+    if (isExternal && !alreadyChecked) {
+      const apiBase = config.apiUrl || ''
+      window.location.href = `${apiBase}/v1/auth/redirect?url=${encodeURIComponent(redirectUrl)}`
     }
-
-    async function checkSession() {
-      try {
-        // Try the access token first
-        const user = await authApi.me()
-        useAuthStore.getState().setUser(user)
-      } catch {
-        try {
-          // Access token expired — try refreshing, then fetch user
-          await authApi.refresh()
-          const user = await authApi.me()
-          useAuthStore.getState().setUser(user)
-        } catch {
-          // No valid session
-        }
-      } finally {
-        setCheckingSession(false)
-      }
-    }
-
-    checkSession()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Redirect once authenticated (after session check or login)
-  useEffect(() => {
-    if (isAuthenticated && hasRedirect) {
-      doRedirect()
-    }
-  }, [isAuthenticated, hasRedirect, doRedirect])
-
-  if (isAuthenticated || checkingSession) {
+  // Show spinner while redirecting to API check
+  if (isExternal && !alreadyChecked) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-8rem)]">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />

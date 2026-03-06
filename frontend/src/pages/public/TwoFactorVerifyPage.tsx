@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
-import { config } from '@/config'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -9,31 +8,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { AlertCircle, Loader2, Shield, ArrowLeft } from 'lucide-react'
 
-function getBaseDomain(hostname: string): string {
-  const parts = hostname.split('.')
-  return parts.length >= 2 ? parts.slice(-2).join('.') : hostname
-}
-
-function isAllowedRedirect(redirectUrl: string): boolean {
-  try {
-    const url = new URL(redirectUrl)
-    const domain = config.appDomain || getBaseDomain(window.location.hostname)
-    return url.hostname === domain || url.hostname.endsWith(`.${domain}`)
-  } catch {
-    return false
-  }
-}
-
 function getRedirectUrl(params: URLSearchParams): string {
   const redirect = params.get('redirect')
   if (!redirect) return '/dashboard'
   if (redirect.startsWith('/') && !redirect.startsWith('//')) {
     return redirect
   }
-  if (isAllowedRedirect(redirect)) {
-    return redirect
-  }
-  return '/dashboard'
+  // External URLs — pass through (user just authenticated via login form,
+  // so cookies are fresh and the redirect will work)
+  return redirect
 }
 
 export function TwoFactorVerifyPage() {

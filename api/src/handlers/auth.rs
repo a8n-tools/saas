@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use crate::errors::AppError;
 use crate::middleware::{
-    extract_client_ip, extract_device_info, AuthCookies, AuthenticatedUser,
+    extract_client_ip, extract_device_info, AuthCookies, AuthenticatedUser, OptionalUser,
 };
 use crate::models::{RateLimitConfig, UserResponse};
 use crate::repositories::RateLimitRepository;
@@ -498,4 +498,107 @@ pub async fn verify_password_reset_token(
     auth_service.verify_reset_token(query.token.clone()).await?;
 
     Ok(success(serde_json::json!({ "valid": true }), request_id))
+}
+
+/// Query params for redirect endpoint
+#[derive(Debug, Deserialize)]
+pub struct RedirectQuery {
+    pub url: String,
+}
+
+/// GET /v1/auth/redirect?url=<url>
+/// Check authentication and redirect to the target URL if valid.
+/// If not authenticated, redirects to the login page with ?redirect=<url>.
+/// Also refreshes the access token cookie if expired but refresh token is valid.
+pub async fn auth_redirect(
+    req: HttpRequest,
+    query: web::Query<RedirectQuery>,
+    optional_user: OptionalUser,
+    auth_service: web::Data<Arc<AuthService>>,
+    config: web::Data<crate::config::Config>,
+) -> Result<HttpResponse, AppError> {
+    let target_url = &query.url;
+
+    // Validate the redirect URL is on an allowed domain
+    let allowed = match url::Url::parse(target_url) {
+        Ok(parsed) => {
+            if let Some(host) = parsed.host_str() {
+                // Extract base domain from CORS origin for comparison
+                let cors_domain = url::Url::parse(&config.cors_origin)
+                    .ok()
+                    .and_then(|u| u.host_str().map(|h| h.to_string()));
+
+                // Also allow cookie_domain subdomains
+                let base_domain = config
+                    .cookie_domain
+                    .as_deref()
+                    .map(|d| d.trim_start_matches('.'))
+                    .or(cors_domain.as_deref());
+
+                match base_domain {
+                    Some(domain) => host == domain || host.ends_with(&format!(".{domain}")),
+                    None => false,
+                }
+            } else {
+                false
+            }
+        }
+        Err(_) => false,
+    };
+
+    if !allowed {
+        return Err(AppError::Validation("Invalid redirect URL".to_string()));
+    }
+
+    let login_url = format!(
+        "{}/login?redirect={}&checked=1",
+        config.cors_origin.trim_end_matches('/'),
+        urlencoding::encode(target_url)
+    );
+
+    // If access token is valid, redirect immediately
+    if optional_user.0.is_some() {
+        return Ok(HttpResponse::Found()
+            .insert_header(("Location", target_url.as_str()))
+            .finish());
+    }
+
+    // Access token missing/expired — try refresh token
+    let refresh_token = req
+        .cookie("refresh_token")
+        .map(|c| c.value().to_string());
+
+    if let Some(refresh_token) = refresh_token {
+        let ip_address = extract_client_ip(&req);
+        let device_info = extract_device_info(&req);
+
+        if let Ok(tokens) = auth_service
+            .refresh_tokens(refresh_token, device_info, ip_address)
+            .await
+        {
+            let secure = config.is_production();
+            let cookie_domain = config.cookie_domain.as_deref();
+
+            // Redirect with fresh cookies set
+            return Ok(HttpResponse::Found()
+                .cookie(AuthCookies::access_token(
+                    &tokens.access_token,
+                    secure,
+                    cookie_domain,
+                ))
+                .cookie(AuthCookies::refresh_token(
+                    &tokens.refresh_token,
+                    secure,
+                    true,
+                    cookie_domain,
+                ))
+                .insert_header(("Location", target_url.as_str()))
+                .finish());
+        }
+    }
+
+    // Not authenticated — redirect to login
+    Ok(HttpResponse::Found()
+        .insert_header(("Location", login_url.as_str()))
+        .finish())
 }

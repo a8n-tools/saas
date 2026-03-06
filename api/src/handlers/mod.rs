@@ -13,7 +13,7 @@ pub mod webhook;
 // Re-export handler functions for convenience
 pub use application::{get_application, list_applications};
 pub use auth::{
-    confirm_password_reset, login, logout, logout_all, refresh_token, register,
+    auth_redirect, confirm_password_reset, login, logout, logout_all, refresh_token, register,
     request_magic_link, request_password_reset, verify_magic_link, verify_password_reset_token,
 };
 pub use totp::{

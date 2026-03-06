@@ -23,6 +23,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route("/2fa/verify", web::post().to(handlers::verify_2fa))
             .route("/2fa/disable", web::post().to(handlers::disable_2fa))
             .route("/2fa/recovery-codes", web::post().to(handlers::regenerate_recovery_codes))
-            .route("/2fa/status", web::get().to(handlers::get_2fa_status)),
+            .route("/2fa/status", web::get().to(handlers::get_2fa_status))
+            .route("/redirect", web::get().to(handlers::auth_redirect)),
     );
 }

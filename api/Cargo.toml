@@ -77,6 +77,10 @@ tera = "1"
 # Lazy static for compile-time statics
 lazy_static = "1.4"
 
+# URL parsing and encoding
+url = "2"
+urlencoding = "2"
+
 [dev-dependencies]
 actix-rt = "2"
 
