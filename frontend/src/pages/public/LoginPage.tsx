@@ -52,25 +52,31 @@ export function LoginPage() {
   // "checked" flag means the API already verified we're not logged in — show the form
   const alreadyChecked = searchParams.has('checked')
 
+  // Use sessionStorage to detect redirect loops: if the target app bounces back
+  // to /login?redirect=..., we don't try the API redirect again.
+  const redirectKey = isExternal ? `auth_redirect:${redirectUrl}` : ''
+  const shouldAutoRedirect = isExternal && !alreadyChecked && !sessionStorage.getItem(redirectKey)
+
   const doRedirect = useCallback(() => {
+    // Clear the loop-detection flag so the redirect is attempted fresh after login
+    if (redirectKey) sessionStorage.removeItem(redirectKey)
     if (isExternal) {
       window.location.href = redirectUrl
     } else {
       navigate(redirectUrl)
     }
-  }, [isExternal, redirectUrl, navigate])
+  }, [isExternal, redirectUrl, navigate, redirectKey])
 
-  // If there's an external redirect and we haven't checked yet,
-  // delegate to the API endpoint which can verify cookies server-side
   useEffect(() => {
-    if (isExternal && !alreadyChecked) {
+    if (shouldAutoRedirect) {
+      sessionStorage.setItem(redirectKey, '1')
       const apiBase = config.apiUrl || ''
       window.location.href = `${apiBase}/v1/auth/redirect?url=${encodeURIComponent(redirectUrl)}`
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Show spinner while redirecting to API check
-  if (isExternal && !alreadyChecked) {
+  if (shouldAutoRedirect) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-8rem)]">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
