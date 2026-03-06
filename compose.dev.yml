@@ -65,7 +65,7 @@ services:
       - ./api/migrations:/app/migrations:ro
       - ./api/templates:/app/templates:ro
       - ./api/Cargo.toml:/app/Cargo.toml:ro
-      - ./api/Cargo.lock:/app/Cargo.lock:ro
+      - ./api/Cargo.lock:/app/Cargo.lock
       - api_target:/app/target
     depends_on:
       postgres:

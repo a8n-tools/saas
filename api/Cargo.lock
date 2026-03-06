@@ -37,6 +37,8 @@ dependencies = [
  "tracing",
  "tracing-actix-web",
  "tracing-subscriber",
+ "url",
+ "urlencoding",
  "uuid 1.21.0",
  "validator",
 ]
