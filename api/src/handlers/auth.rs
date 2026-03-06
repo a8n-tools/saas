@@ -547,7 +547,7 @@ pub async fn auth_redirect(
     };
 
     if !allowed {
-        return Err(AppError::Validation("Invalid redirect URL".to_string()));
+        return Err(AppError::validation("url", "Invalid redirect URL"));
     }
 
     let login_url = format!(
