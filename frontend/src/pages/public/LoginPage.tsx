@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -18,10 +18,24 @@ const loginSchema = z.object({
 
 type LoginFormData = z.infer<typeof loginSchema>
 
+function getRedirectPath(params: URLSearchParams): string {
+  const redirect = params.get('redirect')
+  if (redirect && redirect.startsWith('/') && !redirect.startsWith('//')) {
+    return redirect
+  }
+  return '/dashboard'
+}
+
 export function LoginPage() {
   const navigate = useNavigate()
-  const { login, error, clearError } = useAuthStore()
+  const [searchParams] = useSearchParams()
+  const { login, isAuthenticated, error, clearError } = useAuthStore()
   const [isLoading, setIsLoading] = useState(false)
+  const redirectPath = getRedirectPath(searchParams)
+
+  if (isAuthenticated) {
+    return <Navigate to={redirectPath} replace />
+  }
 
   const {
     register,
@@ -39,9 +53,10 @@ export function LoginPage() {
       // Check if 2FA is required
       const { pendingChallenge } = useAuthStore.getState()
       if (pendingChallenge) {
-        navigate('/login/2fa')
+        const params = redirectPath !== '/dashboard' ? `?redirect=${encodeURIComponent(redirectPath)}` : ''
+        navigate(`/login/2fa${params}`)
       } else {
-        navigate('/dashboard')
+        navigate(redirectPath)
       }
     } catch {
       // Error is handled by the store

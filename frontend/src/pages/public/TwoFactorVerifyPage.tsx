@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,12 +8,22 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { AlertCircle, Loader2, Shield, ArrowLeft } from 'lucide-react'
 
+function getRedirectPath(params: URLSearchParams): string {
+  const redirect = params.get('redirect')
+  if (redirect && redirect.startsWith('/') && !redirect.startsWith('//')) {
+    return redirect
+  }
+  return '/dashboard'
+}
+
 export function TwoFactorVerifyPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { pendingChallenge, verify2FA, error, clearError } = useAuthStore()
   const [code, setCode] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [useRecovery, setUseRecovery] = useState(false)
+  const redirectPath = getRedirectPath(searchParams)
 
   // Redirect if no pending challenge
   if (!pendingChallenge) {
@@ -41,7 +51,7 @@ export function TwoFactorVerifyPage() {
     clearError()
     try {
       await verify2FA(code.trim())
-      navigate('/dashboard')
+      navigate(redirectPath)
     } catch {
       // Error is handled by the store
     } finally {
@@ -56,7 +66,7 @@ export function TwoFactorVerifyPage() {
       setIsLoading(true)
       clearError()
       verify2FA(value.trim())
-        .then(() => navigate('/dashboard'))
+        .then(() => navigate(redirectPath))
         .catch(() => {})
         .finally(() => setIsLoading(false))
     }

@@ -64,7 +64,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />
+    const redirect = location.pathname !== '/dashboard' ? `?redirect=${encodeURIComponent(location.pathname + location.search)}` : ''
+    return <Navigate to={`/login${redirect}`} replace />
   }
 
   // Enforce 2FA for admin users (skip if already on the setup page)
@@ -78,6 +79,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 // Admin route wrapper
 function AdminRoute({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, isLoading } = useAuthStore()
+  const location = useLocation()
 
   // Refresh user data once on mount to get latest role from backend
   useEffect(() => {
@@ -96,7 +98,8 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />
+    const redirect = `?redirect=${encodeURIComponent(location.pathname + location.search)}`
+    return <Navigate to={`/login${redirect}`} replace />
   }
 
   if (user?.role !== 'admin') {
