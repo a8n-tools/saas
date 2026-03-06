@@ -1,7 +1,6 @@
 import { useState, useRef } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
-import { config } from '@/config'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -37,10 +36,8 @@ export function TwoFactorVerifyPage() {
   const doRedirect = () => {
     redirectingRef.current = true
     if (redirectUrl.startsWith('http')) {
-      // Go through the API redirect endpoint so it can set fresh cookies
-      // on the 302 response to the child app
-      const apiBase = config.apiUrl || ''
-      window.location.href = `${apiBase}/v1/auth/redirect?url=${encodeURIComponent(redirectUrl)}`
+      // After 2FA verification, cookies are already set on the shared domain — navigate directly
+      window.location.href = redirectUrl
     } else {
       navigate(redirectUrl)
     }

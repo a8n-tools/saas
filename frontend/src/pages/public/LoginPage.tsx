@@ -59,15 +59,12 @@ export function LoginPage() {
 
   const doRedirect = useCallback(() => {
     if (isExternal) {
-      // Go through the API redirect endpoint so it can set fresh cookies
-      // on the 302 response to the child app
-      if (redirectKey) sessionStorage.setItem(redirectKey, '1')
-      const apiBase = config.apiUrl || ''
-      window.location.href = `${apiBase}/v1/auth/redirect?url=${encodeURIComponent(redirectUrl)}`
+      // After login, cookies are already set on the shared domain — navigate directly
+      window.location.href = redirectUrl
     } else {
       navigate(redirectUrl)
     }
-  }, [isExternal, redirectUrl, navigate, redirectKey])
+  }, [isExternal, redirectUrl, navigate])
 
   useEffect(() => {
     if (shouldAutoRedirect) {

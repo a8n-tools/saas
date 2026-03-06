@@ -519,6 +519,16 @@ pub async fn auth_redirect(
 ) -> Result<HttpResponse, AppError> {
     let target_url = &query.url;
 
+    tracing::info!(
+        target_url = %target_url,
+        has_access_token = req.cookie("access_token").is_some(),
+        has_refresh_token = req.cookie("refresh_token").is_some(),
+        user_authenticated = optional_user.0.is_some(),
+        cookie_domain = ?config.cookie_domain,
+        cors_origin = %config.cors_origin,
+        "auth_redirect: request received"
+    );
+
     // Validate the redirect URL is on an allowed domain
     let allowed = match url::Url::parse(target_url) {
         Ok(parsed) => {
@@ -546,6 +556,8 @@ pub async fn auth_redirect(
         Err(_) => false,
     };
 
+    tracing::info!(allowed = allowed, "auth_redirect: URL validation result");
+
     if !allowed {
         return Err(AppError::validation("url", "Invalid redirect URL"));
     }
@@ -558,6 +570,7 @@ pub async fn auth_redirect(
 
     // If access token is valid, redirect immediately
     if optional_user.0.is_some() {
+        tracing::info!(location = %target_url, "auth_redirect: user authenticated, redirecting to target");
         return Ok(HttpResponse::Found()
             .insert_header(("Location", target_url.as_str()))
             .finish());
@@ -568,36 +581,45 @@ pub async fn auth_redirect(
         .cookie("refresh_token")
         .map(|c| c.value().to_string());
 
-    if let Some(refresh_token) = refresh_token {
+    if let Some(ref refresh_token) = refresh_token {
+        tracing::info!("auth_redirect: attempting token refresh");
         let ip_address = extract_client_ip(&req);
         let device_info = extract_device_info(&req);
 
-        if let Ok(tokens) = auth_service
-            .refresh_tokens(refresh_token, device_info, ip_address)
+        match auth_service
+            .refresh_tokens(refresh_token.clone(), device_info, ip_address)
             .await
         {
-            let secure = config.is_production();
-            let cookie_domain = config.cookie_domain.as_deref();
+            Ok(tokens) => {
+                tracing::info!(location = %target_url, "auth_redirect: refresh succeeded, redirecting to target");
+                let secure = config.is_production();
+                let cookie_domain = config.cookie_domain.as_deref();
 
-            // Redirect with fresh cookies set
-            return Ok(HttpResponse::Found()
-                .cookie(AuthCookies::access_token(
-                    &tokens.access_token,
-                    secure,
-                    cookie_domain,
-                ))
-                .cookie(AuthCookies::refresh_token(
-                    &tokens.refresh_token,
-                    secure,
-                    true,
-                    cookie_domain,
-                ))
-                .insert_header(("Location", target_url.as_str()))
-                .finish());
+                return Ok(HttpResponse::Found()
+                    .cookie(AuthCookies::access_token(
+                        &tokens.access_token,
+                        secure,
+                        cookie_domain,
+                    ))
+                    .cookie(AuthCookies::refresh_token(
+                        &tokens.refresh_token,
+                        secure,
+                        true,
+                        cookie_domain,
+                    ))
+                    .insert_header(("Location", target_url.as_str()))
+                    .finish());
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "auth_redirect: refresh token failed");
+            }
         }
+    } else {
+        tracing::info!("auth_redirect: no refresh token cookie found");
     }
 
     // Not authenticated — redirect to login
+    tracing::info!(location = %login_url, "auth_redirect: not authenticated, redirecting to login");
     Ok(HttpResponse::Found()
         .insert_header(("Location", login_url.as_str()))
         .finish())
