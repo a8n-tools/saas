@@ -19,6 +19,21 @@ const loginSchema = z.object({
 
 type LoginFormData = z.infer<typeof loginSchema>
 
+function getBaseDomain(hostname: string): string {
+  const parts = hostname.split('.')
+  return parts.length >= 2 ? parts.slice(-2).join('.') : hostname
+}
+
+function isAllowedRedirect(redirectUrl: string): boolean {
+  try {
+    const url = new URL(redirectUrl)
+    const domain = config.appDomain || getBaseDomain(window.location.hostname)
+    return url.hostname === domain || url.hostname.endsWith(`.${domain}`)
+  } catch {
+    return false
+  }
+}
+
 function getRedirectUrl(params: URLSearchParams): string {
   const redirect = params.get('redirect')
   if (!redirect) return '/dashboard'
@@ -27,15 +42,8 @@ function getRedirectUrl(params: URLSearchParams): string {
     return redirect
   }
   // Allow full URLs on the same domain (e.g. https://go.example.com/...)
-  if (config.appDomain) {
-    try {
-      const url = new URL(redirect)
-      if (url.hostname === config.appDomain || url.hostname.endsWith(`.${config.appDomain}`)) {
-        return redirect
-      }
-    } catch {
-      // Invalid URL
-    }
+  if (isAllowedRedirect(redirect)) {
+    return redirect
   }
   return '/dashboard'
 }
