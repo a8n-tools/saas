@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react'
-import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
+import { useState, useCallback, useEffect } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -63,6 +63,8 @@ export function LoginPage() {
 
   const redirectUrl = getRedirectUrl(searchParams)
   const isExternal = redirectUrl.startsWith('http')
+  const hasRedirect = searchParams.has('redirect')
+  const [checkingSession, setCheckingSession] = useState(hasRedirect)
 
   const doRedirect = useCallback(() => {
     if (isExternal) {
@@ -72,12 +74,30 @@ export function LoginPage() {
     }
   }, [isExternal, redirectUrl, navigate])
 
-  if (isAuthenticated) {
-    if (isExternal) {
-      window.location.href = redirectUrl
-      return null
+  // When a redirect param is present, check if the user has a valid session
+  // (they may have cookies but isAuthenticated=false in localStorage)
+  useEffect(() => {
+    if (!hasRedirect) return
+    if (isAuthenticated) {
+      doRedirect()
+      return
     }
-    return <Navigate to={redirectUrl} replace />
+    useAuthStore.getState().refreshUser().finally(() => setCheckingSession(false))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // After session check or store hydration, redirect if authenticated
+  useEffect(() => {
+    if (isAuthenticated && hasRedirect) {
+      doRedirect()
+    }
+  }, [isAuthenticated, hasRedirect, doRedirect])
+
+  if (isAuthenticated || checkingSession) {
+    return (
+      <div className="flex items-center justify-center min-h-[calc(100vh-8rem)]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    )
   }
 
   const onSubmit = async (data: LoginFormData) => {
