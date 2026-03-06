@@ -11,6 +11,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route("/register", web::post().to(handlers::register))
             .route("/login", web::post().to(handlers::login))
             .route("/logout", web::post().to(handlers::logout))
+            .route("/logout", web::get().to(handlers::logout_redirect))
             .route("/logout-all", web::post().to(handlers::logout_all))
             .route("/refresh", web::post().to(handlers::refresh_token))
             .route("/magic-link", web::post().to(handlers::request_magic_link))

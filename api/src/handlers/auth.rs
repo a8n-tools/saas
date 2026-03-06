@@ -384,6 +384,73 @@ pub async fn logout(
     Ok(response)
 }
 
+/// GET /v1/auth/logout?redirect=<url>
+/// Logout via redirect — clears cookies and redirects to the target URL.
+/// Used by child apps (RUS, Rusty Links) to log out from the SaaS platform.
+pub async fn logout_redirect(
+    req: HttpRequest,
+    query: web::Query<RedirectQuery>,
+    optional_user: OptionalUser,
+    auth_service: web::Data<Arc<AuthService>>,
+    config: web::Data<crate::config::Config>,
+) -> Result<HttpResponse, AppError> {
+    let target_url = &query.url;
+
+    // Validate the redirect URL is on an allowed domain
+    let allowed = match url::Url::parse(target_url) {
+        Ok(parsed) => {
+            if let Some(host) = parsed.host_str() {
+                let cors_domain = url::Url::parse(&config.cors_origin)
+                    .ok()
+                    .and_then(|u| u.host_str().map(|h| h.to_string()));
+
+                let base_domain = config
+                    .cookie_domain
+                    .as_deref()
+                    .map(|d| d.trim_start_matches('.'))
+                    .or(cors_domain.as_deref());
+
+                match base_domain {
+                    Some(domain) => host == domain || host.ends_with(&format!(".{domain}")),
+                    None => false,
+                }
+            } else {
+                false
+            }
+        }
+        Err(_) => false,
+    };
+
+    if !allowed {
+        return Err(AppError::validation("url", "Invalid redirect URL"));
+    }
+
+    // If authenticated, revoke the refresh token
+    if let Some(user) = &optional_user.0 {
+        if let Some(refresh_token) = req.cookie("refresh_token").map(|c| c.value().to_string()) {
+            let ip_address = extract_client_ip(&req);
+            auth_service
+                .logout(refresh_token, user.sub, ip_address)
+                .await
+                .ok();
+        }
+    }
+
+    let secure = config.is_production();
+    let cookie_domain = config.cookie_domain.as_deref();
+
+    // Clear cookies and redirect
+    let mut response = HttpResponse::Found()
+        .insert_header(("Location", target_url.as_str()))
+        .finish();
+
+    for cookie in AuthCookies::clear(secure, cookie_domain) {
+        response.add_cookie(&cookie).ok();
+    }
+
+    Ok(response)
+}
+
 /// POST /v1/auth/logout-all
 /// Logout from all sessions
 pub async fn logout_all(
