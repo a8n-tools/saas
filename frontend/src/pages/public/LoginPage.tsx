@@ -58,10 +58,12 @@ export function LoginPage() {
   const shouldAutoRedirect = isExternal && !alreadyChecked && !sessionStorage.getItem(redirectKey)
 
   const doRedirect = useCallback(() => {
-    // Clear the loop-detection flag so the redirect is attempted fresh after login
-    if (redirectKey) sessionStorage.removeItem(redirectKey)
     if (isExternal) {
-      window.location.href = redirectUrl
+      // Go through the API redirect endpoint so it can set fresh cookies
+      // on the 302 response to the child app
+      if (redirectKey) sessionStorage.setItem(redirectKey, '1')
+      const apiBase = config.apiUrl || ''
+      window.location.href = `${apiBase}/v1/auth/redirect?url=${encodeURIComponent(redirectUrl)}`
     } else {
       navigate(redirectUrl)
     }
