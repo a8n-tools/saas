@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
+import { config } from '@/config'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -8,10 +9,21 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { AlertCircle, Loader2, Shield, ArrowLeft } from 'lucide-react'
 
-function getRedirectPath(params: URLSearchParams): string {
+function getRedirectUrl(params: URLSearchParams): string {
   const redirect = params.get('redirect')
-  if (redirect && redirect.startsWith('/') && !redirect.startsWith('//')) {
+  if (!redirect) return '/dashboard'
+  if (redirect.startsWith('/') && !redirect.startsWith('//')) {
     return redirect
+  }
+  if (config.appDomain) {
+    try {
+      const url = new URL(redirect)
+      if (url.hostname === config.appDomain || url.hostname.endsWith(`.${config.appDomain}`)) {
+        return redirect
+      }
+    } catch {
+      // Invalid URL
+    }
   }
   return '/dashboard'
 }
@@ -23,7 +35,15 @@ export function TwoFactorVerifyPage() {
   const [code, setCode] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [useRecovery, setUseRecovery] = useState(false)
-  const redirectPath = getRedirectPath(searchParams)
+  const redirectUrl = getRedirectUrl(searchParams)
+
+  const doRedirect = () => {
+    if (redirectUrl.startsWith('http')) {
+      window.location.href = redirectUrl
+    } else {
+      navigate(redirectUrl)
+    }
+  }
 
   // Redirect if no pending challenge
   if (!pendingChallenge) {
@@ -51,7 +71,7 @@ export function TwoFactorVerifyPage() {
     clearError()
     try {
       await verify2FA(code.trim())
-      navigate(redirectPath)
+      doRedirect()
     } catch {
       // Error is handled by the store
     } finally {
@@ -66,7 +86,7 @@ export function TwoFactorVerifyPage() {
       setIsLoading(true)
       clearError()
       verify2FA(value.trim())
-        .then(() => navigate(redirectPath))
+        .then(() => doRedirect())
         .catch(() => {})
         .finally(() => setIsLoading(false))
     }

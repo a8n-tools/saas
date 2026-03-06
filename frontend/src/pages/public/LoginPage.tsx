@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useAuthStore } from '@/stores/authStore'
+import { config } from '@/config'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -18,10 +19,23 @@ const loginSchema = z.object({
 
 type LoginFormData = z.infer<typeof loginSchema>
 
-function getRedirectPath(params: URLSearchParams): string {
+function getRedirectUrl(params: URLSearchParams): string {
   const redirect = params.get('redirect')
-  if (redirect && redirect.startsWith('/') && !redirect.startsWith('//')) {
+  if (!redirect) return '/dashboard'
+  // Allow relative paths
+  if (redirect.startsWith('/') && !redirect.startsWith('//')) {
     return redirect
+  }
+  // Allow full URLs on the same domain (e.g. https://go.example.com/...)
+  if (config.appDomain) {
+    try {
+      const url = new URL(redirect)
+      if (url.hostname === config.appDomain || url.hostname.endsWith(`.${config.appDomain}`)) {
+        return redirect
+      }
+    } catch {
+      // Invalid URL
+    }
   }
   return '/dashboard'
 }
@@ -31,10 +45,23 @@ export function LoginPage() {
   const [searchParams] = useSearchParams()
   const { login, isAuthenticated, error, clearError } = useAuthStore()
   const [isLoading, setIsLoading] = useState(false)
-  const redirectPath = getRedirectPath(searchParams)
+  const redirectUrl = getRedirectUrl(searchParams)
+  const isExternal = redirectUrl.startsWith('http')
+
+  const doRedirect = useCallback(() => {
+    if (isExternal) {
+      window.location.href = redirectUrl
+    } else {
+      navigate(redirectUrl)
+    }
+  }, [isExternal, redirectUrl, navigate])
 
   if (isAuthenticated) {
-    return <Navigate to={redirectPath} replace />
+    if (isExternal) {
+      window.location.href = redirectUrl
+      return null
+    }
+    return <Navigate to={redirectUrl} replace />
   }
 
   const {
@@ -53,10 +80,10 @@ export function LoginPage() {
       // Check if 2FA is required
       const { pendingChallenge } = useAuthStore.getState()
       if (pendingChallenge) {
-        const params = redirectPath !== '/dashboard' ? `?redirect=${encodeURIComponent(redirectPath)}` : ''
+        const params = redirectUrl !== '/dashboard' ? `?redirect=${encodeURIComponent(redirectUrl)}` : ''
         navigate(`/login/2fa${params}`)
       } else {
-        navigate(redirectPath)
+        doRedirect()
       }
     } catch {
       // Error is handled by the store
