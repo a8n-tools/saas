@@ -18,6 +18,7 @@ const appGradients: Record<string, string> = {
 }
 
 const appSubdomains: Record<string, string> = {
+  rus: 'go',
   rustylinks: 'links',
 }
 

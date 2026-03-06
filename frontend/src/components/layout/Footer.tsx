@@ -28,7 +28,7 @@ export function Footer() {
               </li>
               <li>
                 <a
-                  href={config.appDomain ? `https://rus.${config.appDomain}` : '#'}
+                  href={config.appDomain ? `https://go.${config.appDomain}` : '#'}
                   className="text-muted-foreground hover:text-foreground transition-colors"
                 >
                   RUS

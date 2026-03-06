@@ -162,7 +162,7 @@ export function LandingPage() {
                     {app.description}
                   </CardDescription>
                   <a
-                    href={config.appDomain ? `https://${app.slug === 'rustylinks' ? 'links' : app.slug}.${config.appDomain}` : '#'}
+                    href={config.appDomain ? `https://${{ rus: 'go', rustylinks: 'links' }[app.slug] || app.slug}.${config.appDomain}` : '#'}
                     target="_blank"
                     rel="noopener noreferrer"
                     className={`mt-4 inline-flex items-center gap-1 text-sm text-gradient bg-gradient-to-r ${app.gradient} font-medium hover:underline`}
