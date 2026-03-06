@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useAuthStore } from '@/stores/authStore'
+import { authApi } from '@/api'
 import { config } from '@/config'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -82,7 +83,15 @@ export function LoginPage() {
       doRedirect()
       return
     }
-    useAuthStore.getState().refreshUser().finally(() => setCheckingSession(false))
+    // refreshUser() bails early if isAuthenticated is false, so call the API directly
+    authApi.me()
+      .then((user) => {
+        useAuthStore.getState().setUser(user)
+      })
+      .catch(() => {
+        // No valid session — show login form
+      })
+      .finally(() => setCheckingSession(false))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // After session check or store hydration, redirect if authenticated
