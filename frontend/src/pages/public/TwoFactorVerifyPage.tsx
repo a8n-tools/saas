@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 import { Button } from '@/components/ui/button'
@@ -27,8 +27,14 @@ export function TwoFactorVerifyPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [useRecovery, setUseRecovery] = useState(false)
   const redirectUrl = getRedirectUrl(searchParams)
+  const redirectingRef = useRef(false)
+
+  const loginPath = redirectUrl !== '/dashboard'
+    ? `/login?redirect=${encodeURIComponent(redirectUrl)}`
+    : '/login'
 
   const doRedirect = () => {
+    redirectingRef.current = true
     if (redirectUrl.startsWith('http')) {
       window.location.href = redirectUrl
     } else {
@@ -36,8 +42,8 @@ export function TwoFactorVerifyPage() {
     }
   }
 
-  // Redirect if no pending challenge
-  if (!pendingChallenge) {
+  // Redirect if no pending challenge (but not if we're mid-redirect after successful 2FA)
+  if (!pendingChallenge && !redirectingRef.current) {
     return (
       <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center py-12">
         <Card className="w-full max-w-md">
@@ -46,7 +52,7 @@ export function TwoFactorVerifyPage() {
             <CardDescription>Please log in first.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Link to="/login">
+            <Link to={loginPath}>
               <Button className="w-full">Go to Login</Button>
             </Link>
           </CardContent>
@@ -147,7 +153,7 @@ export function TwoFactorVerifyPage() {
 
           <div className="mt-4 text-center">
             <Link
-              to="/login"
+              to={loginPath}
               onClick={() => useAuthStore.getState().clearPendingChallenge()}
               className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground"
             >
