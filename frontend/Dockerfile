@@ -1,5 +1,4 @@
-# Build stage
-FROM oven/bun:alpine AS builder
+FROM oven/bun:alpine
 
 WORKDIR /app
 
@@ -7,33 +6,13 @@ WORKDIR /app
 COPY package.json bun.lock ./
 
 # Install dependencies
-RUN bun install --frozen-lockfile
+RUN bun install
 
 # Copy source code
 COPY . .
 
-# Build the application
-RUN bun run build
+# Expose Vite dev server port
+EXPOSE 5173
 
-# Production stage - Caddy to serve static files
-FROM alpine:3.21
-
-# Copy Caddy binary from official image
-COPY --from=caddy:alpine /usr/bin/caddy /usr/bin/caddy
-
-# Copy Caddyfile
-COPY Caddyfile /etc/caddy/Caddyfile
-
-# Copy built assets from builder
-COPY --from=builder /app/dist /usr/share/caddy
-
-# Run as non-root user
-RUN adduser -D -u 1001 appuser && \
-    chown -R appuser:appuser /usr/share/caddy
-USER appuser
-
-# Default port (configurable via PORT env var)
-ENV PORT=8080
-EXPOSE 8080
-
-CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile"]
+# Run Vite dev server
+CMD ["bun", "run", "dev", "--", "--host", "0.0.0.0"]

@@ -18,7 +18,7 @@ list:
 # Development
 # Start development environment
 dev:
-    docker compose --file compose.dev.yml up -d --build
+    docker compose --file compose.yml up -d --build
     @echo ""
     @echo "Services started!"
     @echo "  Frontend:  http://localhost:5173"
@@ -26,24 +26,24 @@ dev:
 
 # Stop all services
 down:
-    docker compose --file compose.dev.yml down
+    docker compose --file compose.yml down
 
 # Tail all service logs
 logs:
-    docker compose --file compose.dev.yml logs --follow
+    docker compose --file compose.yml logs --follow
 
 # Tail API logs only
 logs-api:
-    docker compose --file compose.dev.yml logs --follow api
+    docker compose --file compose.yml logs --follow api
 
 # Tail frontend logs only
 logs-frontend:
-    docker compose --file compose.dev.yml logs --follow frontend
+    docker compose --file compose.yml logs --follow frontend
 
 # Database
 # Connect to PostgreSQL shell
 db-shell:
-    docker compose --file compose.dev.yml exec postgres psql --username a8n --dbname a8n_platform
+    docker compose --file compose.yml exec postgres psql --username a8n --dbname a8n_platform
 
 # Run database migrations
 migrate:
@@ -66,20 +66,36 @@ test-frontend:
 test: test-api test-frontend
 
 # Build
-# Build all Docker images
+# Build all Docker images (dev)
 build:
-    docker compose --file compose.dev.yml build
+    docker compose --file compose.yml build
+
+# Build API Docker image (dev)
+build-api:
+    docker compose --file compose.yml build api
+
+# Build frontend Docker image (dev)
+build-frontend:
+    docker compose --file compose.yml build frontend
+
+# Build API Docker image for validation (builder stage only)
+check-docker-api:
+    docker buildx build --target builder -t saas-api:check -f oci-build/api/Dockerfile api/
+
+# Build frontend Docker image for validation
+check-docker-frontend:
+    docker buildx build -t saas-frontend:check -f oci-build/frontend/Dockerfile frontend/
 
 # Build API Docker image
-build-api:
-    docker compose --file compose.dev.yml build api
+build-docker-api:
+    docker buildx build -t saas-api:local -f oci-build/api/Dockerfile api/
 
 # Build frontend Docker image
-build-frontend:
-    docker compose --file compose.dev.yml build frontend
+build-docker-frontend:
+    docker buildx build -t saas-frontend:local -f oci-build/frontend/Dockerfile frontend/
 
 # Cleanup
 # Stop services and remove volumes
 clean:
-    docker compose --file compose.dev.yml down -v
+    docker compose --file compose.yml down -v
     @echo "Volumes removed. Data has been cleared."

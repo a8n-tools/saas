@@ -17,7 +17,7 @@ on:
 jobs:
   build-and-push-frontend:
     name: Build and push frontend image
-    runs-on: opensuse-base-16.0-v1
+    runs-on: ${{ vars.RUNS_ON_OPENSUSE_BASE_LATEST }}
     permissions:
       contents: read
       packages: write
@@ -29,7 +29,7 @@ jobs:
 
     steps:
       - name: Clone the repository
-        uses: actions/checkout@v3
+        uses: https://code.forgejo.org/actions/checkout@v3
         with:
           fetch-depth: 0
 
@@ -70,7 +70,7 @@ jobs:
           let tag_args = ($tags | each {|tag| [-t $"($registry)/($image):($tag)"]} | flatten)
           let cache_from = $"type=registry,ref=($registry)/($image):latest"
           print $"Building and pushing ($image) with tags: ($tags_str)"
-          ^docker buildx build --push --cache-from $cache_from --cache-to type=inline ...$tag_args frontend/
+          ^docker buildx build --push --cache-from $cache_from --cache-to type=inline ...$tag_args -f oci-build/frontend/Dockerfile frontend/
 
       - name: Print image URLs
         shell: nu {0}
