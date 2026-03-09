@@ -68,11 +68,27 @@ export function LoginPage() {
   }, [isExternal, redirectUrl, navigate])
 
   useEffect(() => {
-    // Already logged in — redirect to target (or dashboard if no redirect param)
-    if (isAuthenticated) {
-      doRedirect()
+    // API already confirmed we're not authenticated — clear stale localStorage
+    if (alreadyChecked && isAuthenticated) {
+      useAuthStore.setState({ user: null, isAuthenticated: false, isLoading: false })
       return
     }
+
+    // Authenticated with internal redirect — go to dashboard
+    if (isAuthenticated && !isExternal) {
+      navigate('/dashboard', { replace: true })
+      return
+    }
+
+    // Authenticated with external redirect — verify via API (checks actual cookies,
+    // not localStorage which may be stale from another tab)
+    if (isAuthenticated && isExternal) {
+      const apiBase = config.apiUrl || ''
+      window.location.href = `${apiBase}/v1/auth/redirect?url=${encodeURIComponent(redirectUrl)}`
+      return
+    }
+
+    // Not authenticated — try API redirect once (handles valid refresh tokens)
     if (shouldAutoRedirect) {
       sessionStorage.setItem(redirectKey, '1')
       const apiBase = config.apiUrl || ''
