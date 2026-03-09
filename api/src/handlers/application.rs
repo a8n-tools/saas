@@ -23,6 +23,7 @@ pub struct ApplicationResponse {
     pub icon_url: Option<String>,
     pub version: Option<String>,
     pub source_code_url: Option<String>,
+    pub subdomain: Option<String>,
     pub is_accessible: bool,
     pub maintenance_mode: bool,
     pub maintenance_message: Option<String>,
@@ -38,6 +39,7 @@ impl ApplicationResponse {
             icon_url: app.icon_url,
             version: app.version,
             source_code_url: app.source_code_url,
+            subdomain: app.subdomain,
             is_accessible: has_access && !app.maintenance_mode,
             maintenance_mode: app.maintenance_mode,
             maintenance_message: if app.maintenance_mode {

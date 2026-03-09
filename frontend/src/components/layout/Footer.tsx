@@ -1,7 +1,15 @@
 import { Link } from 'react-router-dom'
 import { config } from '@/config'
+import { useApplications } from '@/hooks/useApplications'
 
 export function Footer() {
+  const { applications } = useApplications()
+
+  const getAppUrl = (slug: string) => {
+    const app = applications.find((a) => a.slug === slug)
+    const subdomain = app?.subdomain || slug
+    return config.appDomain ? `https://${subdomain}.${config.appDomain}` : '#'
+  }
   return (
     <footer className="border-t border-border/50 bg-gradient-to-b from-background to-indigo-950/5 dark:to-indigo-950/30">
       <div className="container py-8 md:py-12">
@@ -28,7 +36,7 @@ export function Footer() {
               </li>
               <li>
                 <a
-                  href={config.appDomain ? `https://go.${config.appDomain}` : '#'}
+                  href={getAppUrl('rus')}
                   className="text-muted-foreground hover:text-foreground transition-colors"
                 >
                   RUS
@@ -36,7 +44,7 @@ export function Footer() {
               </li>
               <li>
                 <a
-                  href={config.appDomain ? `https://links.${config.appDomain}` : '#'}
+                  href={getAppUrl('rustylinks')}
                   className="text-muted-foreground hover:text-foreground transition-colors"
                 >
                   Rusty Links

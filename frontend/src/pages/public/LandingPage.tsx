@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useInView } from '@/hooks/useInView'
+import { useApplications } from '@/hooks/useApplications'
 import { config } from '@/config'
 
 const heroLines = [
@@ -60,9 +61,16 @@ const apps = [
 
 export function LandingPage() {
   const hero = useMemo(() => heroLines[Math.floor(Math.random() * heroLines.length)], [])
+  const { applications } = useApplications()
   const features$ = useInView(0.1)
   const apps$ = useInView(0.1)
   const cta$ = useInView(0.15)
+
+  const getAppUrl = (slug: string) => {
+    const app = applications.find((a) => a.slug === slug)
+    const subdomain = app?.subdomain || slug
+    return config.appDomain ? `https://${subdomain}.${config.appDomain}` : '#'
+  }
 
   return (
     <div>
@@ -162,7 +170,7 @@ export function LandingPage() {
                     {app.description}
                   </CardDescription>
                   <a
-                    href={config.appDomain ? `https://${{ rus: 'go', rustylinks: 'links' }[app.slug] || app.slug}.${config.appDomain}` : '#'}
+                    href={getAppUrl(app.slug)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className={`mt-4 inline-flex items-center gap-1 text-sm text-gradient bg-gradient-to-r ${app.gradient} font-medium hover:underline`}
