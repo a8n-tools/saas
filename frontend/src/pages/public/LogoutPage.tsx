@@ -17,8 +17,9 @@ export function LogoutPage() {
     const redirect = searchParams.get('redirect')
 
     logout().then(() => {
-      if (redirect && redirect.startsWith('http')) {
-        window.location.href = redirect
+      if (redirect) {
+        const loginUrl = `/login?redirect=${encodeURIComponent(redirect)}`
+        navigate(loginUrl, { replace: true })
       } else {
         navigate('/login', { replace: true })
       }
