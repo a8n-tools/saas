@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -67,6 +67,7 @@ export function LoginPage() {
     }
   }, [isExternal, redirectUrl, navigate])
 
+  // Handle initial page load — stale state, auto-redirect, already authenticated
   useEffect(() => {
     // API already confirmed we're not authenticated — clear stale localStorage
     if (alreadyChecked && isAuthenticated) {
@@ -74,7 +75,7 @@ export function LoginPage() {
       return
     }
 
-    // Authenticated — redirect to target
+    // Already authenticated — redirect to target
     if (isAuthenticated) {
       doRedirect()
       return
@@ -85,6 +86,18 @@ export function LoginPage() {
       sessionStorage.setItem(redirectKey, '1')
       const apiBase = config.apiUrl || ''
       window.location.href = `${apiBase}/v1/auth/redirect?url=${encodeURIComponent(redirectUrl)}`
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Cross-tab sync — when another tab logs in, redirect this tab too
+  const mountedRef = useRef(false)
+  useEffect(() => {
+    if (!mountedRef.current) {
+      mountedRef.current = true
+      return
+    }
+    if (isAuthenticated) {
+      doRedirect()
     }
   }, [isAuthenticated]) // eslint-disable-line react-hooks/exhaustive-deps
 
