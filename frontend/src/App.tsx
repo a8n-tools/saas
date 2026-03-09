@@ -47,10 +47,12 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, isLoading } = useAuthStore()
   const location = useLocation()
 
-  // Refresh user data once on mount to get latest info from backend
+  // Refresh user data on mount, or clear loading state if not authenticated
   useEffect(() => {
     if (isAuthenticated) {
       useAuthStore.getState().refreshUser()
+    } else {
+      useAuthStore.getState().setLoading(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
