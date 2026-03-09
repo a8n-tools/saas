@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { useSearchParams, useNavigate } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 import { Loader2 } from 'lucide-react'
 
@@ -10,7 +10,6 @@ import { Loader2 } from 'lucide-react'
  */
 export function LogoutPage() {
   const [searchParams] = useSearchParams()
-  const navigate = useNavigate()
   const logout = useAuthStore((s) => s.logout)
 
   useEffect(() => {
@@ -18,10 +17,10 @@ export function LogoutPage() {
 
     logout().then(() => {
       if (redirect) {
-        const loginUrl = `/login?redirect=${encodeURIComponent(redirect)}`
-        navigate(loginUrl, { replace: true })
+        // Full page navigation to ensure clean state — avoids SPA routing edge cases
+        window.location.replace(`/login?redirect=${encodeURIComponent(redirect)}`)
       } else {
-        navigate('/login', { replace: true })
+        window.location.replace('/login')
       }
     })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
