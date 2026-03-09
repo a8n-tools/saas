@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useInView } from '@/hooks/useInView'
 import { useApplications } from '@/hooks/useApplications'
+import { useAuthStore } from '@/stores/authStore'
 import { config } from '@/config'
 
 const heroLines = [
@@ -61,6 +62,7 @@ const apps = [
 
 export function LandingPage() {
   const hero = useMemo(() => heroLines[Math.floor(Math.random() * heroLines.length)], [])
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const { applications } = useApplications()
   const features$ = useInView(0.1)
   const apps$ = useInView(0.1)
@@ -93,9 +95,9 @@ export function LandingPage() {
             <span className="font-semibold text-foreground">$3/month</span>, locked forever.
           </p>
           <div className="mt-10 flex flex-col gap-4 sm:flex-row hero-fade-up-3">
-            <Link to="/register">
+            <Link to={isAuthenticated ? '/membership' : '/register'}>
               <Button size="lg" className="w-full sm:w-auto gap-2 bg-gradient-to-r from-primary to-indigo-500 hover:from-primary/90 hover:to-indigo-500/90 border-0 text-white shadow-lg shadow-primary/25">
-                Get Started <i className="fa-solid fa-arrow-right text-[1rem]" />
+                {isAuthenticated ? 'Go to Membership' : 'Get Started'} <i className="fa-solid fa-arrow-right text-[1rem]" />
               </Button>
             </Link>
             <Link to="/pricing">
@@ -198,9 +200,9 @@ export function LandingPage() {
             Lock in $3/month. Get every tool, current and future. Cancel anytime.
           </p>
           <div className="mt-10 flex justify-center gap-4">
-            <Link to="/register">
+            <Link to={isAuthenticated ? '/membership' : '/register'}>
               <Button size="lg" variant="secondary" className="gap-2 shadow-lg">
-                Create Account <i className="fa-solid fa-arrow-right text-[1rem]" />
+                {isAuthenticated ? 'Go to Membership' : 'Create Account'} <i className="fa-solid fa-arrow-right text-[1rem]" />
               </Button>
             </Link>
           </div>
