@@ -144,13 +144,14 @@ impl ApplicationRepository {
                 icon_url         = COALESCE($3, icon_url),
                 source_code_url  = COALESCE($4, source_code_url),
                 version          = COALESCE($5, version),
-                container_name   = COALESCE($6, container_name),
-                health_check_url = COALESCE($7, health_check_url),
-                is_active        = COALESCE($8, is_active),
-                maintenance_mode = COALESCE($9, maintenance_mode),
-                maintenance_message = COALESCE($10, maintenance_message),
+                subdomain        = COALESCE($6, subdomain),
+                container_name   = COALESCE($7, container_name),
+                health_check_url = COALESCE($8, health_check_url),
+                is_active        = COALESCE($9, is_active),
+                maintenance_mode = COALESCE($10, maintenance_mode),
+                maintenance_message = COALESCE($11, maintenance_message),
                 updated_at       = NOW()
-            WHERE id = $11
+            WHERE id = $12
             RETURNING *
             "#,
         )
@@ -159,6 +160,7 @@ impl ApplicationRepository {
         .bind(data.icon_url.as_deref())
         .bind(data.source_code_url.as_deref())
         .bind(data.version.as_deref())
+        .bind(data.subdomain.as_deref())
         .bind(data.container_name.as_deref())
         .bind(data.health_check_url.as_deref())
         .bind(data.is_active)

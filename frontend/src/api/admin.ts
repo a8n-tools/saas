@@ -70,6 +70,7 @@ export interface AdminApplication {
   is_active: boolean
   maintenance_mode: boolean
   maintenance_message: string | null
+  subdomain: string | null
   container_name: string
   health_check_url: string | null
   version: string | null
@@ -84,6 +85,7 @@ export interface UpdateApplicationRequest {
   icon_url?: string
   source_code_url?: string
   version?: string
+  subdomain?: string
   container_name?: string
   health_check_url?: string
   is_active?: boolean

@@ -113,6 +113,7 @@ export interface Application {
   icon_url: string | null
   version: string | null
   source_code_url: string | null
+  subdomain: string | null
   is_accessible: boolean
   maintenance_mode: boolean
   maintenance_message: string | null

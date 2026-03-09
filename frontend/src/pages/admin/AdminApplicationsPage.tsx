@@ -72,6 +72,7 @@ export function AdminApplicationsPage() {
       version: app.version ?? '',
       icon_url: app.icon_url ?? '',
       source_code_url: app.source_code_url ?? '',
+      subdomain: app.subdomain ?? '',
       container_name: app.container_name,
       health_check_url: app.health_check_url ?? '',
       maintenance_message: app.maintenance_message ?? '',
@@ -121,7 +122,7 @@ export function AdminApplicationsPage() {
                   </div>
                   <div>
                     <CardTitle>{app.display_name}</CardTitle>
-                    <CardDescription>{app.slug}</CardDescription>
+                    <CardDescription>{app.subdomain || app.slug}.{config.appDomain}</CardDescription>
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
@@ -165,7 +166,7 @@ export function AdminApplicationsPage() {
                     Edit
                   </Button>
                   <a
-                    href={`https://${app.slug}.${config.appDomain}`}
+                    href={`https://${app.subdomain || app.slug}.${config.appDomain}`}
                     target="_blank"
                     rel="noopener noreferrer"
                   >
@@ -199,6 +200,21 @@ export function AdminApplicationsPage() {
                   value={editForm.display_name ?? ''}
                   onChange={(e) => setEditForm({ ...editForm, display_name: e.target.value })}
                 />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="subdomain">Subdomain</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="subdomain"
+                    placeholder={editingApp?.slug}
+                    value={editForm.subdomain ?? ''}
+                    onChange={(e) => setEditForm({ ...editForm, subdomain: e.target.value })}
+                  />
+                  <span className="text-sm text-muted-foreground whitespace-nowrap">.{config.appDomain}</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Leave empty to use the slug ({editingApp?.slug}) as the subdomain.
+                </p>
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="description">Description</Label>
