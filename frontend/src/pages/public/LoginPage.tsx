@@ -68,9 +68,9 @@ export function LoginPage() {
   }, [isExternal, redirectUrl, navigate])
 
   useEffect(() => {
-    // Already logged in with no external redirect — go to dashboard
-    if (isAuthenticated && !isExternal) {
-      navigate('/dashboard', { replace: true })
+    // Already logged in — redirect to target (or dashboard if no redirect param)
+    if (isAuthenticated) {
+      doRedirect()
       return
     }
     if (shouldAutoRedirect) {
