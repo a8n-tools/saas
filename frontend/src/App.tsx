@@ -18,6 +18,7 @@ import { PasswordResetConfirmPage } from '@/pages/public/PasswordResetConfirmPag
 import { TermsOfServicePage } from '@/pages/public/TermsOfServicePage'
 import { PrivacyPolicyPage } from '@/pages/public/PrivacyPolicyPage'
 import { TwoFactorVerifyPage } from '@/pages/public/TwoFactorVerifyPage'
+import { LogoutPage } from '@/pages/public/LogoutPage'
 
 // Dashboard pages
 import { DashboardPage } from '@/pages/dashboard/DashboardPage'
@@ -132,6 +133,7 @@ export default function App() {
         <Route path="/settings/confirm-email" element={<ConfirmEmailPage />} />
         <Route path="/settings/verify-email" element={<VerifyEmailPage />} />
         <Route path="/login/2fa" element={<TwoFactorVerifyPage />} />
+        <Route path="/logout" element={<LogoutPage />} />
       </Route>
 
       {/* Protected dashboard routes */}
