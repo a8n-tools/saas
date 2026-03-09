@@ -193,8 +193,8 @@ export const useAuthStore = create<AuthState>()(
   )
 )
 
-// Sync auth state across tabs — when another tab/window clears localStorage
-// (e.g., via the /logout page), update this tab's in-memory state.
+// Sync auth state across tabs — when another tab/window changes localStorage
+// (e.g., login or logout), update this tab's in-memory state.
 if (typeof window !== 'undefined') {
   window.addEventListener('storage', (e) => {
     if (e.key === 'auth-storage') {
@@ -217,6 +217,10 @@ if (typeof window !== 'undefined') {
               isLoading: false,
               pendingChallenge: null,
             })
+          } else if (isAuthenticated && !useAuthStore.getState().isAuthenticated) {
+            // Another tab logged in — mark authenticated and refresh user data
+            useAuthStore.setState({ isAuthenticated: true, isLoading: false })
+            useAuthStore.getState().refreshUser()
           }
         } catch {
           // Ignore parse errors

@@ -74,17 +74,9 @@ export function LoginPage() {
       return
     }
 
-    // Authenticated with internal redirect — go to dashboard
-    if (isAuthenticated && !isExternal) {
-      navigate('/dashboard', { replace: true })
-      return
-    }
-
-    // Authenticated with external redirect — verify via API (checks actual cookies,
-    // not localStorage which may be stale from another tab)
-    if (isAuthenticated && isExternal) {
-      const apiBase = config.apiUrl || ''
-      window.location.href = `${apiBase}/v1/auth/redirect?url=${encodeURIComponent(redirectUrl)}`
+    // Authenticated — redirect to target
+    if (isAuthenticated) {
+      doRedirect()
       return
     }
 
@@ -94,7 +86,7 @@ export function LoginPage() {
       const apiBase = config.apiUrl || ''
       window.location.href = `${apiBase}/v1/auth/redirect?url=${encodeURIComponent(redirectUrl)}`
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Show spinner while redirecting to API check
   if (shouldAutoRedirect) {
