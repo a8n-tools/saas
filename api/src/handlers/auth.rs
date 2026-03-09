@@ -384,9 +384,10 @@ pub async fn logout(
     Ok(response)
 }
 
-/// GET /v1/auth/logout?redirect=<url>
-/// Logout via redirect — clears cookies and redirects to the target URL.
-/// Used by child apps (RUS, Rusty Links) to log out from the SaaS platform.
+/// GET /v1/auth/logout?url=<url>
+/// SSO logout for child apps — clears cookies and redirects to the login page.
+/// The child app URL is passed through as ?redirect= so the user can log back in
+/// and be sent to the right place.
 pub async fn logout_redirect(
     req: HttpRequest,
     query: web::Query<RedirectQuery>,
@@ -440,14 +441,20 @@ pub async fn logout_redirect(
     let cookie_domain = config.cookie_domain.as_deref();
     let clear_cookies = AuthCookies::clear(secure, cookie_domain);
 
-    // Clear cookies and redirect
+    // Redirect to the login page with the child app URL as the redirect param
+    let login_url = format!(
+        "{}/login?redirect={}&checked=1",
+        config.cors_origin.trim_end_matches('/'),
+        urlencoding::encode(target_url)
+    );
+
     let mut builder = HttpResponse::Found();
     for cookie in clear_cookies {
         builder.cookie(cookie);
     }
 
     Ok(builder
-        .insert_header(("Location", target_url.as_str()))
+        .insert_header(("Location", login_url.as_str()))
         .finish())
 }
 
