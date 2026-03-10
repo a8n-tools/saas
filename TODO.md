@@ -5,22 +5,22 @@
 
 ## Summary
 
-| Doc | Title | Status | Progress |
-|-----|-------|--------|----------|
-| 01 | Project Setup | Complete | 100% |
-| 02 | Database Schema | Complete | 100% |
-| 03 | Authentication | Complete | 100% |
-| 04 | API Core | Complete | 100% |
-| 05 | Stripe Integration | Backend Done | 80% |
-| 06 | Frontend Foundation | Complete | 100% |
-| 07 | Frontend Auth | Needs Stripe integration | 90% |
-| 08 | Frontend Dashboard | Complete | 100% |
-| 09 | Admin Panel | Complete | 100% |
-| 10 | Email System | Backend Complete | 80% |
-| 11 | Infrastructure | Dev Only | 50% |
-| 12 | Monitoring | Not Started | 0% |
-| 13 | Security | Headers Done | 70% |
-| 14 | Testing Strategy | Minimal | 33% |
+| Doc | Title               | Status                   | Progress |
+|-----|---------------------|--------------------------|----------|
+| 01  | Project Setup       | Complete                 | 100%     |
+| 02  | Database Schema     | Complete                 | 100%     |
+| 03  | Authentication      | Complete                 | 100%     |
+| 04  | API Core            | Complete                 | 100%     |
+| 05  | Stripe Integration  | Backend Done             | 80%      |
+| 06  | Frontend Foundation | Complete                 | 100%     |
+| 07  | Frontend Auth       | Needs Stripe integration | 90%      |
+| 08  | Frontend Dashboard  | Complete                 | 100%     |
+| 09  | Admin Panel         | Complete                 | 100%     |
+| 10  | Email System        | Backend Complete         | 80%      |
+| 11  | Infrastructure      | Dev Only                 | 50%      |
+| 12  | Monitoring          | Not Started              | 0%       |
+| 13  | Security            | Headers Done             | 70%      |
+| 14  | Testing Strategy    | Minimal                  | 33%      |
 
 ---
 
@@ -65,6 +65,7 @@
 ## 03 - Authentication
 
 ### Backend Services
+
 - [x] JWT service with token creation/verification
 - [x] Access token claims with user context
 - [x] Refresh token generation and hashing
@@ -78,11 +79,13 @@
 - [x] Audit logging for auth events
 
 ### Repositories
+
 - [x] UserRepository (CRUD operations)
 - [x] TokenRepository (refresh, magic link, password reset)
 - [x] AuditLogRepository
 
 ### API Handlers
+
 - [x] POST `/v1/auth/register` handler
 - [x] POST `/v1/auth/login` handler
 - [x] POST `/v1/auth/logout` handler
@@ -95,6 +98,7 @@
 - [x] POST `/v1/auth/password-reset/confirm` handler
 
 ### Auth Middleware
+
 - [x] AuthenticatedUser extractor
 - [x] AdminUser extractor
 - [x] OptionalUser extractor
@@ -109,6 +113,7 @@
 ## 04 - API Core
 
 ### Validation
+
 - [x] Email validation
 - [x] Password validation
 - [x] UUID validation
@@ -116,11 +121,13 @@
 - [x] Validation error handling
 
 ### Response Format
+
 - [x] API response wrapper with metadata
 - [x] Pagination support
 - [x] Error response format
 
 ### API Handlers
+
 - [x] GET `/v1/users/me` handler
 - [x] PUT `/v1/users/me/password` handler
 - [x] GET `/v1/users/me/sessions` handler
@@ -136,6 +143,7 @@
 - [x] POST `/v1/webhooks/stripe` handler
 
 ### Route Wiring
+
 - [x] Wire all handlers in routes/mod.rs
 - [x] Apply authentication guards
 - [ ] Apply rate limiting middleware
@@ -145,6 +153,7 @@
 ## 05 - Stripe Integration
 
 ### Backend Service
+
 - [x] Stripe service with configuration
 - [x] Create Stripe customer (placeholder)
 - [x] Create checkout session (placeholder)
@@ -155,6 +164,7 @@
 - [ ] Real Stripe API integration (using async-stripe crate - ready to implement)
 
 ### Webhook Handlers
+
 - [x] `checkout.session.completed`
 - [x] `customer.subscription.created`
 - [x] `customer.subscription.updated`
@@ -164,6 +174,7 @@
 - [x] Webhook signature verification (placeholder)
 
 ### Grace Period
+
 - [x] Start grace period on payment failure
 - [ ] Grace period email notifications (Day 1, 7, 14, 25, 30)
 - [x] Revoke access after 30 days (in webhook handler)
@@ -191,6 +202,7 @@
 ## 07 - Frontend Auth
 
 ### Pages
+
 - [x] Login page with form
 - [x] Register page with form
 - [x] Magic link request page
@@ -199,6 +211,7 @@
 - [x] Form validation with Zod
 
 ### State & API
+
 - [x] Auth store (Zustand)
 - [x] Auth API client methods
 - [x] Login flow
@@ -209,6 +222,7 @@
 - [x] Password reset flow (API ready)
 
 ### Components
+
 - [x] Login form component
 - [x] Register form component
 - [ ] Password strength indicator
@@ -219,17 +233,20 @@
 ## 08 - Frontend Dashboard
 
 ### Pages
+
 - [x] Dashboard home page
 - [x] Applications page
 - [x] Subscription page
 - [x] Settings page
 
 ### Components
+
 - [x] Application cards
 - [x] Subscription status display
 - [ ] Usage metrics (if needed)
 
 ### Data Fetching
+
 - [x] Applications API integration (API ready)
 - [x] Subscription API integration (API ready)
 - [x] User profile API integration (API ready)
@@ -239,6 +256,7 @@
 ## 09 - Admin Panel
 
 ### Pages
+
 - [x] Admin dashboard page
 - [x] Users management page
 - [x] Subscriptions management page
@@ -248,6 +266,7 @@
 - [ ] System health page
 
 ### Backend Endpoints
+
 - [x] GET `/v1/admin/stats`
 - [x] GET `/v1/admin/users`
 - [x] GET `/v1/admin/users/:id`
@@ -270,12 +289,14 @@
 ## 10 - Email System
 
 ### Email Service
+
 - [x] Email service skeleton (logs only)
 - [x] SMTP configuration with Lettre
 - [x] Template rendering with Tera
 - [x] Email configuration in Config
 
 ### Email Templates
+
 - [x] Base template (HTML + text)
 - [x] Magic link email
 - [x] Password reset email
@@ -286,6 +307,7 @@
 - [x] Payment succeeded (receipt)
 
 ### Email Infrastructure
+
 - [ ] Stalwart mail server in Docker
 - [ ] DNS records (SPF, DKIM, DMARC)
 - [ ] Email queue for reliability
@@ -295,6 +317,7 @@
 ## 11 - Infrastructure & Deployment
 
 ### Development Environment
+
 - [x] docker-compose.dev.yml
 - [x] PostgreSQL service
 - [x] Traefik dev configuration
@@ -303,6 +326,7 @@
 - [x] Makefile dev commands
 
 ### Production Environment
+
 - [ ] docker-compose.yml (production)
 - [ ] API production Dockerfile
 - [ ] Frontend production Dockerfile (nginx)
@@ -311,12 +335,14 @@
 - [ ] Security headers in Traefik
 
 ### Deployment Scripts
+
 - [ ] scripts/deploy.sh
 - [ ] scripts/backup.sh
 - [ ] scripts/restore.sh
 - [ ] scripts/generate-secrets.sh
 
 ### Environment Configuration
+
 - [x] .env.example template
 - [ ] Production environment guide
 - [ ] JWT key generation script
@@ -326,6 +352,7 @@
 ## 12 - Monitoring & Observability
 
 ### Prometheus Metrics
+
 - [ ] Add actix-web-prom dependency
 - [ ] HTTP request metrics
 - [ ] Auth event metrics
@@ -335,11 +362,13 @@
 - [ ] Metrics endpoint (/metrics)
 
 ### Prometheus Server
+
 - [ ] Prometheus service in Docker
 - [ ] prometheus.yml configuration
 - [ ] Alert rules
 
 ### Grafana Dashboards
+
 - [ ] Grafana service in Docker
 - [ ] Prometheus data source
 - [ ] API Overview dashboard
@@ -347,12 +376,14 @@
 - [ ] Infrastructure dashboard
 
 ### Error Tracking
+
 - [ ] GlitchTip service in Docker
 - [ ] Sentry SDK in API
 - [ ] Sentry SDK in frontend
 - [ ] Source maps upload
 
 ### Logging
+
 - [x] Structured JSON logging (backend)
 - [ ] Log aggregation configuration
 - [ ] Log rotation
@@ -362,6 +393,7 @@
 ## 13 - Security Hardening
 
 ### Rate Limiting
+
 - [x] Rate limit model/repository
 - [ ] Rate limit middleware implementation
 - [ ] Login: 5/minute per IP
@@ -372,6 +404,7 @@
 - [ ] Rate limit headers (X-RateLimit-*)
 
 ### Input Validation
+
 - [x] Email validation
 - [x] Password validation
 - [ ] SQL injection pattern detection
@@ -379,6 +412,7 @@
 - [ ] Filename sanitization
 
 ### Security Headers
+
 - [x] X-Frame-Options: DENY
 - [x] X-Content-Type-Options: nosniff
 - [x] X-XSS-Protection
@@ -391,17 +425,20 @@
 - [x] X-DNS-Prefetch-Control
 
 ### CSRF Protection
+
 - [ ] CSRF token generation
 - [ ] CSRF cookie setup
 - [ ] CSRF middleware
 - [ ] Frontend CSRF header integration
 
 ### Secrets Management
+
 - [ ] Secrecy crate integration
 - [ ] Key file permissions
 - [ ] Secrets not logged
 
 ### Audit Logging
+
 - [x] Audit log table
 - [x] Audit log repository
 - [x] Auth event logging
@@ -413,6 +450,7 @@
 ## 14 - Testing Strategy
 
 ### Backend Unit Tests
+
 - [x] Validation tests
 - [ ] Password service tests
 - [ ] JWT service tests
@@ -420,6 +458,7 @@
 - [ ] Repository tests
 
 ### Backend Integration Tests
+
 - [ ] Test infrastructure setup
 - [ ] Auth endpoint tests
 - [ ] User endpoint tests
@@ -427,6 +466,7 @@
 - [ ] Admin endpoint tests
 
 ### Frontend Unit Tests
+
 - [ ] Vitest configuration
 - [ ] Test utilities setup
 - [ ] Component tests
@@ -434,17 +474,20 @@
 - [ ] Store tests
 
 ### Frontend Integration Tests
+
 - [ ] MSW setup for API mocking
 - [ ] Page tests with mocked API
 - [ ] Form submission tests
 
 ### E2E Tests
+
 - [ ] Playwright configuration
 - [ ] Auth flow tests
 - [ ] Subscription flow tests
 - [ ] Admin flow tests
 
 ### CI/CD
+
 - [ ] GitHub Actions workflow
 - [ ] Rust test job
 - [ ] Frontend test job
@@ -464,12 +507,14 @@
 ## Priority Order for Completion
 
 ### P0 - Launch Blockers (DONE)
+
 1. ~~Wire API route handlers (auth, users, subscriptions, applications)~~
 2. ~~Implement Stripe checkout integration (backend handlers ready)~~
 3. ~~Connect frontend to working backend (API client ready)~~
 4. ~~Terms of Service & Privacy Policy pages~~
 
 ### P1 - Should Have
+
 5. ~~Email system implementation~~ (Lettre + Tera templates - DONE)
 6. ~~Admin backend endpoints~~ (DONE - all endpoints implemented)
 7. Rate limiting middleware (repository ready, middleware needed)
@@ -478,6 +523,7 @@
 10. Real Stripe API integration (replace placeholders with async-stripe calls)
 
 ### P2 - Nice to Have
+
 11. Monitoring (Prometheus + Grafana)
 12. Error tracking (GlitchTip)
 13. Comprehensive testing

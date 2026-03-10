@@ -3,6 +3,8 @@ export JUST_DIR := justfile_directory()
 # JUST_CURRENT_DIR it the invocation directory where the just command was run.
 export JUST_INVOCATION_DIR := invocation_directory_native()
 
+export UID := `id -u`
+export GID := `id -g`
 
 # default recipe to display help information
 # just list will fallback to the parent justfile and list recipes only in the parent justfile.
@@ -15,10 +17,21 @@ default:
 list:
 	@just --list
 
+# Create .env files from dev/example defaults if they don't exist
+[private]
+ensure-env:
+    @test -f .env || cp .env.dev .env
+    @test -f api/.env || cp api/.env.example api/.env
+    @test -f frontend/.env || cp frontend/.env.example frontend/.env
+
 # Development
-# Start development environment
-dev:
-    docker compose --file compose.yml up -d --build
+# Start development environment (foreground)
+dev: ensure-env
+    docker compose up --build
+
+# Start development environment (detached)
+dev-detach: ensure-env
+    docker compose up --build --detach
     @echo ""
     @echo "Services started!"
     @echo "  Frontend:  http://localhost:5173"
@@ -26,57 +39,70 @@ dev:
 
 # Stop all services
 down:
-    docker compose --file compose.yml down
+    docker compose down
 
 # Tail all service logs
 logs:
-    docker compose --file compose.yml logs --follow
+    docker compose logs --follow
 
 # Tail API logs only
 logs-api:
-    docker compose --file compose.yml logs --follow api
+    docker compose logs --follow api
 
 # Tail frontend logs only
 logs-frontend:
-    docker compose --file compose.yml logs --follow frontend
+    docker compose logs --follow frontend
 
 # Database
 # Connect to PostgreSQL shell
 db-shell:
-    docker compose --file compose.yml exec postgres psql --username a8n --dbname a8n_platform
+    docker compose exec postgres psql --username a8n --dbname a8n_platform
 
 # Run database migrations
 migrate:
-    cd api && cargo sqlx migrate run
+    docker compose exec api cargo sqlx migrate run
 
 # Create a new migration
 migrate-create name:
-    cd api && cargo sqlx migrate add {{ name }}
+    docker compose exec api cargo sqlx migrate add {{ name }}
 
 # Testing
 # Run API tests
 test-api:
-    cd api && cargo test
+    docker compose exec api cargo test
 
 # Run frontend tests
 test-frontend:
-    cd frontend && bun test
+    docker compose exec frontend bun test
 
 # Run all tests
 test: test-api test-frontend
 
+# Linting
+# Run API clippy
+lint-api:
+    docker compose exec api cargo clippy
+
+# Run API formatter
+fmt-api:
+    docker compose exec api cargo fmt
+
+# Run frontend linter
+lint-frontend:
+    docker compose exec frontend bun run lint
+
 # Build
 # Build all Docker images (dev)
 build:
-    docker compose --file compose.yml build
+    docker compose build
 
 # Build API Docker image (dev)
 build-api:
-    docker compose --file compose.yml build api
+    docker compose build api
 
 # Build frontend Docker image (dev)
 build-frontend:
-    docker compose --file compose.yml build frontend
+    docker compose build frontend
 
 # Build API Docker image for validation (builder stage only)
 check-docker-api:
@@ -97,5 +123,5 @@ build-docker-frontend:
 # Cleanup
 # Stop services and remove volumes
 clean:
-    docker compose --file compose.yml down -v
+    docker compose down --volumes --remove-orphans
     @echo "Volumes removed. Data has been cleared."

@@ -7,6 +7,7 @@ services:
   frontend:
     build:
       context: ./frontend
+    user: "${UID:?run export UID GID}:${GID:?run export UID GID}"
     container_name: a8n-tools-frontend
     restart: unless-stopped
     env_file:
@@ -19,18 +20,24 @@ services:
     ports:
       - "5173:5173"
     volumes:
-      - ./frontend/src:/app/src:ro
-      - ./frontend/public:/app/public:ro
-      - ./frontend/index.html:/app/index.html:ro
-      - ./frontend/vite.config.ts:/app/vite.config.ts:ro
-      - ./frontend/tsconfig.json:/app/tsconfig.json:ro
-      - ./frontend/tailwind.config.js:/app/tailwind.config.js:ro
-      - ./frontend/postcss.config.js:/app/postcss.config.js:ro
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+      - ./frontend/index.html:/app/index.html
+      - ./frontend/vite.config.ts:/app/vite.config.ts
+      - ./frontend/tsconfig.json:/app/tsconfig.json
+      - ./frontend/tsconfig.node.json:/app/tsconfig.node.json
+      - ./frontend/tailwind.config.js:/app/tailwind.config.js
+      - ./frontend/postcss.config.js:/app/postcss.config.js
+    networks:
+      - a8n-tools-private
+    labels:
+      traefik.enable: false
 
   # Rust API Backend
   api:
     build:
       context: ./api
+    user: "${UID:?run export UID GID}:${GID:?run export UID GID}"
     container_name: a8n-tools-api
     restart: unless-stopped
     env_file:
@@ -44,10 +51,10 @@ services:
       ENVIRONMENT: development
       APP_NAME: ${APP_NAME:-a8n Tools}
       JWT_SECRET: ${JWT_SECRET:-development-secret-key-min-32-chars-long!}
-      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
-      STRIPE_PRICE_ID: ${STRIPE_PRICE_ID}
-      STRIPE_BUSINESS_PRICE_ID: ${STRIPE_BUSINESS_PRICE_ID}
-      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_PRICE_ID: ${STRIPE_PRICE_ID:-}
+      STRIPE_BUSINESS_PRICE_ID: ${STRIPE_BUSINESS_PRICE_ID:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       STRIPE_SUCCESS_URL: ${APP_URL:-http://localhost:5173}/checkout/success
       STRIPE_CANCEL_URL: ${APP_URL:-http://localhost:5173}/pricing?checkout=canceled
       EMAIL_ENABLED: ${EMAIL_ENABLED:-false}
@@ -59,38 +66,64 @@ services:
     ports:
       - "18080:8080"
     volumes:
-      - ./api/src:/app/src:ro
-      - ./api/migrations:/app/migrations:ro
-      - ./api/templates:/app/templates:ro
-      - ./api/Cargo.toml:/app/Cargo.toml:ro
+      - ./.git:/app/.git:ro
+      - ./api/src:/app/src
+      - ./api/migrations:/app/migrations
+      - ./api/templates:/app/templates
+      - ./api/build.rs:/app/build.rs
+      - ./api/Cargo.toml:/app/Cargo.toml
       - ./api/Cargo.lock:/app/Cargo.lock
-      - api_target:/app/target
+      - a8n-tools-api:/app/target
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      - a8n-tools-private
+    labels:
+      traefik.enable: false
 
   # PostgreSQL Database
   postgres:
-    image: postgres:16-alpine
+    # https://hub.docker.com/_/postgres
+    # https://github.com/docker-library/postgres
+    # https://www.postgresql.org/docs/17/libpq-envars.html
+    image: docker.io/postgres:18.2-alpine3.23
     container_name: a8n-tools-postgres
     restart: unless-stopped
+    # Use this to enable logging of all SQL statements.
+    #command:
+    #  - "postgres"
+    #  - "-c"
+    #  - "log_statement=all"
+    healthcheck:
+      # See the README for healthcheck information.
+      test: [
+        "CMD-SHELL",
+        "pg_isready -U a8n -d a8n_platform || exit 1"
+      ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+      start_interval: 1s
     environment:
       POSTGRES_USER: a8n
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpassword}
       POSTGRES_DB: a8n_platform
     expose:
       - 5432
+    networks:
+      - a8n-tools-private
     volumes:
-      # - postgres_data:/var/lib/postgresql/data
-      - data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U a8n -d a8n_platform"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+      - a8n-tools-postgre:/var/lib/postgresql/data
+    labels:
+      traefik.enable: false
 
 
 volumes:
-  # postgres_data:
-  data:
-  api_target:
+  a8n-tools-postgre:
+  a8n-tools-api:
+
+networks:
+  a8n-tools-private:
+    driver: bridge
