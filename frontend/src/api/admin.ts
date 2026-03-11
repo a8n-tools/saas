@@ -4,6 +4,7 @@ import type {
   Membership,
   AdminNotification,
   PaginatedResponse,
+  FeedbackStatus,
 } from '@/types'
 
 // Actual stats response from API
@@ -93,6 +94,42 @@ export interface UpdateApplicationRequest {
   maintenance_message?: string
 }
 
+export type AdminFeedbackStatus = FeedbackStatus
+
+export interface AdminFeedbackSummary {
+  id: string
+  name: string | null
+  email_masked: string | null
+  subject: string | null
+  tags: string[]
+  message_excerpt: string
+  status: AdminFeedbackStatus
+  created_at: string
+  responded_at: string | null
+}
+
+export interface AdminFeedbackDetail {
+  id: string
+  name: string | null
+  email: string | null
+  email_masked: string | null
+  subject: string | null
+  tags: string[]
+  message: string
+  page_path: string | null
+  status: AdminFeedbackStatus
+  admin_response: string | null
+  responded_by: string | null
+  responded_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface RespondToFeedbackRequest {
+  response: string
+  status?: AdminFeedbackStatus
+}
+
 export interface GrantMembershipRequest {
   user_id: string
   tier: 'personal' | 'business'
@@ -167,6 +204,26 @@ export const adminApi = {
     if (filters?.admin_only) params.append('admin_only', 'true')
     return apiClient.get(`/admin/audit-logs?${params}`)
   },
+
+  // Feedback
+  getFeedback: (
+    page = 1,
+    pageSize = 20,
+    status?: AdminFeedbackStatus,
+  ): Promise<PaginatedResponse<AdminFeedbackSummary>> => {
+    const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) })
+    if (status) params.append('status', status)
+    return apiClient.get(`/admin/feedback?${params}`)
+  },
+
+  getFeedbackDetail: (feedbackId: string): Promise<AdminFeedbackDetail> =>
+    apiClient.get(`/admin/feedback/${feedbackId}`),
+
+  respondToFeedback: (feedbackId: string, data: RespondToFeedbackRequest): Promise<AdminFeedbackDetail> =>
+    apiClient.post(`/admin/feedback/${feedbackId}/respond`, data),
+
+  updateFeedbackStatus: (feedbackId: string, status: AdminFeedbackStatus): Promise<AdminFeedbackDetail> =>
+    apiClient.put(`/admin/feedback/${feedbackId}/status`, { status }),
 
   // Notifications
   getNotifications: (): Promise<AdminNotification[]> =>

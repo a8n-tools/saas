@@ -5,6 +5,7 @@
 pub mod admin;
 pub mod application;
 pub mod auth;
+pub mod feedback;
 pub mod membership;
 pub mod totp;
 pub mod user;
@@ -17,6 +18,7 @@ pub use auth::{
     refresh_token, register,
     request_magic_link, request_password_reset, verify_magic_link, verify_password_reset_token,
 };
+pub use feedback::{get_feedback, list_feedback, respond_to_feedback, submit_feedback, update_feedback_status};
 pub use totp::{
     confirm_2fa, disable_2fa, get_2fa_status, regenerate_recovery_codes, setup_2fa, verify_2fa,
 };

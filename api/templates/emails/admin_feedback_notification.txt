@@ -1,0 +1,5 @@
+New feedback received
+
+A new submission is waiting for your review.
+
+{{ admin_url }}

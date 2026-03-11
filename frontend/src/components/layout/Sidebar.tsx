@@ -9,6 +9,7 @@ import {
   Users,
   FileText,
   Shield,
+  MessageSquareQuote,
 } from 'lucide-react'
 
 interface SidebarItem {
@@ -29,6 +30,7 @@ const adminItems: SidebarItem[] = [
   { title: 'Users', href: '/admin/users', icon: Users },
   { title: 'Memberships', href: '/admin/memberships', icon: CreditCard },
   { title: 'Applications', href: '/admin/applications', icon: AppWindow },
+  { title: 'Feedback', href: '/admin/feedback', icon: MessageSquareQuote },
   { title: 'Audit Logs', href: '/admin/audit-logs', icon: FileText },
 ]
 
