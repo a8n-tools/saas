@@ -1,26 +1,16 @@
-# JUST_DIR is the directory of the current Justfile
-export JUST_DIR := justfile_directory()
-# JUST_CURRENT_DIR it the invocation directory where the just command was run.
-export JUST_INVOCATION_DIR := invocation_directory_native()
+# SaaS Platform - Task Runner
+
+# List available recipes
+default:
+    @just --list
 
 export UID := `id -u`
 export GID := `id -g`
 
-# default recipe to display help information
-# just list will fallback to the parent justfile and list recipes only in the parent justfile.
-# just --list returns only recipes in this justfile.
-default:
-	@just --list
-
-
-# list the just recipes
-list:
-	@just --list
-
 # Create .env files from dev/example defaults if they don't exist
 [private]
 ensure-env:
-    @test -f .env || cp .env.dev .env
+    @test -f .env || cp .env.example .env
     @test -f api/.env || cp api/.env.example api/.env
     @test -f frontend/.env || cp frontend/.env.example frontend/.env
 
