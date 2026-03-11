@@ -430,7 +430,7 @@ impl UserRepository {
         Ok((users, total))
     }
 
-    /// Get email addresses of all active admin users
+    /// Get email addresses of all active admin users for system notifications
     pub async fn find_admin_emails(pool: &PgPool) -> Result<Vec<String>, AppError> {
         let rows: Vec<(String,)> = sqlx::query_as(
             "SELECT email FROM users WHERE role = 'admin' AND deleted_at IS NULL ORDER BY created_at ASC",
