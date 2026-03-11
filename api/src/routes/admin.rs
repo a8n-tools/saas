@@ -29,6 +29,11 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route("/applications/{app_id}", web::put().to(handlers::update_application))
             // Audit logs
             .route("/audit-logs", web::get().to(handlers::list_audit_logs))
+            // Feedback
+            .route("/feedback", web::get().to(handlers::list_feedback))
+            .route("/feedback/{feedback_id}", web::get().to(handlers::get_feedback))
+            .route("/feedback/{feedback_id}/respond", web::post().to(handlers::respond_to_feedback))
+            .route("/feedback/{feedback_id}/status", web::put().to(handlers::update_feedback_status))
             // Test email
             .route("/test-email", web::post().to(handlers::send_test_email))
             // Notifications

@@ -104,6 +104,23 @@ export interface CheckoutSessionResponse {
   session_id: string
 }
 
+export interface CreateFeedbackRequest {
+  name?: string
+  email?: string
+  subject?: string
+  tags?: string[]
+  message: string
+  page_path?: string
+  website?: string
+}
+
+export interface FeedbackSubmissionResponse {
+  id: string
+  message: string
+}
+
+export type FeedbackStatus = 'new' | 'reviewed' | 'responded' | 'closed'
+
 // Application types
 export interface Application {
   id: string

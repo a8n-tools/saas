@@ -10,6 +10,7 @@ use tera::{Context, Tera};
 
 use crate::config::{EmailConfig, SmtpTls};
 use crate::errors::AppError;
+use crate::models::Feedback;
 
 /// Email service for sending transactional emails
 pub struct EmailService {
@@ -125,6 +126,14 @@ impl EmailService {
             .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
         templates.add_raw_template("email_verify.txt", include_str!("../../templates/emails/email_verify.txt"))
             .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
+        templates.add_raw_template("admin_feedback_notification.html", include_str!("../../templates/emails/admin_feedback_notification.html"))
+            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
+        templates.add_raw_template("admin_feedback_notification.txt", include_str!("../../templates/emails/admin_feedback_notification.txt"))
+            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
+        templates.add_raw_template("feedback_response.html", include_str!("../../templates/emails/feedback_response.html"))
+            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
+        templates.add_raw_template("feedback_response.txt", include_str!("../../templates/emails/feedback_response.txt"))
+            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
 
         Ok(Self {
             transport,
@@ -146,6 +155,7 @@ impl EmailService {
             base_url: "http://localhost:5173".to_string(),
             enabled: false,
             app_name: "localhost".to_string(),
+            admin_notification_emails: Vec::new(),
         };
 
         // Create with minimal template setup for dev
@@ -223,6 +233,17 @@ impl EmailService {
         context.insert("app_name", &self.config.app_name);
         context.insert("year", &Utc::now().year());
         context
+    }
+
+    fn feedback_excerpt(message: &str) -> String {
+        let normalized = message.split_whitespace().collect::<Vec<_>>().join(" ");
+        let mut chars = normalized.chars();
+        let excerpt: String = chars.by_ref().take(180).collect();
+        if chars.next().is_some() {
+            format!("{excerpt}...")
+        } else {
+            excerpt
+        }
     }
 
     /// Send magic link email
@@ -446,6 +467,63 @@ impl EmailService {
 
         let (html, text) = self.render_template("payment_succeeded", &context)?;
         self.send_email(email, &format!("Payment received - {}", self.config.app_name), html, text).await
+    }
+
+    /// Notify admins about newly submitted feedback
+    pub async fn send_admin_feedback_notification(
+        &self,
+        admin_url: &str,
+        recipients: &[String],
+    ) -> Result<(), AppError> {
+        if !self.config.enabled || recipients.is_empty() {
+            tracing::info!(
+                recipients = recipients.len(),
+                "Feedback notification email skipped"
+            );
+            return Ok(());
+        }
+
+        let mut context = self.base_context();
+        context.insert("admin_url", admin_url);
+
+        let (html, text) = self.render_template("admin_feedback_notification", &context)?;
+        for recipient in recipients {
+            self.send_email(
+                recipient,
+                &format!("New feedback received - {}", self.config.app_name),
+                html.clone(),
+                text.clone(),
+            )
+            .await?;
+        }
+
+        Ok(())
+    }
+
+    /// Send a feedback response to the original submitter
+    pub async fn send_feedback_response(
+        &self,
+        email: &str,
+        feedback: &Feedback,
+    ) -> Result<(), AppError> {
+        if !self.config.enabled {
+            tracing::info!(feedback_id = %feedback.id, email = %email, "Feedback response email skipped");
+            return Ok(());
+        }
+
+        let mut context = self.base_context();
+        context.insert("subject_line", &feedback.subject.as_deref().unwrap_or("Your feedback"));
+        context.insert("original_message", &feedback.message);
+        context.insert("response_message", &feedback.admin_response.as_deref().unwrap_or(""));
+
+        let (html, text) = self.render_template("feedback_response", &context)?;
+        self.send_email(
+            email,
+            &format!("Response to your feedback - {}", self.config.app_name),
+            html,
+            text,
+        )
+        .await
     }
 }
 

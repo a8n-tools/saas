@@ -4,6 +4,7 @@
 
 pub mod application;
 pub mod audit;
+pub mod feedback;
 pub mod membership;
 pub mod rate_limit;
 pub mod token;
@@ -15,6 +16,11 @@ pub use application::{Application, ApplicationResponse, CreateApplication, Updat
 pub use audit::{
     AdminNotification, AuditAction, AuditLog, AuditSeverity, CreateAdminNotification,
     CreateAuditLog, NotificationType,
+};
+pub use feedback::{
+    AdminFeedbackDetail, AdminFeedbackSummary, CreateFeedback, CreateFeedbackRequest, Feedback,
+    FeedbackStatus, FeedbackSubmissionResponse, RespondToFeedback, RespondToFeedbackRequest,
+    UpdateFeedbackStatusRequest,
 };
 pub use rate_limit::{RateLimit, RateLimitConfig};
 pub use membership::{
