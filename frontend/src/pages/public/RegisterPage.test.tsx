@@ -1,18 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { render } from '@/test/utils'
+import { render, setupUnauthUser } from '@/test/utils'
 import { RegisterPage } from './RegisterPage'
-import { useAuthStore } from '@/stores/authStore'
 
 beforeEach(() => {
-  useAuthStore.setState({
-    user: null,
-    isAuthenticated: false,
-    isLoading: false,
-    error: null,
-    pendingChallenge: null,
-  })
+  setupUnauthUser()
 })
 
 describe('RegisterPage', () => {

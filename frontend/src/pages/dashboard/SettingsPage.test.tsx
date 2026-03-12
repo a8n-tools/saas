@@ -1,19 +1,13 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { render } from '@/test/utils'
+import { render, setupAuthUser } from '@/test/utils'
 import { SettingsPage } from './SettingsPage'
 import { useAuthStore } from '@/stores/authStore'
 import { mockUser } from '@/test/mocks/handlers'
 
 beforeEach(() => {
-  useAuthStore.setState({
-    user: mockUser,
-    isAuthenticated: true,
-    isLoading: false,
-    error: null,
-    pendingChallenge: null,
-  })
+  setupAuthUser()
 })
 
 describe('SettingsPage', () => {

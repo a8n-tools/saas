@@ -1,18 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 
-import { render } from '@/test/utils'
+import { render, setupAuthUser } from '@/test/utils'
 import { LogoutPage } from './LogoutPage'
 import { useAuthStore } from '@/stores/authStore'
-import { mockUser } from '@/test/mocks/handlers'
 
 beforeEach(() => {
-  useAuthStore.setState({
-    user: mockUser,
-    isAuthenticated: true,
-    isLoading: false,
-    error: null,
-    pendingChallenge: null,
-  })
+  setupAuthUser()
   Object.defineProperty(window, 'location', {
     configurable: true,
     value: { ...window.location, replace: vi.fn(), reload: vi.fn(), assign: vi.fn() },

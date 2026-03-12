@@ -1,18 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
-import { render } from '@/test/utils'
+import { render, setupAuthUser } from '@/test/utils'
 import { DashboardPage } from './DashboardPage'
 import { useAuthStore } from '@/stores/authStore'
 import { mockUser } from '@/test/mocks/handlers'
 
 beforeEach(() => {
-  useAuthStore.setState({
-    user: mockUser,
-    isAuthenticated: true,
-    isLoading: false,
-    error: null,
-    pendingChallenge: null,
-  })
+  setupAuthUser()
 })
 
 describe('DashboardPage', () => {

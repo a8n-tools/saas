@@ -1,18 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
-import { render } from '@/test/utils'
+import { render, setupAdminUser } from '@/test/utils'
 import { AdminDashboardPage } from './AdminDashboardPage'
-import { useAuthStore } from '@/stores/authStore'
-import { mockAdminUser } from '@/test/mocks/handlers'
 
 beforeEach(() => {
-  useAuthStore.setState({
-    user: mockAdminUser,
-    isAuthenticated: true,
-    isLoading: false,
-    error: null,
-    pendingChallenge: null,
-  })
+  setupAdminUser()
 })
 
 describe('AdminDashboardPage', () => {

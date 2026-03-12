@@ -1,18 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { screen } from '@testing-library/react'
-import { render } from '@/test/utils'
+import { render, setupUnauthUser } from '@/test/utils'
 import { PricingPage } from './PricingPage'
 import { useAuthStore } from '@/stores/authStore'
 import { mockUser } from '@/test/mocks/handlers'
 
 beforeEach(() => {
-  useAuthStore.setState({
-    user: null,
-    isAuthenticated: false,
-    isLoading: false,
-    error: null,
-    pendingChallenge: null,
-  })
+  setupUnauthUser()
 })
 
 describe('PricingPage', () => {

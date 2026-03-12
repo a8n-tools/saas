@@ -1,10 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { render } from '@/test/utils'
+import { render, setupAuthUser } from '@/test/utils'
 import { TwoFactorSetupPage } from './TwoFactorSetupPage'
-import { useAuthStore } from '@/stores/authStore'
-import { mockUser } from '@/test/mocks/handlers'
 
 // Mock qrcode.react since jsdom doesn't support SVG rendering
 vi.mock('qrcode.react', () => ({
@@ -12,13 +10,7 @@ vi.mock('qrcode.react', () => ({
 }))
 
 beforeEach(() => {
-  useAuthStore.setState({
-    user: mockUser,
-    isAuthenticated: true,
-    isLoading: false,
-    error: null,
-    pendingChallenge: null,
-  })
+  setupAuthUser()
 
   Object.defineProperty(navigator, 'clipboard', {
     configurable: true,

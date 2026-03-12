@@ -1,19 +1,13 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { render } from '@/test/utils'
+import { render, setupUnauthUser } from '@/test/utils'
 import { LoginPage } from './LoginPage'
 import { useAuthStore } from '@/stores/authStore'
 import { mockUser } from '@/test/mocks/handlers'
 
 beforeEach(() => {
-  useAuthStore.setState({
-    user: null,
-    isAuthenticated: false,
-    isLoading: false,
-    error: null,
-    pendingChallenge: null,
-  })
+  setupUnauthUser()
 })
 
 describe('LoginPage', () => {
@@ -60,7 +54,7 @@ describe('LoginPage', () => {
 
   it('redirects to dashboard after successful login', async () => {
     const user = userEvent.setup()
-    const { container } = render(<LoginPage />)
+    render(<LoginPage />)
 
     await user.type(screen.getByLabelText('Email'), 'test@example.com')
     await user.type(screen.getByLabelText('Password'), 'password123')
@@ -68,9 +62,8 @@ describe('LoginPage', () => {
 
     await waitFor(() => {
       expect(useAuthStore.getState().isAuthenticated).toBe(true)
+      expect(useAuthStore.getState().user?.email).toBe('test@example.com')
     })
-
-    expect(container).toBeTruthy()
   })
 
   it('shows loading spinner when external redirect pending', () => {
