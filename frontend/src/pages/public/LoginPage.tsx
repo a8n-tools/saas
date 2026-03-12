@@ -53,10 +53,11 @@ export function LoginPage() {
   // "checked" flag means the API already verified we're not logged in — show the form
   const alreadyChecked = searchParams.has('checked')
 
-  // Use sessionStorage to detect redirect loops: if the target app bounces back
-  // to /login?redirect=..., we don't try the API redirect again.
-  const redirectKey = isExternal ? `auth_redirect:${redirectUrl}` : ''
-  const shouldAutoRedirect = isExternal && !alreadyChecked && !sessionStorage.getItem(redirectKey)
+  // For external redirects, go through the server-side /v1/auth/redirect endpoint
+  // which refreshes the access_token cookie if the refresh token is still valid.
+  // The "checked" flag from the server is the loop breaker — if the server can't
+  // authenticate us, it redirects back with ?checked=1 so we show the login form.
+  const shouldServerRedirect = isExternal && !alreadyChecked
 
   const doRedirect = useCallback(() => {
     if (isExternal) {
@@ -75,17 +76,18 @@ export function LoginPage() {
       return
     }
 
-    // Already authenticated — redirect to target
-    if (isAuthenticated) {
-      doRedirect()
+    // External redirect: always go through the server endpoint so it can refresh
+    // the access_token cookie before redirecting to the child app.
+    if (shouldServerRedirect) {
+      const apiBase = config.apiUrl || ''
+      window.location.href = `${apiBase}/v1/auth/redirect?url=${encodeURIComponent(redirectUrl)}`
       return
     }
 
-    // Not authenticated — try API redirect once (handles valid refresh tokens)
-    if (shouldAutoRedirect) {
-      sessionStorage.setItem(redirectKey, '1')
-      const apiBase = config.apiUrl || ''
-      window.location.href = `${apiBase}/v1/auth/redirect?url=${encodeURIComponent(redirectUrl)}`
+    // Already authenticated with an internal redirect — navigate directly
+    if (isAuthenticated) {
+      doRedirect()
+      return
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -102,7 +104,7 @@ export function LoginPage() {
   }, [isAuthenticated]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Show spinner while redirecting to API check
-  if (shouldAutoRedirect) {
+  if (shouldServerRedirect) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-8rem)]">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
