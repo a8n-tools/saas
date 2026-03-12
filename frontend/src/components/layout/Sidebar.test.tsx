@@ -1,18 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { screen } from '@testing-library/react'
-import { render } from '@/test/utils'
+import { render, setupAuthUser } from '@/test/utils'
 import { Sidebar } from './Sidebar'
 import { useAuthStore } from '@/stores/authStore'
-import { mockUser, mockAdminUser } from '@/test/mocks/handlers'
+import { mockAdminUser } from '@/test/mocks/handlers'
 
 beforeEach(() => {
-  useAuthStore.setState({
-    user: mockUser,
-    isAuthenticated: true,
-    isLoading: false,
-    error: null,
-    pendingChallenge: null,
-  })
+  setupAuthUser()
 })
 
 describe('Sidebar', () => {

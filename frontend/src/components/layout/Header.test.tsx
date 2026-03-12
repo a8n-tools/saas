@@ -1,20 +1,14 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { render } from '@/test/utils'
+import { render, setupUnauthUser } from '@/test/utils'
 import { Header } from './Header'
 import { useAuthStore } from '@/stores/authStore'
 import { useThemeStore } from '@/stores/themeStore'
 import { mockUser, mockAdminUser } from '@/test/mocks/handlers'
 
 beforeEach(() => {
-  useAuthStore.setState({
-    user: null,
-    isAuthenticated: false,
-    isLoading: false,
-    error: null,
-    pendingChallenge: null,
-  })
+  setupUnauthUser()
 })
 
 describe('Header', () => {

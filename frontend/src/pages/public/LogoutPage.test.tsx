@@ -1,18 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { screen } from '@testing-library/react'
-import { render } from '@/test/utils'
+
+import { render, setupAuthUser } from '@/test/utils'
 import { LogoutPage } from './LogoutPage'
 import { useAuthStore } from '@/stores/authStore'
-import { mockUser } from '@/test/mocks/handlers'
 
 beforeEach(() => {
-  useAuthStore.setState({
-    user: mockUser,
-    isAuthenticated: true,
-    isLoading: false,
-    error: null,
-    pendingChallenge: null,
-  })
+  setupAuthUser()
   Object.defineProperty(window, 'location', {
     configurable: true,
     value: { ...window.location, replace: vi.fn(), reload: vi.fn(), assign: vi.fn() },
@@ -23,13 +16,14 @@ describe('LogoutPage', () => {
   it('shows loading spinner', () => {
     render(<LogoutPage />)
 
-    // The spinner is rendered during the logout process
+    // TODO: query by role="status" or aria-label instead of CSS class
     const spinner = document.querySelector('.animate-spin')
     expect(spinner).toBeInTheDocument()
   })
 
   it('calls logout on mount', async () => {
     const logout = vi.fn().mockResolvedValue(undefined)
+    // TODO: as never cast needed because Zustand setState doesn't accept partial function overrides — fix store type
     useAuthStore.setState({ logout } as never)
 
     render(<LogoutPage />)

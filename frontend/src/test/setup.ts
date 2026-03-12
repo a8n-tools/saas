@@ -35,6 +35,13 @@ Object.defineProperty(window, 'IntersectionObserver', {
   value: MockIntersectionObserver,
 })
 
+// Mock navigator.clipboard (not available in jsdom)
+Object.defineProperty(navigator, 'clipboard', {
+  writable: true,
+  configurable: true,
+  value: { writeText: vi.fn().mockResolvedValue(undefined) },
+})
+
 // Establish API mocking before all tests
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }))
 
@@ -43,6 +50,7 @@ beforeAll(() => server.listen({ onUnhandledRequest: 'error' }))
 afterEach(() => {
   cleanup()
   server.resetHandlers()
+  vi.clearAllMocks()
 })
 
 // Clean up after the tests are finished

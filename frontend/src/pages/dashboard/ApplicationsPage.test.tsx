@@ -1,18 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
-import { render } from '@/test/utils'
+import { render, setupAuthUser } from '@/test/utils'
 import { ApplicationsPage } from './ApplicationsPage'
 import { useAuthStore } from '@/stores/authStore'
 import { mockUser } from '@/test/mocks/handlers'
 
 beforeEach(() => {
-  useAuthStore.setState({
-    user: mockUser,
-    isAuthenticated: true,
-    isLoading: false,
-    error: null,
-    pendingChallenge: null,
-  })
+  setupAuthUser()
 })
 
 describe('ApplicationsPage', () => {
@@ -42,6 +36,7 @@ describe('ApplicationsPage', () => {
 
   it('shows membership required banner for user without active membership', async () => {
     useAuthStore.setState({
+      // TODO: as never cast needed because mockUser has membership_status: 'active' as const — use a looser type annotation on mockUser
       user: { ...mockUser, membership_status: 'none' as never },
       isAuthenticated: true,
     })
@@ -55,6 +50,7 @@ describe('ApplicationsPage', () => {
 
   it('shows subscribe button when membership required', async () => {
     useAuthStore.setState({
+      // TODO: as never cast needed because mockUser has membership_status: 'active' as const — use a looser type annotation on mockUser
       user: { ...mockUser, membership_status: 'none' as never },
       isAuthenticated: true,
     })

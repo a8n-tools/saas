@@ -1,20 +1,14 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
-import { render } from '@/test/utils'
+import { render, setupAuthUser } from '@/test/utils'
 import { MembershipPage } from './MembershipPage'
-import { useAuthStore } from '@/stores/authStore'
 import { useMembershipStore } from '@/stores/membershipStore'
-import { mockUser, mockMembership } from '@/test/mocks/handlers'
+import { mockMembership } from '@/test/mocks/handlers'
 
 beforeEach(() => {
-  useAuthStore.setState({
-    user: mockUser,
-    isAuthenticated: true,
-    isLoading: false,
-    error: null,
-    pendingChallenge: null,
-  })
+  setupAuthUser()
   // Override fetchMembership to prevent auto-fetching on mount
+  // TODO: as never cast needed because Zustand setState doesn't accept partial function overrides — fix store type
   useMembershipStore.setState({
     membership: null,
     isLoading: false,
@@ -36,6 +30,7 @@ describe('MembershipPage', () => {
 
     render(<MembershipPage />)
 
+    // TODO: query by role="status" or aria-label instead of CSS class
     expect(document.querySelector('.animate-spin')).toBeInTheDocument()
   })
 
