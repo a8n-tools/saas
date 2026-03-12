@@ -430,6 +430,17 @@ impl UserRepository {
         Ok((users, total))
     }
 
+    /// Get email addresses of all active admin users for system notifications
+    pub async fn find_admin_emails(pool: &PgPool) -> Result<Vec<String>, AppError> {
+        let rows: Vec<(String,)> = sqlx::query_as(
+            "SELECT email FROM users WHERE role = 'admin' AND deleted_at IS NULL ORDER BY created_at ASC",
+        )
+        .fetch_all(pool)
+        .await?;
+
+        Ok(rows.into_iter().map(|(email,)| email).collect())
+    }
+
     /// Find users in grace period
     pub async fn find_in_grace_period(pool: &PgPool) -> Result<Vec<User>, AppError> {
         let users = sqlx::query_as::<_, User>(

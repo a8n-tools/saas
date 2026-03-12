@@ -19,6 +19,7 @@ import { TermsOfServicePage } from '@/pages/public/TermsOfServicePage'
 import { PrivacyPolicyPage } from '@/pages/public/PrivacyPolicyPage'
 import { TwoFactorVerifyPage } from '@/pages/public/TwoFactorVerifyPage'
 import { LogoutPage } from '@/pages/public/LogoutPage'
+import { FeedbackPage } from '@/pages/public/FeedbackPage'
 
 // Dashboard pages
 import { DashboardPage } from '@/pages/dashboard/DashboardPage'
@@ -34,6 +35,7 @@ import { AdminUsersPage } from '@/pages/admin/AdminUsersPage'
 import { AdminMembershipsPage } from '@/pages/admin/AdminMembershipsPage'
 import { AdminApplicationsPage } from '@/pages/admin/AdminApplicationsPage'
 import { AdminAuditLogsPage } from '@/pages/admin/AdminAuditLogsPage'
+import { AdminFeedbackPage } from '@/pages/admin/AdminFeedbackPage'
 
 // Settings pages (public, token-based)
 import { ConfirmEmailPage } from '@/pages/settings/ConfirmEmailPage'
@@ -134,6 +136,7 @@ export default function App() {
         <Route path="/settings/verify-email" element={<VerifyEmailPage />} />
         <Route path="/login/2fa" element={<TwoFactorVerifyPage />} />
         <Route path="/logout" element={<LogoutPage />} />
+        <Route path="/feedback" element={<FeedbackPage />} />
       </Route>
 
       {/* Protected dashboard routes */}
@@ -165,6 +168,7 @@ export default function App() {
         <Route path="/admin/users" element={<AdminUsersPage />} />
         <Route path="/admin/memberships" element={<AdminMembershipsPage />} />
         <Route path="/admin/applications" element={<AdminApplicationsPage />} />
+        <Route path="/admin/feedback" element={<AdminFeedbackPage />} />
         <Route path="/admin/audit-logs" element={<AdminAuditLogsPage />} />
       </Route>
 

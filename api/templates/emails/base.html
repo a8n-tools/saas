@@ -25,15 +25,26 @@
       overflow: hidden;
     }
     .header {
-      background: linear-gradient(135deg, #f97316 0%, #6366f1 100%);
+      background: #0d0b14;
+      border-bottom: 1px solid rgba(99, 102, 241, 0.2);
       padding: 24px;
       text-align: center;
     }
     .logo {
-      color: white;
-      font-size: 24px;
-      font-weight: bold;
       text-decoration: none;
+      font-size: 26px;
+      line-height: 1;
+    }
+    .logo-brand {
+      font-weight: 800;
+      background: linear-gradient(135deg, #f97316, #6366f1);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .logo-tld {
+      font-weight: 300;
+      color: #a1a1b5;
     }
     .content {
       padding: 32px;
@@ -113,7 +124,9 @@
   <div class="wrapper">
     <div class="card">
       <div class="header">
-        <a href="{{ base_url }}" class="logo">{{ app_name }}</a>
+        <a href="{{ base_url }}" class="logo">
+          <span class="logo-brand">a8n</span><span class="logo-tld">.tools</span>
+        </a>
       </div>
       <div class="content">
         {% block content %}{% endblock %}

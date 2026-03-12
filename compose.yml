@@ -63,6 +63,7 @@ services:
       SMTP_FROM: ${SMTP_FROM:-noreply@localhost}
       SMTP_USERNAME: ${SMTP_USERNAME:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      ADMIN_NOTIFICATION_EMAILS: ${ADMIN_NOTIFICATION_EMAILS:-admin@localhost}
     ports:
       - "18080:8080"
     volumes:
