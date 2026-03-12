@@ -25,6 +25,7 @@ describe('TwoFactorVerifyPage', () => {
   })
 
   it('shows 2FA form when pending challenge exists', () => {
+    // TODO: as never cast needed because pendingChallenge type isn't exported from the store — export the type
     useAuthStore.setState({
       pendingChallenge: { challenge_token: 'test-challenge-token' },
     } as never)
@@ -37,6 +38,7 @@ describe('TwoFactorVerifyPage', () => {
   })
 
   it('shows authenticator app description by default', () => {
+    // TODO: as never cast needed because pendingChallenge type isn't exported from the store — export the type
     useAuthStore.setState({
       pendingChallenge: { challenge_token: 'test-challenge-token' },
     } as never)
@@ -48,6 +50,7 @@ describe('TwoFactorVerifyPage', () => {
 
   it('switches to recovery code mode', async () => {
     const user = userEvent.setup()
+    // TODO: as never cast needed because pendingChallenge type isn't exported from the store — export the type
     useAuthStore.setState({
       pendingChallenge: { challenge_token: 'test-challenge-token' },
     } as never)
@@ -62,6 +65,7 @@ describe('TwoFactorVerifyPage', () => {
   })
 
   it('shows back to login link', () => {
+    // TODO: as never cast needed because pendingChallenge type isn't exported from the store — export the type
     useAuthStore.setState({
       pendingChallenge: { challenge_token: 'test-challenge-token' },
     } as never)

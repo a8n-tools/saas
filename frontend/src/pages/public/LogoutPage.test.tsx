@@ -16,13 +16,14 @@ describe('LogoutPage', () => {
   it('shows loading spinner', () => {
     render(<LogoutPage />)
 
-    // The spinner is rendered during the logout process
+    // TODO: query by role="status" or aria-label instead of CSS class
     const spinner = document.querySelector('.animate-spin')
     expect(spinner).toBeInTheDocument()
   })
 
   it('calls logout on mount', async () => {
     const logout = vi.fn().mockResolvedValue(undefined)
+    // TODO: as never cast needed because Zustand setState doesn't accept partial function overrides — fix store type
     useAuthStore.setState({ logout } as never)
 
     render(<LogoutPage />)
