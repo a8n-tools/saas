@@ -311,12 +311,19 @@ pub async fn update_application(
 
     let app = ApplicationRepository::update(&pool, app_id, &body).await?;
 
-    // Notify child app if maintenance mode changed
-    if old_app.maintenance_mode != app.maintenance_mode {
+    // Notify child app if maintenance mode or active status changed
+    let maintenance_changed = old_app.maintenance_mode != app.maintenance_mode;
+    let active_changed = old_app.is_active != app.is_active;
+    if maintenance_changed || active_changed {
         let ws = webhook_service.into_inner();
         let app_clone = app.clone();
         actix_web::rt::spawn(async move {
-            ws.notify_maintenance_change(&app_clone).await;
+            if maintenance_changed {
+                ws.notify_maintenance_change(&app_clone).await;
+            }
+            if active_changed {
+                ws.notify_active_change(&app_clone).await;
+            }
         });
     }
 

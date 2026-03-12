@@ -275,7 +275,7 @@ export function AdminApplicationsPage() {
                   onChange={(e) => setEditForm({ ...editForm, webhook_url: e.target.value })}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Platform will POST to this URL when maintenance mode changes.
+                  Platform will POST to this URL when maintenance mode or active status changes.
                 </p>
               </div>
               {editingApp?.maintenance_mode && (

@@ -27,13 +27,7 @@ impl WebhookService {
     }
 
     /// Notify a child app that its maintenance mode has changed.
-    /// Fires and forgets — logs success/failure but never errors out.
     pub async fn notify_maintenance_change(&self, app: &Application) {
-        let webhook_url = match &app.webhook_url {
-            Some(url) if !url.is_empty() => url,
-            _ => return,
-        };
-
         let payload = serde_json::json!({
             "event": "maintenance_mode_changed",
             "slug": app.slug,
@@ -41,10 +35,29 @@ impl WebhookService {
             "maintenance_message": app.maintenance_message,
             "timestamp": chrono::Utc::now().to_rfc3339(),
         });
+        self.send(app, payload).await;
+    }
+
+    /// Notify a child app that its active status has changed.
+    pub async fn notify_active_change(&self, app: &Application) {
+        let payload = serde_json::json!({
+            "event": "active_changed",
+            "slug": app.slug,
+            "is_active": app.is_active,
+            "timestamp": chrono::Utc::now().to_rfc3339(),
+        });
+        self.send(app, payload).await;
+    }
+
+    /// Send a signed JSON payload to the app's webhook URL.
+    /// Fires and forgets — logs success/failure but never errors out.
+    async fn send(&self, app: &Application, payload: serde_json::Value) {
+        let webhook_url = match &app.webhook_url {
+            Some(url) if !url.is_empty() => url,
+            _ => return,
+        };
 
         let body = serde_json::to_string(&payload).unwrap_or_default();
-
-        // Sign the payload with HMAC-SHA256
         let signature = self.sign(&body);
 
         match self
