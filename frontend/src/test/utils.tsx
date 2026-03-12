@@ -3,6 +3,7 @@ import { render, RenderOptions } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
+import { User } from '@/types'
 import { mockUser, mockAdminUser } from '@/test/mocks/handlers'
 
 // Create a new QueryClient for each test
@@ -39,7 +40,7 @@ export * from '@testing-library/react'
 export { customRender as render }
 
 // Auth store setup helpers — use in beforeEach to avoid repeating the full setState boilerplate
-export function setupAuthUser(user = mockUser) {
+export function setupAuthUser(user: User = mockUser) {
   useAuthStore.setState({
     user,
     isAuthenticated: true,
