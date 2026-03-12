@@ -4,7 +4,7 @@ FROM oven/bun:alpine
 WORKDIR /app
 
 # Layer 1: Dependencies (cached unless package.json changes)
-COPY package.json bun.lock ./
+COPY --chmod=644 package.json bun.lock ./
 RUN --mount=type=cache,target=/root/.bun/install/cache \
     bun install
 
