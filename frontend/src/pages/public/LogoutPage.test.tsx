@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { screen } from '@testing-library/react'
+
 import { render } from '@/test/utils'
 import { LogoutPage } from './LogoutPage'
 import { useAuthStore } from '@/stores/authStore'
