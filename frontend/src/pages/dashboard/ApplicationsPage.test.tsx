@@ -36,6 +36,7 @@ describe('ApplicationsPage', () => {
 
   it('shows membership required banner for user without active membership', async () => {
     useAuthStore.setState({
+      // TODO: as never cast needed because mockUser has membership_status: 'active' as const — use a looser type annotation on mockUser
       user: { ...mockUser, membership_status: 'none' as never },
       isAuthenticated: true,
     })
@@ -49,6 +50,7 @@ describe('ApplicationsPage', () => {
 
   it('shows subscribe button when membership required', async () => {
     useAuthStore.setState({
+      // TODO: as never cast needed because mockUser has membership_status: 'active' as const — use a looser type annotation on mockUser
       user: { ...mockUser, membership_status: 'none' as never },
       isAuthenticated: true,
     })

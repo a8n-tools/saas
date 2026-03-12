@@ -8,6 +8,7 @@ import { mockMembership } from '@/test/mocks/handlers'
 beforeEach(() => {
   setupAuthUser()
   // Override fetchMembership to prevent auto-fetching on mount
+  // TODO: as never cast needed because Zustand setState doesn't accept partial function overrides — fix store type
   useMembershipStore.setState({
     membership: null,
     isLoading: false,
@@ -29,6 +30,7 @@ describe('MembershipPage', () => {
 
     render(<MembershipPage />)
 
+    // TODO: query by role="status" or aria-label instead of CSS class
     expect(document.querySelector('.animate-spin')).toBeInTheDocument()
   })
 

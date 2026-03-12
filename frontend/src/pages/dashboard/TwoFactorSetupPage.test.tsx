@@ -29,7 +29,7 @@ describe('TwoFactorSetupPage', () => {
   it('shows loading spinner while fetching QR code', () => {
     render(<TwoFactorSetupPage />)
 
-    // Initially loading
+    // TODO: query by role="status" or aria-label instead of CSS class
     expect(document.querySelector('.animate-spin')).toBeInTheDocument()
   })
 
