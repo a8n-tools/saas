@@ -210,7 +210,7 @@ impl AuthCookies {
         let max_age = if remember {
             actix_web::cookie::time::Duration::days(30)
         } else {
-            actix_web::cookie::time::Duration::days(1)
+            actix_web::cookie::time::Duration::days(7)
         };
 
         let mut builder = Cookie::build("refresh_token", token.to_owned())
