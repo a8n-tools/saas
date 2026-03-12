@@ -74,6 +74,7 @@ export interface AdminApplication {
   subdomain: string | null
   container_name: string
   health_check_url: string | null
+  webhook_url: string | null
   version: string | null
   source_code_url: string | null
   created_at: string
@@ -89,6 +90,7 @@ export interface UpdateApplicationRequest {
   subdomain?: string
   container_name?: string
   health_check_url?: string
+  webhook_url?: string
   is_active?: boolean
   maintenance_mode?: boolean
   maintenance_message?: string

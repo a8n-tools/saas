@@ -75,6 +75,7 @@ export function AdminApplicationsPage() {
       subdomain: app.subdomain ?? '',
       container_name: app.container_name,
       health_check_url: app.health_check_url ?? '',
+      webhook_url: app.webhook_url ?? '',
       maintenance_message: app.maintenance_message ?? '',
     })
     setEditingApp(app)
@@ -264,6 +265,18 @@ export function AdminApplicationsPage() {
                   value={editForm.health_check_url ?? ''}
                   onChange={(e) => setEditForm({ ...editForm, health_check_url: e.target.value })}
                 />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="webhook_url">Webhook URL</Label>
+                <Input
+                  id="webhook_url"
+                  placeholder="https://app.example.com/webhooks/platform"
+                  value={editForm.webhook_url ?? ''}
+                  onChange={(e) => setEditForm({ ...editForm, webhook_url: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Platform will POST to this URL when maintenance mode changes.
+                </p>
               </div>
               {editingApp?.maintenance_mode && (
                 <div className="grid gap-2">

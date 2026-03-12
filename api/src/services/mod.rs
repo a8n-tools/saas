@@ -8,6 +8,7 @@ pub mod jwt;
 pub mod password;
 pub mod stripe;
 pub mod totp;
+pub mod webhook;
 
 // Re-export service types
 pub use auth::{AuthService, AuthTokens, LoginResult, MagicLinkResult};
@@ -16,3 +17,4 @@ pub use jwt::{AccessTokenClaims, JwtConfig, JwtService, RefreshTokenClaims, TwoF
 pub use password::PasswordService;
 pub use stripe::{StripeConfig, StripeService, MembershipTier};
 pub use totp::TotpService;
+pub use webhook::WebhookService;

@@ -150,8 +150,9 @@ impl ApplicationRepository {
                 is_active        = COALESCE($9, is_active),
                 maintenance_mode = COALESCE($10, maintenance_mode),
                 maintenance_message = COALESCE($11, maintenance_message),
+                webhook_url      = COALESCE($12, webhook_url),
                 updated_at       = NOW()
-            WHERE id = $12
+            WHERE id = $13
             RETURNING *
             "#,
         )
@@ -166,6 +167,7 @@ impl ApplicationRepository {
         .bind(data.is_active)
         .bind(data.maintenance_mode)
         .bind(data.maintenance_message.as_deref())
+        .bind(data.webhook_url.as_deref())
         .bind(app_id)
         .fetch_one(pool)
         .await?;
