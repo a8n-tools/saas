@@ -4,8 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { render as rtlRender } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { VerifyEmailPage } from './VerifyEmailPage'
-import { useAuthStore } from '@/stores/authStore'
-import { mockUser } from '@/test/mocks/handlers'
+import { setupAuthUser } from '@/test/utils'
 
 function renderWithSearch(search = '') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -22,13 +21,7 @@ function renderWithSearch(search = '') {
 }
 
 beforeEach(() => {
-  useAuthStore.setState({
-    user: mockUser,
-    isAuthenticated: true,
-    isLoading: false,
-    error: null,
-    pendingChallenge: null,
-  })
+  setupAuthUser()
 })
 
 describe('VerifyEmailPage', () => {
