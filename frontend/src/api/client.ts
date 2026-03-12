@@ -5,6 +5,7 @@ const API_BASE_URL = config.apiUrl + '/v1'
 
 class ApiClient {
   private baseUrl: string
+  private refreshPromise: Promise<void> | null = null
 
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl
@@ -12,7 +13,8 @@ class ApiClient {
 
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    isRetry = false
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`
 
@@ -38,6 +40,34 @@ class ApiClient {
           message: 'Server returned a non-JSON response. Please refresh and try again.',
         },
       } satisfies ApiError
+    }
+
+    // On 401, try refreshing the token once and retry
+    if (
+      response.status === 401 &&
+      !isRetry &&
+      endpoint !== '/auth/refresh' &&
+      endpoint !== '/auth/login'
+    ) {
+      if (!this.refreshPromise) {
+        this.refreshPromise = fetch(`${this.baseUrl}/auth/refresh`, {
+          method: 'POST',
+          credentials: 'include',
+        })
+          .then((r) => {
+            if (!r.ok) throw new Error('refresh failed')
+          })
+          .finally(() => {
+            this.refreshPromise = null
+          })
+      }
+
+      try {
+        await this.refreshPromise
+        return this.request<T>(endpoint, options, true)
+      } catch {
+        // Refresh failed — fall through to normal error handling
+      }
     }
 
     if (!response.ok) {

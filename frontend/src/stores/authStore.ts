@@ -3,6 +3,29 @@ import { persist } from 'zustand/middleware'
 import type { User, TwoFactorChallengeResponse } from '@/types'
 import { authApi } from '@/api'
 
+// Proactive background refresh: refresh the access token 2 minutes before it expires
+const ACCESS_TOKEN_REFRESH_MS = 13 * 60 * 1000 // 13 minutes (access token expires at 15)
+let refreshTimer: ReturnType<typeof setTimeout> | null = null
+
+function clearRefreshTimer() {
+  if (refreshTimer) {
+    clearTimeout(refreshTimer)
+    refreshTimer = null
+  }
+}
+
+function scheduleRefresh() {
+  clearRefreshTimer()
+  refreshTimer = setTimeout(async () => {
+    try {
+      await authApi.refresh()
+      scheduleRefresh() // reschedule after success
+    } catch {
+      // Token couldn't be refreshed — user will get logged out on next API call
+    }
+  }, ACCESS_TOKEN_REFRESH_MS)
+}
+
 interface AuthState {
   user: User | null
   isAuthenticated: boolean
@@ -72,6 +95,7 @@ export const useAuthStore = create<AuthState>()(
               isLoading: false,
               pendingChallenge: null,
             })
+            scheduleRefresh()
           }
         } catch (err) {
           const error = err as { error?: { message?: string } }
@@ -100,6 +124,7 @@ export const useAuthStore = create<AuthState>()(
             isLoading: false,
             pendingChallenge: null,
           })
+          scheduleRefresh()
         } catch (err) {
           const error = err as { error?: { message?: string } }
           set({
@@ -119,6 +144,7 @@ export const useAuthStore = create<AuthState>()(
             isAuthenticated: true,
             isLoading: false,
           })
+          scheduleRefresh()
         } catch (err) {
           const error = err as { error?: { message?: string } }
           set({
@@ -130,6 +156,7 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: async () => {
+        clearRefreshTimer()
         try {
           await authApi.logout()
         } catch {
@@ -161,6 +188,7 @@ export const useAuthStore = create<AuthState>()(
             isAuthenticated: true,
             isLoading: false,
           })
+          scheduleRefresh()
         } catch {
           // Access token may be expired — try refreshing it
           try {
@@ -173,6 +201,7 @@ export const useAuthStore = create<AuthState>()(
               isAuthenticated: true,
               isLoading: false,
             })
+            scheduleRefresh()
           } catch {
             // Refresh token also failed — truly logged out
             set({
@@ -200,6 +229,7 @@ if (typeof window !== 'undefined') {
     if (e.key === 'auth-storage') {
       if (!e.newValue) {
         // Key was removed — logged out
+        clearRefreshTimer()
         useAuthStore.setState({
           user: null,
           isAuthenticated: false,
@@ -211,6 +241,7 @@ if (typeof window !== 'undefined') {
           const parsed = JSON.parse(e.newValue)
           const isAuthenticated = parsed?.state?.isAuthenticated ?? false
           if (!isAuthenticated) {
+            clearRefreshTimer()
             useAuthStore.setState({
               user: null,
               isAuthenticated: false,
