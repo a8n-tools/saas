@@ -107,8 +107,8 @@ export const mockAuditLog = {
   created_at: '2024-01-01T00:00:00Z',
 }
 
-// Must match the base URL used by apiClient
-const API_BASE = '/v1'
+// Must match the base URL used by apiClient (config.apiUrl + '/v1')
+const API_BASE = `${import.meta.env.VITE_API_URL || ''}/v1`
 
 export const handlers = [
   // Login
