@@ -60,6 +60,8 @@ pub struct EmailConfig {
     pub enabled: bool,
     /// Application name for email subjects and templates
     pub app_name: String,
+    /// Admin recipients for operational notifications
+    pub admin_notification_emails: Vec<String>,
 }
 
 impl EmailConfig {
@@ -105,6 +107,13 @@ impl EmailConfig {
                 .unwrap_or_else(|_| "http://localhost:5173".to_string()),
             enabled: (is_production && has_smtp) || force_enabled,
             app_name: env::var("APP_NAME").unwrap_or_else(|_| "localhost".to_string()),
+            admin_notification_emails: env::var("ADMIN_NOTIFICATION_EMAILS")
+                .unwrap_or_default()
+                .split(',')
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(ToOwned::to_owned)
+                .collect(),
         }
     }
 }

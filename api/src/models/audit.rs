@@ -42,6 +42,8 @@ pub enum AuditAction {
     TwoFactorRecoveryCodesRegenerated,
     EmailVerificationRequested,
     EmailVerified,
+    FeedbackSubmitted,
+    FeedbackResponded,
 }
 
 impl AuditAction {
@@ -78,6 +80,8 @@ impl AuditAction {
             AuditAction::TwoFactorRecoveryCodesRegenerated => "two_factor_recovery_codes_regenerated",
             AuditAction::EmailVerificationRequested => "email_verification_requested",
             AuditAction::EmailVerified => "email_verified",
+            AuditAction::FeedbackSubmitted => "feedback_submitted",
+            AuditAction::FeedbackResponded => "feedback_responded",
         }
     }
 
@@ -91,6 +95,7 @@ impl AuditAction {
                 | AuditAction::AdminUserDeactivated
                 | AuditAction::AdminUserActivated
                 | AuditAction::ApplicationMaintenanceToggled
+                | AuditAction::FeedbackResponded
         )
     }
 }
@@ -212,6 +217,7 @@ pub enum NotificationType {
     MembershipCanceled,
     GracePeriodExpiring,
     SystemAlert,
+    NewFeedback,
 }
 
 impl NotificationType {
@@ -222,6 +228,7 @@ impl NotificationType {
             NotificationType::MembershipCanceled => "membership_canceled",
             NotificationType::GracePeriodExpiring => "grace_period_expiring",
             NotificationType::SystemAlert => "system_alert",
+            NotificationType::NewFeedback => "new_feedback",
         }
     }
 }
