@@ -3,7 +3,7 @@
 //! This is the entry point for the backend API server.
 
 use actix_cors::Cors;
-use actix_web::{middleware::Logger, web, App, HttpServer};
+use actix_web::{middleware::Logger, middleware::NormalizePath, web, App, HttpServer};
 use sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;
 use std::time::Duration;
@@ -238,8 +238,10 @@ async fn main() -> anyhow::Result<()> {
             .wrap(SecurityHeaders)
             .wrap(RequestIdMiddleware)
             .wrap(cors)
-            // Auto-ban runs outermost — rejects banned IPs before CORS processing
+            // Auto-ban runs before CORS processing
             .wrap(AutoBanMiddleware::new(auto_ban_service.clone()))
+            // NormalizePath outermost — strips trailing slashes before routing
+            .wrap(NormalizePath::trim())
             // Explicit JSON body size limit (32 KB)
             .app_data(web::JsonConfig::default().limit(32_768))
             // Add database pool to app state
