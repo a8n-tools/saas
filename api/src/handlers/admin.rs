@@ -20,7 +20,7 @@ use crate::repositories::{
     TokenRepository, UserRepository,
 };
 use crate::responses::{get_request_id, paginated, success, success_no_data};
-use crate::services::{EmailService, JwtService};
+use crate::services::{EmailService, JwtService, WebhookService};
 
 // =============================================================================
 // User Management
@@ -300,16 +300,25 @@ pub async fn update_application(
     pool: web::Data<PgPool>,
     path: web::Path<uuid::Uuid>,
     body: web::Json<UpdateApplication>,
+    webhook_service: web::Data<Arc<WebhookService>>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
     let app_id = path.into_inner();
 
-    // Verify app exists
-    ApplicationRepository::find_by_id(&pool, app_id)
+    let old_app = ApplicationRepository::find_by_id(&pool, app_id)
         .await?
         .ok_or(AppError::not_found("Application"))?;
 
     let app = ApplicationRepository::update(&pool, app_id, &body).await?;
+
+    // Notify child app if maintenance mode changed
+    if old_app.maintenance_mode != app.maintenance_mode {
+        let ws = webhook_service.into_inner();
+        let app_clone = app.clone();
+        actix_web::rt::spawn(async move {
+            ws.notify_maintenance_change(&app_clone).await;
+        });
+    }
 
     Ok(success(app, request_id))
 }

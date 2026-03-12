@@ -20,7 +20,7 @@ use a8n_api::{
     },
     repositories::RateLimitRepository,
     routes,
-    services::{AuthService, EmailService, JwtConfig, JwtService, StripeConfig, StripeService, TotpService},
+    services::{AuthService, EmailService, JwtConfig, JwtService, StripeConfig, StripeService, TotpService, WebhookService},
 };
 
 #[tokio::main]
@@ -115,6 +115,11 @@ async fn main() -> anyhow::Result<()> {
     ));
 
     info!("TOTP service initialized");
+
+    // Initialize webhook service
+    let webhook_service = Arc::new(WebhookService::new(jwt_secret.clone()));
+
+    info!("Webhook service initialized");
 
     // Initialize auto-ban service
     let auto_ban_service = Arc::new(AutoBanService::new(config.auto_ban.clone(), pool.clone()));
@@ -250,6 +255,7 @@ async fn main() -> anyhow::Result<()> {
             .app_data(web::Data::new(email_service.clone()))
             .app_data(web::Data::new(stripe_service.clone()))
             .app_data(web::Data::new(totp_service.clone()))
+            .app_data(web::Data::new(webhook_service.clone()))
             .app_data(web::Data::new(config_data.clone()))
             // Configure routes
             .configure(routes::configure)

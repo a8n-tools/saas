@@ -20,6 +20,7 @@ pub struct Application {
     pub subdomain: Option<String>,
     pub container_name: String,
     pub health_check_url: Option<String>,
+    pub webhook_url: Option<String>,
     pub version: Option<String>,
     pub source_code_url: Option<String>,
     pub created_at: DateTime<Utc>,
@@ -93,4 +94,5 @@ pub struct UpdateApplication {
     pub is_active: Option<bool>,
     pub maintenance_mode: Option<bool>,
     pub maintenance_message: Option<String>,
+    pub webhook_url: Option<String>,
 }
