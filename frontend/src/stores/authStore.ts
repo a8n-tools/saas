@@ -37,7 +37,7 @@ interface AuthState {
   setUser: (user: User | null) => void
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
-  login: (email: string, password: string) => Promise<void>
+  login: (email: string, password: string, remember?: boolean) => Promise<void>
   register: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
   refreshUser: () => Promise<void>
@@ -79,10 +79,10 @@ export const useAuthStore = create<AuthState>()(
 
       clearPendingChallenge: () => set({ pendingChallenge: null }),
 
-      login: async (email, password) => {
+      login: async (email, password, remember) => {
         set({ isLoading: true, error: null })
         try {
-          const response = await authApi.login({ email, password })
+          const response = await authApi.login({ email, password, remember })
           if (isTwoFactorChallenge(response)) {
             set({
               pendingChallenge: { challenge_token: response.challenge_token },

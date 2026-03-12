@@ -15,6 +15,7 @@ import { AlertCircle, Loader2 } from 'lucide-react'
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
   password: z.string().min(1, 'Password is required'),
+  remember: z.boolean().optional(),
 })
 
 type LoginFormData = z.infer<typeof loginSchema>
@@ -116,7 +117,7 @@ export function LoginPage() {
     setIsLoading(true)
     clearError()
     try {
-      await login(data.email, data.password)
+      await login(data.email, data.password, data.remember)
       // Check if 2FA is required
       const { pendingChallenge } = useAuthStore.getState()
       if (pendingChallenge) {
@@ -181,6 +182,18 @@ export function LoginPage() {
               {errors.password && (
                 <p className="text-sm text-destructive">{errors.password.message}</p>
               )}
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <input
+                id="remember"
+                type="checkbox"
+                className="h-4 w-4 rounded border-border"
+                {...register('remember')}
+              />
+              <Label htmlFor="remember" className="text-sm font-normal cursor-pointer">
+                Remember me for 30 days
+              </Label>
             </div>
 
             <Button type="submit" className="w-full" disabled={isLoading}>
