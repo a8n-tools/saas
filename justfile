@@ -143,13 +143,17 @@ test-release:
     sleep 5sec
     let headers = {Authorization: $"token ($token)"}
     let runs = (http get --headers $headers "https://dev.a8n.run/api/v1/repos/a8n-tools/saas/actions/runs")
-    let matched = ($runs.workflow_runs | where head_branch == $tag)
+    let matched = ($runs.workflow_runs | where prettyref == $tag)
     if ($matched | is-empty) {
         print $"(ansi yellow)No workflow run found for ($tag) — skipping cancel(ansi reset)"
     } else {
         let run_id = ($matched | first | get id)
-        http post --headers $headers --content-type "application/json" $"https://dev.a8n.run/api/v1/repos/a8n-tools/saas/actions/runs/($run_id)/cancel" {}
-        print $"Cancelled workflow run ($run_id)"
+        try {
+            http post --headers $headers --content-type "application/json" $"https://dev.a8n.run/api/v1/repos/a8n-tools/saas/actions/runs/($run_id)/cancel" {}
+            print $"Cancelled workflow run ($run_id)"
+        } catch {
+            print $"(ansi yellow)Could not cancel run ($run_id) — may have already completed(ansi reset)"
+        }
     }
     ^git tag --delete $tag
     ^git push origin --delete $tag
