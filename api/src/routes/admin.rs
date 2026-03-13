@@ -34,6 +34,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route("/feedback/export", web::get().to(handlers::export_feedback))
             .route("/feedback/archive", web::get().to(handlers::list_feedback_archive))
             .route("/feedback/archive/{archive_id}/restore", web::post().to(handlers::restore_feedback))
+            .route("/feedback/{feedback_id}/attachments/{attachment_id}", web::get().to(handlers::get_attachment))
             .route("/feedback/{feedback_id}", web::get().to(handlers::get_feedback))
             .route("/feedback/{feedback_id}/respond", web::post().to(handlers::respond_to_feedback))
             .route("/feedback/{feedback_id}/status", web::put().to(handlers::update_feedback_status))

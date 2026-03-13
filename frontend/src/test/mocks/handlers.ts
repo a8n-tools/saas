@@ -134,6 +134,7 @@ export const mockFeedbackDetail = {
   responded_at: null,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
+  attachments: [],
 }
 
 // Must match the base URL used by apiClient (config.apiUrl + '/v1')

@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
-import { MessageCircleHeart, Loader2, Send, AlertCircle, Bug, Lightbulb, Sparkles, Workflow, X } from 'lucide-react'
+import { MessageCircleHeart, Loader2, Send, AlertCircle, Bug, Lightbulb, Sparkles, Workflow, X, Paperclip } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -11,6 +11,16 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { feedbackApi } from '@/api/feedback'
 import type { ApiError } from '@/types'
 import { cn } from '@/lib/utils'
+
+const MAX_FILES = 3
+const MAX_FILE_SIZE = 5 * 1024 * 1024
+const ACCEPTED_FILE_TYPES = 'image/png,image/jpeg,image/webp,image/gif,text/plain'
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
 
 const feedbackTagOptions = [
   {
@@ -72,7 +82,10 @@ const initialState: FormState = {
 export function FeedbackPage() {
   const location = useLocation()
   const [form, setForm] = useState<FormState>(initialState)
+  const [files, setFiles] = useState<File[]>([])
+  const [fileError, setFileError] = useState<string | null>(null)
   const [submitted, setSubmitted] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const pagePath = useMemo(() => {
     const state = location.state as { fromPath?: string } | null
@@ -94,17 +107,51 @@ export function FeedbackPage() {
       message: form.message,
       page_path: pagePath,
       website: form.website || undefined,
+      files,
     }),
     onSuccess: () => {
       setSubmitted(true)
       setForm(initialState)
+      setFiles([])
+      setFileError(null)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
     },
   })
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault()
     setSubmitted(false)
+    setFileError(null)
     submitMutation.mutate()
+  }
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = Array.from(event.target.files ?? [])
+    if (selectedFiles.length === 0) return
+
+    if (files.length + selectedFiles.length > MAX_FILES) {
+      setFileError(`You can attach up to ${MAX_FILES} files.`)
+      event.target.value = ''
+      return
+    }
+
+    const oversized = selectedFiles.find((file) => file.size > MAX_FILE_SIZE)
+    if (oversized) {
+      setFileError(`${oversized.name} exceeds the 5 MB limit.`)
+      event.target.value = ''
+      return
+    }
+
+    setFiles((current) => [...current, ...selectedFiles])
+    setFileError(null)
+    event.target.value = ''
+  }
+
+  const removeFile = (index: number) => {
+    setFiles((current) => current.filter((_, currentIndex) => currentIndex !== index))
+    setFileError(null)
   }
 
   const toggleTag = (tag: string) => {
@@ -160,6 +207,15 @@ export function FeedbackPage() {
             )}
 
             <form className="space-y-5" onSubmit={handleSubmit}>
+              <input
+                ref={fileInputRef}
+                type="file"
+                hidden
+                multiple
+                accept={ACCEPTED_FILE_TYPES}
+                onChange={handleFileChange}
+              />
+
               <div className="grid gap-5 md:grid-cols-2">
                 <div className="grid gap-2">
                   <Label htmlFor="name">Name</Label>
@@ -259,6 +315,53 @@ export function FeedbackPage() {
                 <p className="text-xs text-muted-foreground">
                   Shared from: <span className="font-medium text-foreground">{pagePathLabel}</span>
                 </p>
+              </div>
+
+              <div className="grid gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="space-y-1">
+                    <Label>Attachments</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Up to 3 files, 5 MB each. Images and plain text only.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="gap-2"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Paperclip className="h-4 w-4" />
+                    Attach files
+                  </Button>
+                </div>
+
+                {files.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {files.map((file, index) => (
+                      <div
+                        key={`${file.name}-${file.size}-${index}`}
+                        className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-muted/40 px-3 py-1.5 text-sm"
+                      >
+                        <Paperclip className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span>{file.name}</span>
+                        <span className="text-xs text-muted-foreground">({formatBytes(file.size)})</span>
+                        <button
+                          type="button"
+                          onClick={() => removeFile(index)}
+                          className="inline-flex text-muted-foreground transition hover:text-foreground"
+                          aria-label={`Remove ${file.name}`}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {fileError && (
+                  <p className="text-sm text-destructive">{fileError}</p>
+                )}
               </div>
 
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

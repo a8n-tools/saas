@@ -4,7 +4,7 @@ use sqlx::{PgPool, QueryBuilder};
 use uuid::Uuid;
 
 use crate::errors::AppError;
-use crate::models::{ArchivedFeedbackItem, CreateFeedback, Feedback, FeedbackStatus, RespondToFeedback};
+use crate::models::{ArchivedFeedbackItem, CreateFeedback, Feedback, FeedbackAttachmentMeta, FeedbackStatus, RespondToFeedback};
 
 pub struct FeedbackRepository;
 
@@ -190,6 +190,67 @@ impl FeedbackRepository {
         }
 
         Ok(())
+    }
+
+    pub async fn save_attachments(
+        pool: &PgPool,
+        feedback_id: Uuid,
+        attachments: Vec<(String, String, Vec<u8>)>,
+    ) -> Result<(), AppError> {
+        for (filename, mime_type, data) in attachments {
+            let size_bytes = data.len() as i32;
+            sqlx::query!(
+                r#"
+                INSERT INTO feedback_attachments (feedback_id, filename, mime_type, size_bytes, data)
+                VALUES ($1, $2, $3, $4, $5)
+                "#,
+                feedback_id,
+                filename,
+                mime_type,
+                size_bytes,
+                data as Vec<u8>,
+            )
+            .execute(pool)
+            .await?;
+        }
+        Ok(())
+    }
+
+    pub async fn find_attachments(
+        pool: &PgPool,
+        feedback_id: Uuid,
+    ) -> Result<Vec<FeedbackAttachmentMeta>, AppError> {
+        let rows = sqlx::query_as::<_, FeedbackAttachmentMeta>(
+            "SELECT id, feedback_id, filename, mime_type, size_bytes, created_at FROM feedback_attachments WHERE feedback_id = $1 ORDER BY created_at",
+        )
+        .bind(feedback_id)
+        .fetch_all(pool)
+        .await?;
+        Ok(rows)
+    }
+
+    pub async fn get_attachment_data(
+        pool: &PgPool,
+        attachment_id: Uuid,
+    ) -> Result<Option<(FeedbackAttachmentMeta, Vec<u8>)>, AppError> {
+        let row = sqlx::query!(
+            "SELECT id, feedback_id, filename, mime_type, size_bytes, data, created_at FROM feedback_attachments WHERE id = $1",
+            attachment_id,
+        )
+        .fetch_optional(pool)
+        .await?;
+
+        Ok(row.map(|r| {
+            let meta = FeedbackAttachmentMeta {
+                id: r.id,
+                feedback_id: r.feedback_id,
+                filename: r.filename,
+                mime_type: r.mime_type,
+                size_bytes: r.size_bytes,
+                created_at: r.created_at,
+            };
+            (meta, r.data)
+        }))
     }
 
     pub async fn archive_and_purge_closed(pool: &PgPool) -> Result<u64, AppError> {

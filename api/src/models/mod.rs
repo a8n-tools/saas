@@ -19,8 +19,9 @@ pub use audit::{
 };
 pub use feedback::{
     AdminFeedbackDetail, AdminFeedbackSummary, ArchivedFeedbackItem, CreateFeedback,
-    CreateFeedbackRequest, Feedback, FeedbackStatus, FeedbackSubmissionResponse, RespondToFeedback,
-    RespondToFeedbackRequest, UpdateFeedbackStatusRequest,
+    CreateFeedbackRequest, Feedback, FeedbackAttachmentMeta, FeedbackStatus,
+    FeedbackSubmissionResponse, RespondToFeedback, RespondToFeedbackRequest,
+    UpdateFeedbackStatusRequest,
 };
 pub use rate_limit::{RateLimit, RateLimitConfig};
 pub use membership::{

@@ -113,6 +113,16 @@ pub struct ArchivedFeedbackItem {
     pub created_at: Option<DateTime<Utc>>,
 }
 
+#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+pub struct FeedbackAttachmentMeta {
+    pub id: Uuid,
+    pub feedback_id: Uuid,
+    pub filename: String,
+    pub mime_type: String,
+    pub size_bytes: i32,
+    pub created_at: DateTime<Utc>,
+}
+
 #[derive(Debug, Serialize)]
 pub struct AdminFeedbackSummary {
     pub id: Uuid,
@@ -142,6 +152,7 @@ pub struct AdminFeedbackDetail {
     pub responded_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub attachments: Vec<FeedbackAttachmentMeta>,
 }
 
 impl Feedback {
@@ -183,7 +194,7 @@ impl Feedback {
         }
     }
 
-    pub fn to_admin_detail(&self) -> AdminFeedbackDetail {
+    pub fn to_admin_detail(&self, attachments: Vec<FeedbackAttachmentMeta>) -> AdminFeedbackDetail {
         AdminFeedbackDetail {
             id: self.id,
             name: self.name.clone(),
@@ -199,6 +210,7 @@ impl Feedback {
             responded_at: self.responded_at,
             created_at: self.created_at,
             updated_at: self.updated_at,
+            attachments,
         }
     }
 }

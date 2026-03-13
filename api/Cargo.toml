@@ -10,6 +10,7 @@ description = "Backend API for SaaS platform"
 actix-web = "4"
 actix-cors = "0.7"
 actix-rt = "2"
+actix-multipart = "0.7"
 
 # Async runtime
 tokio = { version = "1", features = ["full", "signal"] }

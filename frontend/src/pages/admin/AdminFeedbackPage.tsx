@@ -15,8 +15,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { MessageSquareQuote, Loader2, AlertCircle, Mail, ArrowRight, Bug, Lightbulb, Sparkles, Workflow, Download, RotateCcw } from 'lucide-react'
-import { adminApi, downloadFeedbackExport, type AdminFeedbackDetail, type AdminFeedbackStatus } from '@/api/admin'
+import { MessageSquareQuote, Loader2, AlertCircle, Mail, ArrowRight, Bug, Lightbulb, Sparkles, Workflow, Download, RotateCcw, Paperclip } from 'lucide-react'
+import { adminApi, downloadFeedbackExport, getFeedbackAttachmentUrl, type AdminFeedbackDetail, type AdminFeedbackStatus, type FeedbackAttachmentMeta } from '@/api/admin'
 import { formatDate, formatRelativeTime } from '@/lib/utils'
 import type { ApiError } from '@/types'
 import { cn } from '@/lib/utils'
@@ -51,6 +51,12 @@ function formatPagePath(path: string) {
   if (path === '/') return 'Landing page'
   const stripped = path.replace(/^\//, '')
   return stripped.charAt(0).toUpperCase() + stripped.slice(1)
+}
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
 export function AdminFeedbackPage() {
@@ -165,9 +171,34 @@ export function AdminFeedbackPage() {
         responded_at: summary.responded_at,
         created_at: summary.created_at,
         updated_at: summary.created_at,
+        attachments: [],
       })
       setResponse('')
     }
+  }
+
+  const openAttachment = async (feedbackId: string, attachment: FeedbackAttachmentMeta) => {
+    const response = await fetch(getFeedbackAttachmentUrl(feedbackId, attachment.id), {
+      credentials: 'include',
+    })
+    if (!response.ok) {
+      throw new Error('Attachment download failed')
+    }
+
+    const blob = await response.blob()
+    const url = URL.createObjectURL(blob)
+
+    if (attachment.mime_type.startsWith('image/')) {
+      window.open(url, '_blank', 'noopener,noreferrer')
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
+      return
+    }
+
+    const link = document.createElement('a')
+    link.href = url
+    link.download = attachment.filename
+    link.click()
+    URL.revokeObjectURL(url)
   }
 
   const renderTag = (tag: string) => {
@@ -412,6 +443,26 @@ export function AdminFeedbackPage() {
                 </div>
               </div>
 
+              {activeFeedback.attachments?.length > 0 && (
+                <div className="grid gap-2">
+                  <Label>Attachments</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {activeFeedback.attachments.map((attachment) => (
+                      <button
+                        key={attachment.id}
+                        type="button"
+                        onClick={() => void openAttachment(activeFeedback.id, attachment)}
+                        className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background/60 px-3 py-1.5 text-sm transition hover:border-primary/40 hover:bg-primary/5"
+                      >
+                        <Paperclip className="h-3.5 w-3.5" />
+                        {attachment.filename}
+                        <span className="text-xs text-muted-foreground">({formatBytes(attachment.size_bytes)})</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="grid gap-2">
                 <Label htmlFor="admin-response">Response</Label>
                 <Textarea
@@ -448,13 +499,23 @@ export function AdminFeedbackPage() {
                 </Button>
               )}
               {activeFeedback && activeFeedback.status === 'closed' && (
-                <Button
-                  variant="destructive"
-                  onClick={() => setShowDeleteConfirm(true)}
-                  disabled={deleteMutation.isPending}
-                >
-                  Delete
-                </Button>
+                <>
+                  <Button
+                    variant="outline"
+                    className="text-muted-foreground"
+                    onClick={() => selectedFeedback && statusMutation.mutate({ feedbackId: selectedFeedback.id, status: 'reviewed' })}
+                    disabled={statusMutation.isPending}
+                  >
+                    {statusMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Reopen'}
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={() => setShowDeleteConfirm(true)}
+                    disabled={deleteMutation.isPending}
+                  >
+                    Delete
+                  </Button>
+                </>
               )}
             </div>
             <Button

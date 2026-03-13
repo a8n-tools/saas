@@ -1,4 +1,5 @@
 import { apiClient } from './client'
+import { config } from '@/config'
 import type {
   User,
   Membership,
@@ -125,6 +126,16 @@ export interface AdminFeedbackDetail {
   responded_at: string | null
   created_at: string
   updated_at: string
+  attachments: FeedbackAttachmentMeta[]
+}
+
+export interface FeedbackAttachmentMeta {
+  id: string
+  feedback_id: string
+  filename: string
+  mime_type: string
+  size_bytes: number
+  created_at: string
 }
 
 export interface ArchivedFeedbackItem {
@@ -155,7 +166,7 @@ export interface RevokeMembershipRequest {
 }
 
 export async function downloadFeedbackExport(): Promise<void> {
-  const response = await fetch('/api/admin/feedback/export', { credentials: 'include' })
+  const response = await fetch(`${config.apiUrl}/v1/admin/feedback/export`, { credentials: 'include' })
   if (!response.ok) throw new Error('Export failed')
   const blob = await response.blob()
   const url = URL.createObjectURL(blob)
@@ -164,6 +175,10 @@ export async function downloadFeedbackExport(): Promise<void> {
   a.download = 'feedback.csv'
   a.click()
   URL.revokeObjectURL(url)
+}
+
+export function getFeedbackAttachmentUrl(feedbackId: string, attachmentId: string): string {
+  return `${config.apiUrl}/v1/admin/feedback/${feedbackId}/attachments/${attachmentId}`
 }
 
 export const adminApi = {
