@@ -341,3 +341,117 @@ pub async fn update_feedback_status(
 
     Ok(success(updated.to_admin_detail(), request_id))
 }
+
+pub async fn delete_feedback(
+    req: HttpRequest,
+    admin: AdminUser,
+    pool: web::Data<PgPool>,
+    path: web::Path<uuid::Uuid>,
+) -> Result<HttpResponse, AppError> {
+    let request_id = get_request_id(&req);
+    let feedback_id = path.into_inner();
+
+    FeedbackRepository::delete(&pool, feedback_id).await?;
+
+    AuditLogRepository::create(
+        &pool,
+        CreateAuditLog::new(AuditAction::FeedbackDeleted)
+            .with_actor(admin.0.sub, &admin.0.email, &admin.0.role)
+            .with_resource("feedback", feedback_id),
+    )
+    .await?;
+
+    Ok(success(serde_json::json!({}), request_id))
+}
+
+fn csv_field(value: &str) -> String {
+    if value.contains(',') || value.contains('"') || value.contains('\n') {
+        format!("\"{}\"", value.replace('"', "\"\""))
+    } else {
+        value.to_string()
+    }
+}
+
+fn csv_opt(value: &Option<String>) -> String {
+    value.as_deref().map(csv_field).unwrap_or_default()
+}
+
+pub async fn export_feedback(
+    req: HttpRequest,
+    _admin: AdminUser,
+    pool: web::Data<PgPool>,
+) -> Result<HttpResponse, AppError> {
+    let _ = get_request_id(&req);
+    let feedback = FeedbackRepository::list_all(&pool).await?;
+
+    let mut csv = String::from(
+        "id,name,email,subject,tags,message,page_path,status,admin_response,responded_at,is_spam,created_at,updated_at\r\n",
+    );
+
+    for item in &feedback {
+        csv.push_str(&format!(
+            "{},{},{},{},{},{},{},{},{},{},{},{},{}\r\n",
+            item.id,
+            csv_opt(&item.name),
+            csv_opt(&item.email),
+            csv_opt(&item.subject),
+            csv_field(&item.tags.join("|")),
+            csv_field(&item.message),
+            csv_opt(&item.page_path),
+            csv_field(&item.status),
+            csv_opt(&item.admin_response),
+            item.responded_at.map(|t| t.to_rfc3339()).unwrap_or_default(),
+            item.is_spam,
+            item.created_at.to_rfc3339(),
+            item.updated_at.to_rfc3339(),
+        ));
+    }
+
+    Ok(HttpResponse::Ok()
+        .content_type("text/csv; charset=utf-8")
+        .insert_header(("Content-Disposition", "attachment; filename=\"feedback.csv\""))
+        .body(csv))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ListArchiveQuery {
+    pub page: Option<i32>,
+    pub per_page: Option<i32>,
+}
+
+pub async fn list_feedback_archive(
+    req: HttpRequest,
+    _admin: AdminUser,
+    pool: web::Data<PgPool>,
+    query: web::Query<ListArchiveQuery>,
+) -> Result<HttpResponse, AppError> {
+    let request_id = get_request_id(&req);
+    let page = query.page.unwrap_or(1).max(1);
+    let per_page = query.per_page.unwrap_or(20).min(100);
+
+    let (items, total) = FeedbackRepository::list_archived(&pool, page, per_page).await?;
+
+    Ok(paginated(items, total, page, per_page, request_id))
+}
+
+pub async fn restore_feedback(
+    req: HttpRequest,
+    admin: AdminUser,
+    pool: web::Data<PgPool>,
+    path: web::Path<uuid::Uuid>,
+) -> Result<HttpResponse, AppError> {
+    let request_id = get_request_id(&req);
+    let archive_id = path.into_inner();
+
+    let feedback = FeedbackRepository::restore_from_archive(&pool, archive_id).await?;
+
+    AuditLogRepository::create(
+        &pool,
+        CreateAuditLog::new(AuditAction::FeedbackRestored)
+            .with_actor(admin.0.sub, &admin.0.email, &admin.0.role)
+            .with_resource("feedback", feedback.id),
+    )
+    .await?;
+
+    Ok(success(feedback.to_admin_detail(), request_id))
+}

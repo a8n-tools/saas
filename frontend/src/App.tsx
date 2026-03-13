@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { PublicLayout } from '@/components/layout/PublicLayout'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { AdminLayout } from '@/components/layout/AdminLayout'
+import { FeedbackLauncher } from '@/components/layout/FeedbackLauncher'
 
 // Public pages
 import { LandingPage } from '@/pages/public/LandingPage'
@@ -122,6 +123,8 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
+    <>
+    <FeedbackLauncher />
     <Routes>
       {/* Public routes */}
       <Route element={<PublicLayout />}>
@@ -177,5 +180,6 @@ export default function App() {
       {/* 404 */}
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
+    </>
   )
 }

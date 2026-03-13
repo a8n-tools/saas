@@ -15,8 +15,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { MessageSquareQuote, Loader2, AlertCircle, Mail, ArrowRight, Bug, Lightbulb, Sparkles, Workflow } from 'lucide-react'
-import { adminApi, type AdminFeedbackDetail, type AdminFeedbackStatus } from '@/api/admin'
+import { MessageSquareQuote, Loader2, AlertCircle, Mail, ArrowRight, Bug, Lightbulb, Sparkles, Workflow, Download, RotateCcw } from 'lucide-react'
+import { adminApi, downloadFeedbackExport, type AdminFeedbackDetail, type AdminFeedbackStatus } from '@/api/admin'
 import { formatDate, formatRelativeTime } from '@/lib/utils'
 import type { ApiError } from '@/types'
 import { cn } from '@/lib/utils'
@@ -57,9 +57,11 @@ export function AdminFeedbackPage() {
   const queryClient = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
   const [page, setPage] = useState(1)
-  const [selectedStatus, setSelectedStatus] = useState<AdminFeedbackStatus | 'all'>('all')
+  const [selectedStatus, setSelectedStatus] = useState<AdminFeedbackStatus | 'all' | 'archived'>('all')
   const [selectedFeedback, setSelectedFeedback] = useState<AdminFeedbackDetail | null>(null)
   const [response, setResponse] = useState('')
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [exportLoading, setExportLoading] = useState(false)
 
   const linkedId = searchParams.get('id')
 
@@ -73,7 +75,14 @@ export function AdminFeedbackPage() {
 
   const listQuery = useQuery({
     queryKey: ['admin', 'feedback', page, selectedStatus],
-    queryFn: () => adminApi.getFeedback(page, 20, selectedStatus === 'all' ? undefined : selectedStatus),
+    queryFn: () => adminApi.getFeedback(page, 20, selectedStatus === 'all' || selectedStatus === 'archived' ? undefined : selectedStatus),
+    enabled: selectedStatus !== 'archived',
+  })
+
+  const archiveQuery = useQuery({
+    queryKey: ['admin', 'feedback', 'archive', page],
+    queryFn: () => adminApi.getArchivedFeedback(page, 20),
+    enabled: selectedStatus === 'archived',
   })
 
   const detailQuery = useQuery({
@@ -102,6 +111,23 @@ export function AdminFeedbackPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedFeedback?.id, detailQuery.data?.status])
 
+  const deleteMutation = useMutation({
+    mutationFn: (feedbackId: string) => adminApi.deleteFeedback(feedbackId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'feedback'] })
+      setShowDeleteConfirm(false)
+      setSelectedFeedback(null)
+      setSearchParams({}, { replace: true })
+    },
+  })
+
+  const restoreMutation = useMutation({
+    mutationFn: (archiveId: string) => adminApi.restoreFeedback(archiveId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'feedback'] })
+    },
+  })
+
   const respondMutation = useMutation({
     mutationFn: (feedbackId: string) => adminApi.respondToFeedback(feedbackId, {
       response,
@@ -117,7 +143,7 @@ export function AdminFeedbackPage() {
   const activeFeedback = detailQuery.data ?? selectedFeedback
 
   const statusOptions = useMemo(
-    () => ['all', 'new', 'reviewed', 'responded', 'closed'] as const,
+    () => ['all', 'new', 'reviewed', 'responded', 'closed', 'archived'] as const,
     []
   )
 
@@ -169,7 +195,7 @@ export function AdminFeedbackPage() {
             Review what users are asking for and respond without leaving admin.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {statusOptions.map((status) => (
             <Button
               key={status}
@@ -180,9 +206,21 @@ export function AdminFeedbackPage() {
                 setPage(1)
               }}
             >
-              {status === 'all' ? 'All' : status}
+              {status === 'all' ? 'All' : status.charAt(0).toUpperCase() + status.slice(1)}
             </Button>
           ))}
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={exportLoading}
+            onClick={async () => {
+              setExportLoading(true)
+              try { await downloadFeedbackExport() } finally { setExportLoading(false) }
+            }}
+          >
+            {exportLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            <span className="ml-1.5">Export CSV</span>
+          </Button>
         </div>
       </div>
 
@@ -196,11 +234,69 @@ export function AdminFeedbackPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Incoming feedback</CardTitle>
-          <CardDescription>Newest first. Email addresses stay masked here until you open an item.</CardDescription>
+          <CardTitle>{selectedStatus === 'archived' ? 'Archived feedback' : 'Incoming feedback'}</CardTitle>
+          <CardDescription>
+            {selectedStatus === 'archived'
+              ? 'Closed items auto-archived after 90 days. Restore to bring them back for review.'
+              : 'Newest first. Email addresses stay masked here until you open an item.'}
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          {listQuery.isLoading ? (
+          {selectedStatus === 'archived' ? (
+            archiveQuery.isLoading ? (
+              <div className="flex justify-center py-10">
+                <Loader2 className="h-8 w-8 animate-spin" />
+              </div>
+            ) : (
+              <>
+                <div className="space-y-4">
+                  {archiveQuery.data?.items.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex flex-col gap-4 rounded-xl border border-border/60 bg-background/50 p-4 md:flex-row md:items-start md:justify-between"
+                    >
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {item.original_status && (
+                            <Badge variant="default">{item.original_status.charAt(0).toUpperCase() + item.original_status.slice(1)}</Badge>
+                          )}
+                          {item.subject && <span className="font-medium">{item.subject}</span>}
+                        </div>
+                        {item.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-2">{item.tags.map(renderTag)}</div>
+                        )}
+                        <p className="text-sm text-muted-foreground">{item.message_excerpt}</p>
+                        <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                          {item.name && <span>{item.name}</span>}
+                          {item.created_at && <span>{formatRelativeTime(item.created_at)}</span>}
+                          <span className="text-muted-foreground/60">Archived {formatRelativeTime(item.archived_at)}</span>
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={restoreMutation.isPending}
+                        onClick={() => restoreMutation.mutate(item.id)}
+                      >
+                        {restoreMutation.isPending ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <>
+                            <RotateCcw className="mr-1.5 h-4 w-4" />
+                            Restore
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+
+                {archiveQuery.data?.items.length === 0 && (
+                  <p className="py-10 text-center text-muted-foreground">No archived feedback.</p>
+                )}
+              </>
+            )
+          ) : listQuery.isLoading ? (
             <div className="flex justify-center py-10">
               <Loader2 className="h-8 w-8 animate-spin" />
             </div>
@@ -217,7 +313,7 @@ export function AdminFeedbackPage() {
                     <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                       <div className="space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
-                          <Badge variant={statusVariant[item.status]}>{item.status}</Badge>
+                          <Badge variant={statusVariant[item.status]}>{item.status.charAt(0).toUpperCase() + item.status.slice(1)}</Badge>
                           {item.subject && <span className="font-medium">{item.subject}</span>}
                         </div>
                         {item.tags.length > 0 && (
@@ -293,7 +389,7 @@ export function AdminFeedbackPage() {
             <div className="space-y-6">
               <div className="rounded-xl border border-border/60 bg-muted/30 p-4">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant={statusVariant[activeFeedback.status]}>{activeFeedback.status}</Badge>
+                  <Badge variant={statusVariant[activeFeedback.status]}>{activeFeedback.status.charAt(0).toUpperCase() + activeFeedback.status.slice(1)}</Badge>
                   {activeFeedback.subject && <span className="font-medium">{activeFeedback.subject}</span>}
                 </div>
                 {activeFeedback.tags.length > 0 && (
@@ -351,6 +447,15 @@ export function AdminFeedbackPage() {
                   {statusMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Mark closed'}
                 </Button>
               )}
+              {activeFeedback && activeFeedback.status === 'closed' && (
+                <Button
+                  variant="destructive"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  disabled={deleteMutation.isPending}
+                >
+                  Delete
+                </Button>
+              )}
             </div>
             <Button
               onClick={() => selectedFeedback && respondMutation.mutate(selectedFeedback.id)}
@@ -364,6 +469,29 @@ export function AdminFeedbackPage() {
               ) : (
                 'Save response'
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Permanently delete this feedback?</DialogTitle>
+            <DialogDescription>
+              This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeleteConfirm(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => activeFeedback && deleteMutation.mutate(activeFeedback.id)}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Delete permanently'}
             </Button>
           </DialogFooter>
         </DialogContent>

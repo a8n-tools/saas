@@ -4,7 +4,7 @@ use sqlx::{PgPool, QueryBuilder};
 use uuid::Uuid;
 
 use crate::errors::AppError;
-use crate::models::{CreateFeedback, Feedback, FeedbackStatus, RespondToFeedback};
+use crate::models::{ArchivedFeedbackItem, CreateFeedback, Feedback, FeedbackStatus, RespondToFeedback};
 
 pub struct FeedbackRepository;
 
@@ -90,6 +90,133 @@ impl FeedbackRepository {
         .await?;
 
         Ok(feedback)
+    }
+
+    pub async fn list_all(pool: &PgPool) -> Result<Vec<Feedback>, AppError> {
+        let feedback = sqlx::query_as::<_, Feedback>(
+            "SELECT * FROM feedback WHERE is_spam = false ORDER BY created_at DESC",
+        )
+        .fetch_all(pool)
+        .await?;
+
+        Ok(feedback)
+    }
+
+    pub async fn list_archived(
+        pool: &PgPool,
+        page: i32,
+        per_page: i32,
+    ) -> Result<(Vec<ArchivedFeedbackItem>, i64), AppError> {
+        let offset = (page - 1) * per_page;
+
+        let items = sqlx::query_as::<_, ArchivedFeedbackItem>(
+            r#"
+            SELECT
+                id,
+                archived_at,
+                (data->>'name')::text                                                     AS name,
+                (data->>'email')::text                                                    AS email,
+                (data->>'subject')::text                                                  AS subject,
+                ARRAY(SELECT jsonb_array_elements_text(COALESCE(data->'tags', '[]'::jsonb))) AS tags,
+                LEFT(COALESCE(data->>'message', ''), 120)                                 AS message_excerpt,
+                (data->>'status')::text                                                   AS original_status,
+                (data->>'created_at')::timestamptz                                        AS created_at
+            FROM feedback_archive
+            ORDER BY archived_at DESC
+            LIMIT $1 OFFSET $2
+            "#,
+        )
+        .bind(per_page)
+        .bind(offset)
+        .fetch_all(pool)
+        .await?;
+
+        let total: (i64,) = sqlx::query_as("SELECT COUNT(*)::BIGINT FROM feedback_archive")
+            .fetch_one(pool)
+            .await?;
+
+        Ok((items, total.0))
+    }
+
+    pub async fn restore_from_archive(pool: &PgPool, id: Uuid) -> Result<Feedback, AppError> {
+        let feedback = sqlx::query_as::<_, Feedback>(
+            r#"
+            WITH archive_data AS (
+                DELETE FROM feedback_archive WHERE id = $1 RETURNING data
+            )
+            INSERT INTO feedback (
+                id, name, email, subject, tags, message, page_path,
+                status, admin_response, responded_by, responded_at,
+                is_spam, created_at, updated_at
+            )
+            SELECT
+                (data->>'id')::uuid,
+                data->>'name',
+                data->>'email',
+                data->>'subject',
+                ARRAY(SELECT jsonb_array_elements_text(COALESCE(data->'tags', '[]'::jsonb))),
+                data->>'message',
+                data->>'page_path',
+                'reviewed',
+                data->>'admin_response',
+                (data->>'responded_by')::uuid,
+                (data->>'responded_at')::timestamptz,
+                COALESCE((data->>'is_spam')::boolean, false),
+                (data->>'created_at')::timestamptz,
+                NOW()
+            FROM archive_data
+            ON CONFLICT (id) DO UPDATE
+                SET status = 'reviewed', updated_at = NOW()
+            RETURNING *
+            "#,
+        )
+        .bind(id)
+        .fetch_one(pool)
+        .await?;
+
+        Ok(feedback)
+    }
+
+    pub async fn delete(pool: &PgPool, id: Uuid) -> Result<(), AppError> {
+        let result = sqlx::query!(
+            "DELETE FROM feedback WHERE id = $1 AND status = 'closed'",
+            id
+        )
+        .execute(pool)
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::not_found("Feedback"));
+        }
+
+        Ok(())
+    }
+
+    pub async fn archive_and_purge_closed(pool: &PgPool) -> Result<u64, AppError> {
+        let result = sqlx::query!(
+            r#"
+            WITH to_purge AS (
+                SELECT id FROM feedback
+                WHERE status = 'closed'
+                  AND updated_at < NOW() - INTERVAL '90 days'
+            ),
+            archived AS (
+                INSERT INTO feedback_archive (id, data)
+                SELECT f.id, row_to_json(f)::jsonb
+                FROM feedback f
+                JOIN to_purge tp ON f.id = tp.id
+                ON CONFLICT (id) DO NOTHING
+                RETURNING id
+            )
+            DELETE FROM feedback f
+            USING archived a
+            WHERE f.id = a.id
+            "#
+        )
+        .execute(pool)
+        .await?;
+
+        Ok(result.rows_affected())
     }
 
     pub async fn respond(

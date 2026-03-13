@@ -1,7 +1,6 @@
 import { Outlet } from 'react-router-dom'
 import { Header } from './Header'
 import { Footer } from './Footer'
-import { FeedbackLauncher } from './FeedbackLauncher'
 
 export function PublicLayout() {
   return (
@@ -11,7 +10,6 @@ export function PublicLayout() {
         <Outlet />
       </main>
       <Footer />
-      <FeedbackLauncher />
     </div>
   )
 }

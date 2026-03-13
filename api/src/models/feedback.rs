@@ -100,6 +100,19 @@ pub struct FeedbackSubmissionResponse {
     pub message: String,
 }
 
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct ArchivedFeedbackItem {
+    pub id: Uuid,
+    pub archived_at: DateTime<Utc>,
+    pub name: Option<String>,
+    pub email: Option<String>,
+    pub subject: Option<String>,
+    pub tags: Vec<String>,
+    pub message_excerpt: String,
+    pub original_status: Option<String>,
+    pub created_at: Option<DateTime<Utc>>,
+}
+
 #[derive(Debug, Serialize)]
 pub struct AdminFeedbackSummary {
     pub id: Uuid,

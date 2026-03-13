@@ -127,6 +127,18 @@ export interface AdminFeedbackDetail {
   updated_at: string
 }
 
+export interface ArchivedFeedbackItem {
+  id: string
+  archived_at: string
+  name: string | null
+  email: string | null
+  subject: string | null
+  tags: string[]
+  message_excerpt: string
+  original_status: string | null
+  created_at: string | null
+}
+
 export interface RespondToFeedbackRequest {
   response: string
   status?: AdminFeedbackStatus
@@ -140,6 +152,18 @@ export interface GrantMembershipRequest {
 
 export interface RevokeMembershipRequest {
   user_id: string
+}
+
+export async function downloadFeedbackExport(): Promise<void> {
+  const response = await fetch('/api/admin/feedback/export', { credentials: 'include' })
+  if (!response.ok) throw new Error('Export failed')
+  const blob = await response.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'feedback.csv'
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 export const adminApi = {
@@ -226,6 +250,17 @@ export const adminApi = {
 
   updateFeedbackStatus: (feedbackId: string, status: AdminFeedbackStatus): Promise<AdminFeedbackDetail> =>
     apiClient.put(`/admin/feedback/${feedbackId}/status`, { status }),
+
+  deleteFeedback: (feedbackId: string): Promise<void> =>
+    apiClient.delete(`/admin/feedback/${feedbackId}`),
+
+  getArchivedFeedback: (page = 1, pageSize = 20): Promise<PaginatedResponse<ArchivedFeedbackItem>> => {
+    const params = new URLSearchParams({ page: String(page), per_page: String(pageSize) })
+    return apiClient.get(`/admin/feedback/archive?${params}`)
+  },
+
+  restoreFeedback: (archiveId: string): Promise<AdminFeedbackDetail> =>
+    apiClient.post(`/admin/feedback/archive/${archiveId}/restore`),
 
   // Notifications
   getNotifications: (): Promise<AdminNotification[]> =>

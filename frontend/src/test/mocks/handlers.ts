@@ -107,6 +107,35 @@ export const mockAuditLog = {
   created_at: '2024-01-01T00:00:00Z',
 }
 
+export const mockFeedbackSummary = {
+  id: 'fb-001',
+  name: 'Alice',
+  email_masked: 'al***@example.com',
+  subject: 'Login issue',
+  tags: ['Bug'],
+  message_excerpt: 'I cannot log in with my credentials.',
+  status: 'new' as const,
+  created_at: '2026-01-01T00:00:00Z',
+  responded_at: null,
+}
+
+export const mockFeedbackDetail = {
+  id: 'fb-001',
+  name: 'Alice',
+  email: 'alice@example.com',
+  email_masked: 'al***@example.com',
+  subject: 'Login issue',
+  tags: ['Bug'],
+  message: 'I cannot log in with my credentials.',
+  page_path: '/login',
+  status: 'new' as const,
+  admin_response: null,
+  responded_by: null,
+  responded_at: null,
+  created_at: '2026-01-01T00:00:00Z',
+  updated_at: '2026-01-01T00:00:00Z',
+}
+
 // Must match the base URL used by apiClient (config.apiUrl + '/v1')
 const API_BASE = `${import.meta.env.VITE_API_URL || ''}/v1`
 
@@ -507,5 +536,71 @@ export const handlers = [
 
   http.post(`${API_BASE}/admin/memberships/revoke`, () => {
     return HttpResponse.json({ success: true, data: { message: 'Revoked' } })
+  }),
+
+  // Feedback (admin)
+  http.get(`${API_BASE}/admin/feedback`, () => {
+    return HttpResponse.json({
+      success: true,
+      data: {
+        items: [mockFeedbackSummary],
+        total: 1,
+        page: 1,
+        total_pages: 1,
+      },
+    })
+  }),
+
+  http.get(`${API_BASE}/admin/feedback/:feedbackId`, () => {
+    return HttpResponse.json({ success: true, data: mockFeedbackDetail })
+  }),
+
+  http.post(`${API_BASE}/admin/feedback/:feedbackId/respond`, () => {
+    return HttpResponse.json({
+      success: true,
+      data: { ...mockFeedbackDetail, status: 'responded', admin_response: 'Thank you for your feedback!' },
+    })
+  }),
+
+  http.put(`${API_BASE}/admin/feedback/:feedbackId/status`, () => {
+    return HttpResponse.json({
+      success: true,
+      data: { ...mockFeedbackDetail, status: 'closed' },
+    })
+  }),
+
+  http.delete(`${API_BASE}/admin/feedback/:feedbackId`, () => {
+    return HttpResponse.json({ success: true, data: {} })
+  }),
+
+  http.get(`${API_BASE}/admin/feedback/export`, () => {
+    return new HttpResponse('id,name,email\r\nfb-001,Alice,al***@example.com\r\n', {
+      headers: { 'Content-Type': 'text/csv' },
+    })
+  }),
+
+  http.get(`${API_BASE}/admin/feedback/archive`, () => {
+    return HttpResponse.json({
+      success: true,
+      data: {
+        items: [],
+        total: 0,
+        page: 1,
+        per_page: 20,
+        total_pages: 1,
+      },
+    })
+  }),
+
+  http.post(`${API_BASE}/admin/feedback/archive/:archiveId/restore`, () => {
+    return HttpResponse.json({ success: true, data: { ...mockFeedbackDetail, status: 'reviewed' } })
+  }),
+
+  // Feedback (public)
+  http.post(`${API_BASE}/feedback`, () => {
+    return HttpResponse.json({
+      success: true,
+      data: { id: 'fb-001', message: 'Feedback submitted' },
+    })
   }),
 ]
