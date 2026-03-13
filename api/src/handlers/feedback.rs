@@ -115,7 +115,11 @@ pub async fn submit_feedback(
     let mut website_raw: Option<String> = None;
     let mut attachment_parts: Vec<(String, String, Vec<u8>)> = Vec::new();
 
-    while let Some(mut field) = payload.try_next().await.map_err(|_| AppError::bad_request("Invalid multipart data"))? {
+    while let Some(mut field) = payload
+        .try_next()
+        .await
+        .map_err(|_| AppError::validation("attachment", "Invalid multipart data"))?
+    {
         let content_disposition = field.content_disposition().cloned();
         let field_name = content_disposition
             .as_ref()
@@ -129,7 +133,11 @@ pub async fn submit_feedback(
 
         // Collect field bytes
         let mut bytes = Vec::new();
-        while let Some(chunk) = field.try_next().await.map_err(|_| AppError::bad_request("Failed to read field"))? {
+        while let Some(chunk) = field
+            .try_next()
+            .await
+            .map_err(|_| AppError::validation("attachment", "Failed to read field"))?
+        {
             bytes.extend_from_slice(&chunk);
             if filename.is_some() && bytes.len() > MAX_ATTACHMENT_SIZE {
                 return Err(AppError::validation("attachment", "File exceeds 5 MB limit"));

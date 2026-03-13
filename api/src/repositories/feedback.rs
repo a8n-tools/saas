@@ -199,17 +199,17 @@ impl FeedbackRepository {
     ) -> Result<(), AppError> {
         for (filename, mime_type, data) in attachments {
             let size_bytes = data.len() as i32;
-            sqlx::query!(
+            sqlx::query(
                 r#"
                 INSERT INTO feedback_attachments (feedback_id, filename, mime_type, size_bytes, data)
                 VALUES ($1, $2, $3, $4, $5)
                 "#,
-                feedback_id,
-                filename,
-                mime_type,
-                size_bytes,
-                data as Vec<u8>,
             )
+            .bind(feedback_id)
+            .bind(filename)
+            .bind(mime_type)
+            .bind(size_bytes)
+            .bind(data)
             .execute(pool)
             .await?;
         }
@@ -233,23 +233,23 @@ impl FeedbackRepository {
         pool: &PgPool,
         attachment_id: Uuid,
     ) -> Result<Option<(FeedbackAttachmentMeta, Vec<u8>)>, AppError> {
-        let row = sqlx::query!(
+        let row = sqlx::query_as::<_, (Uuid, Uuid, String, String, i32, Vec<u8>, chrono::DateTime<chrono::Utc>)>(
             "SELECT id, feedback_id, filename, mime_type, size_bytes, data, created_at FROM feedback_attachments WHERE id = $1",
-            attachment_id,
         )
+        .bind(attachment_id)
         .fetch_optional(pool)
         .await?;
 
         Ok(row.map(|r| {
             let meta = FeedbackAttachmentMeta {
-                id: r.id,
-                feedback_id: r.feedback_id,
-                filename: r.filename,
-                mime_type: r.mime_type,
-                size_bytes: r.size_bytes,
-                created_at: r.created_at,
+                id: r.0,
+                feedback_id: r.1,
+                filename: r.2,
+                mime_type: r.3,
+                size_bytes: r.4,
+                created_at: r.6,
             };
-            (meta, r.data)
+            (meta, r.5)
         }))
     }
 
