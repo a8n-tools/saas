@@ -600,7 +600,18 @@ export function AdminApplicationsPage() {
                       id="delete_totp"
                       required
                       value={deleteTotpCode}
-                      onChange={(e) => setDeleteTotpCode(e.target.value)}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, '').slice(0, 6)
+                        setDeleteTotpCode(val)
+                        if (val.length === 6 && deletingApp && !deleteMutation.isPending) {
+                          setDeleteError('')
+                          deleteMutation.mutate({
+                            appId: deletingApp.id,
+                            password: deletePassword,
+                            totp_code: val,
+                          })
+                        }
+                      }}
                       placeholder="000000"
                       maxLength={6}
                       pattern="[0-9]{6}"
