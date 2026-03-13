@@ -570,59 +570,46 @@ export function AdminApplicationsPage() {
                 </Button>
               </DialogFooter>
             </div>
-          ) : deleteStep === 1 ? (
-            <form onSubmit={handleDeletePasswordStep}>
-              <div className="grid gap-4 py-4">
-                <Alert variant="destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>
-                    You are about to delete <strong>{deletingApp?.display_name}</strong> ({deletingApp?.slug}). This action is irreversible.
-                  </AlertDescription>
-                </Alert>
-                <div className="grid gap-2">
-                  <Label htmlFor="delete_password">Confirm your password</Label>
-                  <Input
-                    id="delete_password"
-                    type="password"
-                    required
-                    value={deletePassword}
-                    onChange={(e) => setDeletePassword(e.target.value)}
-                    autoFocus
-                  />
-                </div>
-              </div>
-              {deleteError && (
-                <Alert variant="destructive" className="mb-4">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{deleteError}</AlertDescription>
-                </Alert>
-              )}
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={closeDeleteDialog}>
-                  Cancel
-                </Button>
-                <Button type="submit" variant="destructive">
-                  Next
-                </Button>
-              </DialogFooter>
-            </form>
           ) : (
-            <form onSubmit={handleDeleteConfirm}>
+            <form onSubmit={deleteStep === 1 ? handleDeletePasswordStep : handleDeleteConfirm} autoComplete="off">
               <div className="grid gap-4 py-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="delete_totp">Enter your 2FA code</Label>
-                  <Input
-                    id="delete_totp"
-                    required
-                    value={deleteTotpCode}
-                    onChange={(e) => setDeleteTotpCode(e.target.value)}
-                    placeholder="000000"
-                    maxLength={6}
-                    pattern="[0-9]{6}"
-                    title="Enter a 6-digit code"
-                    autoFocus
-                  />
+                <div className={deleteStep === 1 ? undefined : 'hidden'}>
+                  <Alert variant="destructive" className="mb-4">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      You are about to delete <strong>{deletingApp?.display_name}</strong> ({deletingApp?.slug}). This action is irreversible.
+                    </AlertDescription>
+                  </Alert>
+                  <div className="grid gap-2">
+                    <Label htmlFor="delete_password">Confirm your password</Label>
+                    <Input
+                      id="delete_password"
+                      type="password"
+                      required={deleteStep === 1}
+                      value={deletePassword}
+                      onChange={(e) => setDeletePassword(e.target.value)}
+                      autoComplete="off"
+                      autoFocus
+                    />
+                  </div>
                 </div>
+                {deleteStep === 2 && (
+                  <div className="grid gap-2">
+                    <Label htmlFor="delete_totp">Enter your 2FA code</Label>
+                    <Input
+                      id="delete_totp"
+                      required
+                      value={deleteTotpCode}
+                      onChange={(e) => setDeleteTotpCode(e.target.value)}
+                      placeholder="000000"
+                      maxLength={6}
+                      pattern="[0-9]{6}"
+                      title="Enter a 6-digit code"
+                      autoComplete="off"
+                      autoFocus
+                    />
+                  </div>
+                )}
               </div>
               {deleteError && (
                 <Alert variant="destructive" className="mb-4">
@@ -631,13 +618,26 @@ export function AdminApplicationsPage() {
                 </Alert>
               )}
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => { setDeleteStep(1); setDeleteError('') }}>
-                  Back
-                </Button>
-                <Button type="submit" variant="destructive" disabled={deleteMutation.isPending}>
-                  {deleteMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Delete Application
-                </Button>
+                {deleteStep === 1 ? (
+                  <>
+                    <Button type="button" variant="outline" onClick={closeDeleteDialog}>
+                      Cancel
+                    </Button>
+                    <Button type="submit" variant="destructive">
+                      Next
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button type="button" variant="outline" onClick={() => { setDeleteStep(1); setDeleteError('') }}>
+                      Back
+                    </Button>
+                    <Button type="submit" variant="destructive" disabled={deleteMutation.isPending}>
+                      {deleteMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Delete Application
+                    </Button>
+                  </>
+                )}
               </DialogFooter>
             </form>
           )}
