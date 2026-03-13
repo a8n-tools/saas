@@ -96,6 +96,25 @@ export interface UpdateApplicationRequest {
   maintenance_message?: string
 }
 
+export interface CreateApplicationRequest {
+  name: string
+  slug: string
+  display_name: string
+  description?: string
+  icon_url?: string
+  container_name: string
+  health_check_url?: string
+  subdomain?: string
+  webhook_url?: string
+  version?: string
+  source_code_url?: string
+}
+
+export interface DeleteApplicationRequest {
+  password: string
+  totp_code: string
+}
+
 export type AdminFeedbackStatus = FeedbackStatus
 
 export interface AdminFeedbackSummary {
@@ -193,6 +212,12 @@ export const adminApi = {
 
   updateApplication: (appId: string, data: UpdateApplicationRequest): Promise<AdminApplication> =>
     apiClient.put(`/admin/applications/${appId}`, data),
+
+  createApplication: (data: CreateApplicationRequest): Promise<AdminApplication> =>
+    apiClient.post('/admin/applications', data),
+
+  deleteApplication: (appId: string, data: DeleteApplicationRequest): Promise<void> =>
+    apiClient.delete(`/admin/applications/${appId}`, data),
 
   // Audit Logs
   getAuditLogs: (

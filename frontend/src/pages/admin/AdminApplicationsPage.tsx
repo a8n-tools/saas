@@ -16,9 +16,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Loader2, AppWindow, ExternalLink, Pencil, AlertCircle } from 'lucide-react'
+import { Loader2, AppWindow, ExternalLink, Pencil, AlertCircle, Plus, Trash2, ShieldAlert } from 'lucide-react'
 import { adminApi } from '@/api/admin'
-import type { AdminApplication, UpdateApplicationRequest } from '@/api/admin'
+import { authApi } from '@/api/auth'
+import type { AdminApplication, UpdateApplicationRequest, CreateApplicationRequest } from '@/api/admin'
 import { config } from '@/config'
 import type { ApiError } from '@/types'
 
@@ -26,10 +27,27 @@ export function AdminApplicationsPage() {
   const queryClient = useQueryClient()
   const [editingApp, setEditingApp] = useState<AdminApplication | null>(null)
   const [editForm, setEditForm] = useState<UpdateApplicationRequest>({})
+  const [showCreateDialog, setShowCreateDialog] = useState(false)
+  const [createForm, setCreateForm] = useState<CreateApplicationRequest>({
+    name: '',
+    slug: '',
+    display_name: '',
+    container_name: '',
+  })
+  const [deletingApp, setDeletingApp] = useState<AdminApplication | null>(null)
+  const [deleteStep, setDeleteStep] = useState<1 | 2>(1)
+  const [deletePassword, setDeletePassword] = useState('')
+  const [deleteTotpCode, setDeleteTotpCode] = useState('')
+  const [deleteError, setDeleteError] = useState('')
 
   const { data: applications, isLoading, isError, error } = useQuery({
     queryKey: ['admin', 'applications'],
     queryFn: adminApi.getApplications,
+  })
+
+  const { data: twoFactorStatus } = useQuery({
+    queryKey: ['2fa', 'status'],
+    queryFn: authApi.get2FAStatus,
   })
 
   const updateMutation = useMutation({
@@ -48,6 +66,29 @@ export function AdminApplicationsPage() {
       queryClient.invalidateQueries({ queryKey: ['admin', 'applications'] })
       queryClient.invalidateQueries({ queryKey: ['applications'] })
       setEditingApp(null)
+    },
+  })
+
+  const createMutation = useMutation({
+    mutationFn: (data: CreateApplicationRequest) => adminApi.createApplication(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'applications'] })
+      queryClient.invalidateQueries({ queryKey: ['applications'] })
+      setShowCreateDialog(false)
+      setCreateForm({ name: '', slug: '', display_name: '', container_name: '' })
+    },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: ({ appId, password, totp_code }: { appId: string; password: string; totp_code: string }) =>
+      adminApi.deleteApplication(appId, { password, totp_code }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'applications'] })
+      queryClient.invalidateQueries({ queryKey: ['applications'] })
+      closeDeleteDialog()
+    },
+    onError: (err: ApiError) => {
+      setDeleteError(err?.error?.message || 'Failed to delete application')
     },
   })
 
@@ -87,6 +128,49 @@ export function AdminApplicationsPage() {
     editMutation.mutate({ appId: editingApp.id, data: editForm })
   }
 
+  const handleCreateNameChange = (name: string) => {
+    const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+    setCreateForm({ ...createForm, name, slug, display_name: name })
+  }
+
+  const handleCreateSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    createMutation.mutate(createForm)
+  }
+
+  const openDeleteDialog = (app: AdminApplication) => {
+    setDeletingApp(app)
+    setDeleteStep(1)
+    setDeletePassword('')
+    setDeleteTotpCode('')
+    setDeleteError('')
+  }
+
+  const closeDeleteDialog = () => {
+    setDeletingApp(null)
+    setDeleteStep(1)
+    setDeletePassword('')
+    setDeleteTotpCode('')
+    setDeleteError('')
+  }
+
+  const handleDeletePasswordStep = (e: React.FormEvent) => {
+    e.preventDefault()
+    setDeleteError('')
+    setDeleteStep(2)
+  }
+
+  const handleDeleteConfirm = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!deletingApp) return
+    setDeleteError('')
+    deleteMutation.mutate({
+      appId: deletingApp.id,
+      password: deletePassword,
+      totp_code: deleteTotpCode,
+    })
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -97,11 +181,17 @@ export function AdminApplicationsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Applications</h1>
-        <p className="mt-2 text-muted-foreground">
-          Manage platform applications.
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Applications</h1>
+          <p className="mt-2 text-muted-foreground">
+            Manage platform applications.
+          </p>
+        </div>
+        <Button onClick={() => setShowCreateDialog(true)}>
+          <Plus className="mr-2 h-4 w-4" />
+          Add Application
+        </Button>
       </div>
 
       {isError && (
@@ -166,6 +256,10 @@ export function AdminApplicationsPage() {
                     <Pencil className="mr-2 h-4 w-4" />
                     Edit
                   </Button>
+                  <Button variant="destructive" size="sm" onClick={() => openDeleteDialog(app)}>
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete
+                  </Button>
                   <a
                     href={`https://${app.subdomain || app.slug}.${config.appDomain}`}
                     target="_blank"
@@ -183,6 +277,152 @@ export function AdminApplicationsPage() {
         ))}
       </div>
 
+      {/* Create Application Dialog */}
+      <Dialog open={showCreateDialog} onOpenChange={(open) => {
+        if (!open) {
+          setShowCreateDialog(false)
+          setCreateForm({ name: '', slug: '', display_name: '', container_name: '' })
+          createMutation.reset()
+        }
+      }}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+          <form onSubmit={handleCreateSubmit}>
+            <DialogHeader>
+              <DialogTitle>Add Application</DialogTitle>
+              <DialogDescription>
+                Register a new application on the platform.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="create_name">Name *</Label>
+                <Input
+                  id="create_name"
+                  required
+                  value={createForm.name}
+                  onChange={(e) => handleCreateNameChange(e.target.value)}
+                  placeholder="My Application"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="create_slug">Slug *</Label>
+                <Input
+                  id="create_slug"
+                  required
+                  value={createForm.slug}
+                  onChange={(e) => setCreateForm({ ...createForm, slug: e.target.value })}
+                  placeholder="my-application"
+                  pattern="^[a-z0-9-]+$"
+                  title="Lowercase letters, numbers, and hyphens only"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="create_display_name">Display Name *</Label>
+                <Input
+                  id="create_display_name"
+                  required
+                  value={createForm.display_name}
+                  onChange={(e) => setCreateForm({ ...createForm, display_name: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="create_description">Description</Label>
+                <Textarea
+                  id="create_description"
+                  value={createForm.description ?? ''}
+                  onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="create_container_name">Container Name *</Label>
+                <Input
+                  id="create_container_name"
+                  required
+                  value={createForm.container_name}
+                  onChange={(e) => setCreateForm({ ...createForm, container_name: e.target.value })}
+                  placeholder="my-app-container"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="create_subdomain">Subdomain</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="create_subdomain"
+                    value={createForm.subdomain ?? ''}
+                    onChange={(e) => setCreateForm({ ...createForm, subdomain: e.target.value })}
+                    placeholder={createForm.slug || 'my-app'}
+                  />
+                  <span className="text-sm text-muted-foreground whitespace-nowrap">.{config.appDomain}</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Leave empty to use the slug as the subdomain.
+                </p>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="create_health_check_url">Health Check URL</Label>
+                <Input
+                  id="create_health_check_url"
+                  value={createForm.health_check_url ?? ''}
+                  onChange={(e) => setCreateForm({ ...createForm, health_check_url: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="create_webhook_url">Webhook URL</Label>
+                <Input
+                  id="create_webhook_url"
+                  value={createForm.webhook_url ?? ''}
+                  onChange={(e) => setCreateForm({ ...createForm, webhook_url: e.target.value })}
+                  placeholder="https://app.example.com/webhooks/platform"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="create_version">Version</Label>
+                <Input
+                  id="create_version"
+                  value={createForm.version ?? ''}
+                  onChange={(e) => setCreateForm({ ...createForm, version: e.target.value })}
+                  placeholder="1.0.0"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="create_source_code_url">Source Code URL</Label>
+                <Input
+                  id="create_source_code_url"
+                  value={createForm.source_code_url ?? ''}
+                  onChange={(e) => setCreateForm({ ...createForm, source_code_url: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="create_icon_url">Icon URL</Label>
+                <Input
+                  id="create_icon_url"
+                  value={createForm.icon_url ?? ''}
+                  onChange={(e) => setCreateForm({ ...createForm, icon_url: e.target.value })}
+                />
+              </div>
+            </div>
+            {createMutation.isError && (
+              <Alert variant="destructive" className="mb-4">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  {(createMutation.error as unknown as ApiError)?.error?.message || 'Failed to create application'}
+                </AlertDescription>
+              </Alert>
+            )}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setShowCreateDialog(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={createMutation.isPending}>
+                {createMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Create Application
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Application Dialog */}
       <Dialog open={!!editingApp} onOpenChange={(open) => !open && setEditingApp(null)}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
           <form onSubmit={handleEditSubmit}>
@@ -299,6 +539,108 @@ export function AdminApplicationsPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Application Dialog */}
+      <Dialog open={!!deletingApp} onOpenChange={(open) => !open && closeDeleteDialog()}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <ShieldAlert className="h-5 w-5" />
+              Delete {deletingApp?.display_name}
+            </DialogTitle>
+            <DialogDescription>
+              This action cannot be undone. The application and all associated data will be permanently removed.
+            </DialogDescription>
+          </DialogHeader>
+
+          {!twoFactorStatus?.enabled ? (
+            <div className="py-4">
+              <Alert>
+                <ShieldAlert className="h-4 w-4" />
+                <AlertTitle>2FA Required</AlertTitle>
+                <AlertDescription>
+                  You must enable two-factor authentication before you can delete applications. Go to your security settings to enable 2FA.
+                </AlertDescription>
+              </Alert>
+              <DialogFooter className="mt-4">
+                <Button variant="outline" onClick={closeDeleteDialog}>
+                  Close
+                </Button>
+              </DialogFooter>
+            </div>
+          ) : deleteStep === 1 ? (
+            <form onSubmit={handleDeletePasswordStep}>
+              <div className="grid gap-4 py-4">
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    You are about to delete <strong>{deletingApp?.display_name}</strong> ({deletingApp?.slug}). This action is irreversible.
+                  </AlertDescription>
+                </Alert>
+                <div className="grid gap-2">
+                  <Label htmlFor="delete_password">Confirm your password</Label>
+                  <Input
+                    id="delete_password"
+                    type="password"
+                    required
+                    value={deletePassword}
+                    onChange={(e) => setDeletePassword(e.target.value)}
+                    autoFocus
+                  />
+                </div>
+              </div>
+              {deleteError && (
+                <Alert variant="destructive" className="mb-4">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{deleteError}</AlertDescription>
+                </Alert>
+              )}
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={closeDeleteDialog}>
+                  Cancel
+                </Button>
+                <Button type="submit" variant="destructive">
+                  Next
+                </Button>
+              </DialogFooter>
+            </form>
+          ) : (
+            <form onSubmit={handleDeleteConfirm}>
+              <div className="grid gap-4 py-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="delete_totp">Enter your 2FA code</Label>
+                  <Input
+                    id="delete_totp"
+                    required
+                    value={deleteTotpCode}
+                    onChange={(e) => setDeleteTotpCode(e.target.value)}
+                    placeholder="000000"
+                    maxLength={6}
+                    pattern="[0-9]{6}"
+                    title="Enter a 6-digit code"
+                    autoFocus
+                  />
+                </div>
+              </div>
+              {deleteError && (
+                <Alert variant="destructive" className="mb-4">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{deleteError}</AlertDescription>
+                </Alert>
+              )}
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => { setDeleteStep(1); setDeleteError('') }}>
+                  Back
+                </Button>
+                <Button type="submit" variant="destructive" disabled={deleteMutation.isPending}>
+                  {deleteMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Delete Application
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
         </DialogContent>
       </Dialog>
     </div>
