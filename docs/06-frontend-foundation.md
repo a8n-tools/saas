@@ -45,7 +45,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:8080',
+        target: 'http://localhost:4000',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, '/v1'),
       },
@@ -78,7 +78,7 @@ frontend/
 
 Create .env.example:
 ```
-VITE_API_URL=http://localhost:8080
+VITE_API_URL=http://localhost:4000
 VITE_APP_URL=http://localhost:5173
 ```
 
@@ -303,7 +303,7 @@ Create src/api/client.ts:
 ```typescript
 import axios, { AxiosError, AxiosInstance } from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
 export const apiClient: AxiosInstance = axios.create({
   baseURL: `${API_URL}/v1`,

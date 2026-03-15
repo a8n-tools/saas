@@ -797,7 +797,7 @@ RUN cargo build --release
 FROM alpine:3.19
 RUN apk add --no-cache ca-certificates libgcc
 COPY --from=builder /app/target/release/a8n-api /app/a8n-api
-EXPOSE 8080
+EXPOSE 4000
 CMD ["/app/a8n-api"]
 ```
 
@@ -915,7 +915,7 @@ Events: UserLogin, UserLogout, MagicLinkUsed, PasswordResetCompleted, Subscripti
 2. **rust-tests:** cargo test
 3. **frontend-tests:** lint, test:coverage
 4. **build-images:** docker build, push
-5. **deploy:** docker-compose pull, up
+5. **deploy:** docker compose pull, up
 
 ### 15.2 Code Quality Tools
 
@@ -1077,7 +1077,7 @@ chmod 644 jwt_public.pem
 
 ```bash
 # Start development
-docker-compose -f docker-compose.dev.yml up -d
+docker compose -f compose.dev.yml up -d
 
 # Run migrations
 cd api && cargo sqlx migrate run
@@ -1087,10 +1087,10 @@ cargo test
 cd frontend && npm test
 
 # Deploy
-docker-compose pull && docker-compose up -d
+docker compose pull && docker compose up -d
 
 # View logs
-docker-compose logs -f api
+docker compose logs -f api
 
 # Connect to database
 docker exec -it a8n-postgres psql -U a8n -d a8n_platform

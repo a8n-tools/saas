@@ -16,7 +16,7 @@ This document contains prompts for setting up production infrastructure includin
 ```text
 Create the production Docker Compose configuration.
 
-Create docker-compose.yml:
+Create compose.yml:
 ```yaml
 version: '3.8'
 
@@ -75,7 +75,7 @@ services:
       - "traefik.http.routers.api.rule=Host(`api.a8n.tools`)"
       - "traefik.http.routers.api.tls=true"
       - "traefik.http.routers.api.tls.certresolver=letsencrypt"
-      - "traefik.http.services.api.loadbalancer.server.port=8080"
+      - "traefik.http.services.api.loadbalancer.server.port=4000"
 
   frontend:
     build:
@@ -340,10 +340,10 @@ COPY --from=builder /app/migrations /app/migrations
 RUN adduser -D -u 1000 appuser
 USER appuser
 
-EXPOSE 8080
+EXPOSE 4000
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://localhost:4000/health || exit 1
 
 CMD ["/app/a8n-api"]
 ```
@@ -427,15 +427,15 @@ git pull origin main
 
 # Build images
 echo "📦 Building images..."
-docker-compose build --parallel
+docker compose build --parallel
 
 # Run migrations
 echo "🗄️ Running migrations..."
-docker-compose run --rm api /app/a8n-api migrate
+docker compose run --rm api /app/a8n-api migrate
 
 # Start services
 echo "🔄 Starting services..."
-docker-compose up -d
+docker compose up -d
 
 # Wait for health checks
 echo "⏳ Waiting for services to be healthy..."

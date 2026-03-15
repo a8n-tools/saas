@@ -1,10 +1,10 @@
 ---
-name: a8n-development-environment
+name: saas-${USER}
 services:
   # PostgreSQL Database
   postgres:
     image: postgres:16-alpine
-    container_name: a8n-postgres
+    container_name: saas-postgres-${USER}
     restart: unless-stopped
     environment:
       POSTGRES_USER: a8n
@@ -26,13 +26,13 @@ services:
     build:
       context: ./api
       dockerfile: Dockerfile.dev
-    container_name: a8n-api
+    container_name: saas-api-${USER}
     restart: unless-stopped
     environment:
       # scheme://username:password@host:port/path/file.ext
       DATABASE_URL: postgres://a8n:${POSTGRES_PASSWORD:-devpassword}@postgres:5432/a8n_platform
-      HOST: 0.0.0.0
-      PORT: 8080
+      HOST_IP: 0.0.0.0
+      APP_PORT: 4000
       RUST_LOG: ${RUST_LOG:-debug}
       # CORS_ORIGIN: http://localhost:5173
       CORS_ORIGIN: https://app.a8n.run
@@ -49,7 +49,7 @@ services:
       # BASE_URL: ${BASE_URL:-http://localhost:5173}
       BASE_URL: ${BASE_URL:-http://app.a8n.run}
     ports:
-      - "18080:8080"
+      - "4000:4000"
     volumes:
       - ./api/src:/app/src:ro
       - ./api/migrations:/app/migrations:ro
@@ -70,19 +70,19 @@ services:
       traefik.http.routers.api-saas.service: api-saas@docker
       traefik.http.routers.api-saas.entrypoints: web-secure
       traefik.http.routers.api-saas.tls.certresolver: cert-cloudflare
-      traefik.http.services.api-saas.loadbalancer.server.port: 8080
+      traefik.http.services.api-saas.loadbalancer.server.port: 4000
 
   # React Frontend
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile.dev
-    container_name: a8n-frontend
+    container_name: saas-frontend-${USER}
     restart: unless-stopped
     environment:
       # Use Docker service name for internal proxy requests
       # TODO: Once port 443 is working through Traefik, this is not needed.
-      # VITE_API_URL: http://api.a8n.run:8080
+      # VITE_API_URL: http://api.a8n.run:4000
       VITE_API_URL: https://api.a8n.run
     ports:
       - "5173:5173"
@@ -107,9 +107,10 @@ services:
 
 
 volumes:
-  # postgres_data:
   data:
+    name: saas-data-${USER}
   api_target:
+    name: saas-api-target-${USER}
 
 networks:
   network-traefik-public:

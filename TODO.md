@@ -295,7 +295,7 @@
 ## 11 - Infrastructure & Deployment
 
 ### Development Environment
-- [x] docker-compose.dev.yml
+- [x] compose.dev.yml
 - [x] PostgreSQL service
 - [x] Traefik dev configuration
 - [x] API dev Dockerfile
@@ -303,7 +303,7 @@
 - [x] Makefile dev commands
 
 ### Production Environment
-- [ ] docker-compose.yml (production)
+- [ ] compose.yml (production)
 - [ ] API production Dockerfile
 - [ ] Frontend production Dockerfile (nginx)
 - [ ] Production Traefik config

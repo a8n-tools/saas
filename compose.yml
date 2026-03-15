@@ -66,8 +66,8 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: postgres://a8n:${POSTGRES_PASSWORD}@postgres:5432/a8n_platform
-      HOST: 0.0.0.0
-      PORT: 8080
+      HOST_IP: 0.0.0.0
+      APP_PORT: 4000
       RUST_LOG: ${RUST_LOG:-info}
       ENVIRONMENT: production
       JWT_SECRET: ${JWT_SECRET}
@@ -83,7 +83,7 @@ services:
     networks:
       - a8n-tools-private
     expose:
-      - 8080
+      - 4000
     depends_on:
       postgres:
         condition: service_healthy
@@ -92,7 +92,7 @@ services:
       traefik.http.routers.api-a8n-tools.rule: Host(`api.a8n.tools`)
       traefik.http.routers.api-a8n-tools.entrypoints: web-secure
       traefik.http.routers.api-a8n-tools.tls.certresolver: letsencrypt
-      traefik.http.services.api-a8n-tools.loadbalancer.server.port: 8080
+      traefik.http.services.api-a8n-tools.loadbalancer.server.port: 4000
       # Security headers
       #traefik.http.middlewares.api-headers.headers.stsSeconds: 31536000
       #traefik.http.middlewares.api-headers.headers.stsIncludeSubdomains: true

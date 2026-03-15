@@ -489,7 +489,7 @@ Update main.rs:
 2. Configure server with shutdown:
    ```rust
    HttpServer::new(|| App::new())
-       .bind("0.0.0.0:8080")?
+       .bind("0.0.0.0:4000")?
        .shutdown_timeout(30)  // 30 seconds to finish requests
        .run()
        .await

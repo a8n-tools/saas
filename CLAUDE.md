@@ -254,7 +254,7 @@ frontend/
 
 ```bash
 # Start development environment
-docker-compose -f docker-compose.dev.yml up -d
+docker compose -f compose.dev.yml up -d
 
 # Run database migrations
 cd api && cargo sqlx migrate run
@@ -271,10 +271,10 @@ openssl pkey -in secrets/jwt_private.pem -pubout -out secrets/jwt_public.pem
 chmod 600 secrets/jwt_private.pem
 
 # Deploy
-docker-compose pull && docker-compose up -d
+docker compose pull && docker compose up -d
 
 # View logs
-docker-compose logs -f api
+docker compose logs -f api
 ```
 
 ## Project Structure
@@ -307,8 +307,8 @@ a8n-tools/
 ├── secrets/
 │   ├── jwt_private.pem
 │   └── jwt_public.pem
-├── docker-compose.yml
-├── docker-compose.dev.yml
+├── compose.yml
+├── compose.dev.yml
 ├── .env.example
 ├── CLAUDE.md              # This file
 └── a8n-tools-specification.md  # Full spec
@@ -439,7 +439,7 @@ ENVIRONMENT=production
 1. **Always use parameterized queries** — sqlx handles this automatically
 2. **Hash tokens before storing** — never store raw magic link or reset tokens
 3. **Log all auth events** — audit_logs table for security tracking
-4. **Test Stripe webhooks locally** — use Stripe CLI: `stripe listen --forward-to localhost:8080/v1/webhooks/stripe`
+4. **Test Stripe webhooks locally** — use Stripe CLI: `stripe listen --forward-to localhost:4000/v1/webhooks/stripe`
 5. **JWT public key shared with apps** — mount as read-only volume
 6. **Cookie domain is `.a8n.tools`** — enables SSO across subdomains
 7. **Validate membership status on every app request** — check JWT claims

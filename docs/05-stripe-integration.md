@@ -619,7 +619,7 @@ Create src/testing/stripe_mocks.rs:
 4. Stripe CLI webhook forwarding script:
    ```bash
    #!/bin/bash
-   stripe listen --forward-to localhost:8080/v1/webhooks/stripe
+   stripe listen --forward-to localhost:4000/v1/webhooks/stripe
    ```
 
 Write comprehensive webhook handler tests.

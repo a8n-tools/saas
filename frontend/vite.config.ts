@@ -15,7 +15,7 @@ export default defineConfig({
     allowedHosts: ['app.a8n.run'],
     proxy: {
       '/api': {
-        target: process.env.VITE_API_URL || 'http://localhost:8080',
+        target: process.env.VITE_API_URL || 'http://localhost:4000',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, '/v1'),
       },

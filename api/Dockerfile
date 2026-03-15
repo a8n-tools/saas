@@ -51,11 +51,11 @@ RUN chown -R a8n:a8n /app
 USER a8n
 
 # Expose port
-EXPOSE 8080
+EXPOSE 4000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8080/health || exit 1
+    CMD curl -f http://localhost:4000/health || exit 1
 
 # Run the binary
 CMD ["/app/a8n-api"]

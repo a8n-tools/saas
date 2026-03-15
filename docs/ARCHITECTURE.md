@@ -224,7 +224,7 @@ Applications receive user identity from JWT claims and manage their own data sch
 ### Development
 
 ```
-docker-compose.dev.yml
+compose.dev.yml
 ├── postgres (local data)
 ├── api (with hot reload)
 ├── frontend (with HMR)
@@ -234,7 +234,7 @@ docker-compose.dev.yml
 ### Production
 
 ```
-docker-compose.yml
+compose.yml
 ├── postgres (persistent volume)
 ├── api (replicated)
 ├── frontend (nginx)

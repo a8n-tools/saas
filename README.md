@@ -60,7 +60,7 @@ A SaaS platform hosting developer and productivity tools. We sell convenience, r
 
 4. Access the applications:
    - Frontend: http://localhost:5173
-   - API: http://localhost:8080
+   - API: http://localhost:4000
    - Traefik Dashboard: http://localhost:8081
 
    With Traefik routing:
@@ -106,7 +106,7 @@ a8n-tools/
 │   └── rustylinks/
 ├── traefik/                # Traefik configuration
 ├── docs/                   # Documentation
-├── docker-compose.dev.yml  # Development environment
+├── compose.dev.yml  # Development environment
 ├── Makefile                # Development commands
 └── .env.example            # Environment template
 ```
@@ -216,8 +216,8 @@ async fn get_current_user() -> HttpResponse {
 | Variable                | Description                      | Default                 | Required   |
 |-------------------------|----------------------------------|-------------------------|------------|
 | `DATABASE_URL`          | PostgreSQL connection string     | -                       | Yes        |
-| `HOST`                  | API server host                  | `0.0.0.0`               | No         |
-| `PORT`                  | API server port                  | `8080`                  | No         |
+| `HOST_IP`               | API server host                  | `0.0.0.0`               | No         |
+| `APP_PORT`              | API server port                  | `4000`                  | No         |
 | `RUST_LOG`              | Log level                        | `info`                  | No         |
 | `CORS_ORIGIN`           | Allowed CORS origin              | `https://app.a8n.tools` | No         |
 | `ENVIRONMENT`           | Environment name                 | `development`           | No         |
@@ -281,7 +281,7 @@ Will this work on any machine?
 
   What changes for production?
 
-  Almost nothing — your production docker-compose.yml is already set up correctly:
+  Almost nothing — your production compose.yml is already set up correctly:
   ┌────────────────────┬──────────────────────────────┬───────────────────────────────────────────────────┐
   │      Concern       │        Dev (current)         │           Production (already handled)            │
   ├────────────────────┼──────────────────────────────┼───────────────────────────────────────────────────┤
