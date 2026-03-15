@@ -1,12 +1,10 @@
-# example.com
+# a8n.tools
 
-A SaaS platform hosting developer and productivity tools. We sell convenience, reliability, and managed hosting for
-open-source applications.
+A SaaS platform hosting developer and productivity tools. We sell convenience, reliability, and managed hosting for open-source applications.
 
 ## Overview
 
-**example.com** provides hosted versions of open-source developer tools with:
-
+**a8n.tools** provides hosted versions of open-source developer tools with:
 - No server setup, maintenance, or updates required
 - Managed infrastructure with monitoring and backups
 - Dedicated support for subscribers
@@ -15,10 +13,10 @@ open-source applications.
 
 ### Current Applications
 
-| Application | Description                  | Subdomain              |
-|-------------|------------------------------|------------------------|
-| RUS         | URL shortening with QR codes | `rus.example.com`        |
-| Rusty Links | Bookmark management          | `rustylinks.example.com` |
+| Application  | Description                  | Subdomain              |
+|--------------|------------------------------|------------------------|
+| RUS          | URL shortening with QR codes | `rus.a8n.tools`        |
+| Rusty Links  | Bookmark management          | `rustylinks.a8n.tools` |
 
 ## Tech Stack
 
@@ -61,8 +59,18 @@ open-source applications.
    ```
 
 4. Access the applications:
-    - Frontend: http://localhost:5173
-    - API: http://localhost:18080
+   - Frontend: http://localhost:5173
+   - API: http://localhost:4000
+   - Traefik Dashboard: http://localhost:8081
+
+   With Traefik routing:
+   - Frontend: http://localhost
+   - API: http://api.localhost
+
+5. Add to `/etc/hosts` (optional, for subdomain routing):
+   ```
+   127.0.0.1 localhost api.localhost admin.localhost
+   ```
 
 ## Project Structure
 
@@ -138,25 +146,9 @@ Run this command if the _sqlx_migrations table was emptied on accident
 If this returns 0 but tables exist, you know there's a problem before the API crashes.
 
 ```
-docker exec a8n-tools-postgres psql -U a8n -d a8n_platform -c \
+docker exec a8n-postgres psql -U a8n -d a8n_platform -c \
    "SELECT COUNT(*) FROM _sqlx_migrations;"
 ```
-
-## Admin Setup
-
-To promote a user to admin, connect to the database and update their role:
-
-```bash
-just db-shell
-```
-
-```sql
-UPDATE users
-SET role = 'admin'
-WHERE email = 'your@email.com';
-```
-
-Once you have an admin account, you can promote additional users from the admin UI at the Users page.
 
 ## Development
 
@@ -225,28 +217,28 @@ pub async fn get_item(
 
 ### API (Backend)
 
-| Variable                  | Description                                        | Default                   | Required   |
-|---------------------------|----------------------------------------------------|---------------------------|------------|
-| `DATABASE_URL`            | PostgreSQL connection string                       | -                         | Yes        |
-| `HOST`                    | API server host                                    | `0.0.0.0`                 | No         |
-| `PORT`                    | API server port                                    | `8080`                    | No         |
-| `RUST_LOG`                | Log level                                          | `info`                    | No         |
-| `ENVIRONMENT`             | `production` or `development`                      | `production`              | No         |
-| `APP_NAME`                | App name used in email subjects and templates      | `localhost`               | No         |
-| `APP_URL`                 | Frontend base URL for email links                  | Falls back to `CORS_ORIGIN`, then `http://localhost:5173` | No |
-| `CORS_ORIGIN`             | Allowed CORS origin (frontend URL)                 | `http://localhost:5173`   | No         |
-| `COOKIE_DOMAIN`           | Cookie domain for cross-subdomain auth (e.g. `.example.com`) | None (exact hostname) | Yes (prod) |
-| `JWT_SECRET`              | Shared JWT signing secret                          | -                         | Yes (prod) |
-| `TOTP_ENCRYPTION_KEY`     | Hex-encoded 32-byte key for encrypting TOTP secrets | Zero bytes (dev only)    | Yes (prod) |
-| `STRIPE_SECRET_KEY`       | Stripe API secret key                              | -                         | Yes (prod) |
-| `STRIPE_WEBHOOK_SECRET`   | Stripe webhook signing secret                      | -                         | Yes (prod) |
-| `STRIPE_PRICE_ID`         | Stripe price ID for subscription                   | -                         | Yes (prod) |
-| `SMTP_HOST`               | SMTP server hostname                               | `localhost`               | No         |
-| `SMTP_PORT`               | SMTP server port                                   | `465`                     | No         |
-| `SMTP_FROM`               | Sender email (format: `Name <email>` or `email`)   | `noreply@localhost`       | No         |
-| `SMTP_USERNAME`           | SMTP auth username                                 | -                         | No         |
-| `SMTP_PASSWORD`           | SMTP auth password                                 | -                         | No         |
-| `EMAIL_ENABLED`           | Force enable email sending in dev                  | `false`                   | No         |
+| Variable                | Description                                                  | Default                                                   | Required   |
+|-------------------------|--------------------------------------------------------------|-----------------------------------------------------------|------------|
+| `DATABASE_URL`          | PostgreSQL connection string                                 | -                                                         | Yes        |
+| `HOST_IP`               | API server host                                              | `0.0.0.0`                                                 | No         |
+| `APP_PORT`              | API server port                                              | `8080`                                                    | No         |
+| `RUST_LOG`              | Log level                                                    | `info`                                                    | No         |
+| `ENVIRONMENT`           | `production` or `development`                                | `production`                                              | No         |
+| `APP_NAME`              | App name used in email subjects and templates                | `localhost`                                               | No         |
+| `APP_URL`               | Frontend base URL for email links                            | Falls back to `CORS_ORIGIN`, then `http://localhost:5173` | No |
+| `CORS_ORIGIN`           | Allowed CORS origin (frontend URL)                           | `http://localhost:5173`                                   | No         |
+| `COOKIE_DOMAIN`         | Cookie domain for cross-subdomain auth (e.g. `.example.com`) | None (exact hostname)                                     | Yes (prod) |
+| `JWT_SECRET`            | Shared JWT signing secret                                    | -                                                         | Yes (prod) |
+| `TOTP_ENCRYPTION_KEY`   | Hex-encoded 32-byte key for encrypting TOTP secrets          | Zero bytes (dev only)                                     | Yes (prod) |
+| `STRIPE_SECRET_KEY`     | Stripe API secret key                                        | -                                                         | Yes (prod) |
+| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret                                | -                                                         | Yes (prod) |
+| `STRIPE_PRICE_ID`       | Stripe price ID for subscription                             | -                                                         | Yes (prod) |
+| `SMTP_HOST`             | SMTP server hostname                                         | `localhost`                                               | No         |
+| `SMTP_PORT`             | SMTP server port                                             | `465`                                                     | No         |
+| `SMTP_FROM`             | Sender email (format: `Name <email>` or `email`)             | `noreply@localhost`                                       | No         |
+| `SMTP_USERNAME`         | SMTP auth username                                           | -                                                         | No         |
+| `SMTP_PASSWORD`         | SMTP auth password                                           | -                                                         | No         |
+| `EMAIL_ENABLED`         | Force enable email sending in dev                            | `false`                                                   | No         |
 
 ### Frontend
 
@@ -318,6 +310,21 @@ services:
 ### Subdomain Routing
 
 Traefik handles routing based on subdomain:
+- `a8n.tools` -> Marketing site
+- `app.a8n.tools` -> User dashboard
+- `api.a8n.tools` -> Backend API
+- `admin.a8n.tools` -> Admin panel
+- `*.a8n.tools` -> Individual applications
+
+
+Will this work on any machine?                                                                                                                                        
+                                                                                                                                                                        
+  Almost — the only manual step is each developer needs to add the /etc/hosts entries:                                                                                  
+   
+  127.0.0.1 a8n.test                                                                                                                                                    
+  127.0.0.1 app.a8n.test                                                           
+  127.0.0.1 api.a8n.test
+  127.0.0.1 rus.a8n.test
 
 - `example.com` -> Marketing site
 - `app.example.com` -> User dashboard

@@ -496,7 +496,7 @@ This allows the API to return immediately while emails send in background.
 ```text
 Configure Stalwart mail server in Docker.
 
-Add to docker-compose.yml:
+Add to compose.yml:
 ```yaml
 stalwart:
   image: stalwartlabs/mail-server:latest

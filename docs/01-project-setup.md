@@ -53,13 +53,13 @@ Create a basic main.rs that:
 2. Sets up structured JSON logging with tracing
 3. Creates a database connection pool
 4. Configures CORS for .example.com domain
-5. Starts the server on configurable port (default 8080)
+5. Starts the server on configurable port (default 4000)
 6. Has a /health endpoint returning {"status": "ok"}
 
 Create config.rs that loads:
 - DATABASE_URL
-- HOST (default: 0.0.0.0)
-- PORT (default: 8080)
+- HOST_IP (default: 0.0.0.0)
+- APP_PORT (default: 4000)
 - RUST_LOG (default: info)
 - CORS_ORIGIN (default: https://app.example.com)
 
@@ -194,7 +194,7 @@ Write unit tests for response serialization.
 ```text
 Create a Docker Compose development environment for example.com.
 
-Create docker-compose.dev.yml with these services:
+Create compose.dev.yml with these services:
 
 1. **postgres** (PostgreSQL 16):
    - Volume for data persistence
@@ -208,13 +208,13 @@ Create docker-compose.dev.yml with these services:
    - Mount source code for live reload (use cargo-watch)
    - Depends on postgres
    - Environment variables from .env
-   - Port 8080
+   - Port 4000
 
 3. **frontend** (React dev server):
    - Build context ./frontend
    - Mount source code for HMR
    - Port 5173
-   - Environment: VITE_API_URL=http://localhost:8080
+   - Environment: VITE_API_URL=http://localhost:4000
 
 Create a Dockerfile.dev for the API that:
 - Uses rust:1.75
@@ -249,7 +249,7 @@ Ensure the setup allows for:
 ```text
 Add Traefik reverse proxy to the Docker development environment.
 
-Update docker-compose.dev.yml to add:
+Update compose.dev.yml to add:
 
 1. **traefik** service:
    - Image: traefik:v3.0
@@ -274,7 +274,7 @@ Update docker-compose.dev.yml to add:
    labels:
      - "traefik.enable=true"
      - "traefik.http.routers.api.rule=Host(`api.localhost`)"
-     - "traefik.http.services.api.loadbalancer.server.port=8080"
+     - "traefik.http.services.api.loadbalancer.server.port=4000"
    ```
 
 5. Add /etc/hosts entries to README:
@@ -322,7 +322,7 @@ Create README.md in project root with:
 
 5. **Available Commands**
    - All Makefile commands
-   - Manual docker-compose commands
+   - Manual docker compose commands
    - Cargo commands for API
    - bun commands for frontend
 
@@ -353,7 +353,7 @@ After completing all prompts in this section, verify:
 - [ ] `cargo build` succeeds in api/ directory
 - [ ] `cargo test` passes
 - [ ] `make dev` starts all services
-- [ ] http://localhost:8080/health returns `{"status": "ok"}`
+- [ ] http://localhost:4000/health returns `{"status": "ok"}`
 - [ ] Logs show structured JSON output
 - [ ] Database connection pool works
 - [ ] CORS headers present on API responses

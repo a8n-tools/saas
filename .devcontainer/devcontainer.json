@@ -9,7 +9,7 @@
   "image": "ghcr.io/niceguyit/opensuse-dev:v1-leap-16.0",
   // "image": "opensuse-dev:v0.6.0-leap-16.0",
   // For application development
-  "forwardPorts": ["localhost:3000", "8080"],
+  "forwardPorts": ["localhost:3000", "4000"],
   // Use 'postCreateCommand' to run commands after the container is created.
   "postCreateCommand": {
     // FIXME: It seems JetBrains does not run postCreateCommand as the user.

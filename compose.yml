@@ -50,6 +50,8 @@ services:
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
       ENVIRONMENT: development
       APP_NAME: ${APP_NAME:-a8n Tools}
+      HOST_IP: 0.0.0.0
+      APP_PORT: 4000
       JWT_SECRET: ${JWT_SECRET:-development-secret-key-min-32-chars-long!}
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       STRIPE_PRICE_ID: ${STRIPE_PRICE_ID:-}
@@ -65,7 +67,7 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       ADMIN_NOTIFICATION_EMAILS: ${ADMIN_NOTIFICATION_EMAILS:-admin@localhost}
     ports:
-      - "18080:8080"
+      - "18080:4000"
     volumes:
       - ./.git:/app/.git:ro
       - ./api/src:/app/src

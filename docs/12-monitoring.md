@@ -133,7 +133,7 @@ Use middleware to record HTTP metrics automatically.
 ```text
 Configure Prometheus server in Docker.
 
-Add to docker-compose.yml:
+Add to compose.yml:
 ```yaml
 prometheus:
   image: prom/prometheus:v2.48.0
@@ -177,7 +177,7 @@ scrape_configs:
 
   - job_name: 'api'
     static_configs:
-      - targets: ['api:8080']
+      - targets: ['api:4000']
     metrics_path: /metrics
 
   - job_name: 'traefik'
@@ -248,7 +248,7 @@ groups:
 ```text
 Configure Grafana with dashboards.
 
-Add to docker-compose.yml:
+Add to compose.yml:
 ```yaml
 grafana:
   image: grafana/grafana:10.2.0
@@ -358,7 +358,7 @@ Create additional dashboards:
 ```text
 Set up GlitchTip for error tracking.
 
-Add to docker-compose.yml:
+Add to compose.yml:
 ```yaml
 glitchtip:
   image: glitchtip/glitchtip:latest
@@ -492,7 +492,7 @@ fn init_logging() {
 
 Create log aggregation with Docker logging driver:
 ```yaml
-# In docker-compose.yml, add to services:
+# In compose.yml, add to services:
 x-logging: &logging
   driver: "json-file"
   options:

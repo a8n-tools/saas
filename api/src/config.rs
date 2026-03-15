@@ -189,12 +189,12 @@ impl Config {
         let database_url = env::var("DATABASE_URL")
             .map_err(|_| ConfigError::MissingEnv("DATABASE_URL".to_string()))?;
 
-        let host = env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
+        let host = env::var("HOST_IP").unwrap_or_else(|_| "0.0.0.0".to_string());
 
-        let port = env::var("PORT")
-            .unwrap_or_else(|_| "8080".to_string())
+        let port = env::var("APP_PORT")
+            .unwrap_or_else(|_| "4000".to_string())
             .parse::<u16>()
-            .map_err(|_| ConfigError::InvalidValue("PORT".to_string(), "must be a valid port number".to_string()))?;
+            .map_err(|_| ConfigError::InvalidValue("APP_PORT".to_string(), "must be a valid port number".to_string()))?;
 
         let log_level = env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string());
 
@@ -289,8 +289,8 @@ mod tests {
     fn test_config_defaults() {
         // Set required env var
         env::set_var("DATABASE_URL", "postgres://test:test@localhost/test");
-        env::remove_var("HOST");
-        env::remove_var("PORT");
+        env::remove_var("HOST_IP");
+        env::remove_var("APP_PORT");
         env::remove_var("RUST_LOG");
         env::remove_var("CORS_ORIGIN");
         env::remove_var("ENVIRONMENT");
@@ -300,7 +300,7 @@ mod tests {
         let config = Config::from_env().unwrap();
 
         assert_eq!(config.host, "0.0.0.0");
-        assert_eq!(config.port, 8080);
+        assert_eq!(config.port, 4000);
         assert_eq!(config.log_level, "info");
         assert_eq!(config.cors_origin, "http://localhost:5173");
         assert_eq!(config.environment, "production");

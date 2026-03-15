@@ -46,6 +46,6 @@ USER appuser
 
 LABEL org.opencontainers.image.source=https://dev.a8n.run/a8n-tools/saas
 
-EXPOSE 8080
+EXPOSE 4000
 
 ENTRYPOINT ["/app/a8n-api"]

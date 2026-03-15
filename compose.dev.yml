@@ -1,0 +1,117 @@
+---
+name: saas-${USER}
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: saas-postgres-${USER}
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: a8n
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpassword}
+      POSTGRES_DB: a8n_platform
+    expose:
+      - "5432:5432"
+    volumes:
+      # - postgres_data:/var/lib/postgresql/data
+      - data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U a8n -d a8n_platform"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Rust API Backend
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile.dev
+    container_name: saas-api-${USER}
+    restart: unless-stopped
+    environment:
+      # scheme://username:password@host:port/path/file.ext
+      DATABASE_URL: postgres://a8n:${POSTGRES_PASSWORD:-devpassword}@postgres:5432/a8n_platform
+      HOST_IP: 0.0.0.0
+      APP_PORT: 4000
+      RUST_LOG: ${RUST_LOG:-debug}
+      # CORS_ORIGIN: http://localhost:5173
+      CORS_ORIGIN: https://app.a8n.run
+      ENVIRONMENT: development
+      JWT_SECRET: ${JWT_SECRET:-s3cr3tK3yAtL34st32Ch4r4ct3rsL0ng!}
+      COOKIE_DOMAIN: .a8n.run
+      # Email configuration
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_FROM: ${SMTP_FROM:-noreply@a8n.tools}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      EMAIL_ENABLED: ${EMAIL_ENABLED:-false}
+      # BASE_URL: ${BASE_URL:-http://localhost:5173}
+      BASE_URL: ${BASE_URL:-http://app.a8n.run}
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./api/src:/app/src:ro
+      - ./api/migrations:/app/migrations:ro
+      - ./api/templates:/app/templates:ro
+      - ./api/Cargo.toml:/app/Cargo.toml:ro
+      - ./api/Cargo.lock:/app/Cargo.lock:ro
+      - api_target:/app/target
+    networks:
+      - default # Use default network for internal communication with Postgres
+      - network-traefik-public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    labels:
+      traefik.enable: true
+      traefik.docker.network: network-traefik-public
+      traefik.http.routers.api-saas.rule: Host(`api.a8n.run`)
+      traefik.http.routers.api-saas.service: api-saas@docker
+      traefik.http.routers.api-saas.entrypoints: web-secure
+      traefik.http.routers.api-saas.tls.certresolver: cert-cloudflare
+      traefik.http.services.api-saas.loadbalancer.server.port: 4000
+
+  # React Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: saas-frontend-${USER}
+    restart: unless-stopped
+    environment:
+      # Use Docker service name for internal proxy requests
+      # TODO: Once port 443 is working through Traefik, this is not needed.
+      # VITE_API_URL: http://api.a8n.run:4000
+      VITE_API_URL: https://api.a8n.run
+    ports:
+      - "5173:5173"
+    networks:
+      - network-traefik-public
+    volumes:
+      - ./frontend/src:/app/src:ro
+      - ./frontend/public:/app/public:ro
+      - ./frontend/index.html:/app/index.html:ro
+      - ./frontend/vite.config.ts:/app/vite.config.ts:ro
+      - ./frontend/tsconfig.json:/app/tsconfig.json:ro
+      - ./frontend/tailwind.config.js:/app/tailwind.config.js:ro
+      - ./frontend/postcss.config.js:/app/postcss.config.js:ro
+    labels:
+      traefik.enable: true
+      traefik.docker.network: network-traefik-public
+      traefik.http.routers.frontend-saas.rule: Host(`app.a8n.run`)
+      traefik.http.routers.frontend-saas.service: frontend-saas@docker
+      traefik.http.routers.frontend-saas.entrypoints: web-secure
+      traefik.http.routers.frontend-saas.tls.certresolver: cert-cloudflare
+      traefik.http.services.frontend-saas.loadbalancer.server.port: 5173
+
+
+volumes:
+  data:
+    name: saas-data-${USER}
+  api_target:
+    name: saas-api-target-${USER}
+
+networks:
+  network-traefik-public:
+    external: true

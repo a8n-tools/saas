@@ -11,8 +11,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Development Commands
 
 ```bash
-# Start full dev environment (Postgres + API + Frontend via Docker Compose)
-just dev
+# Start development environment
+docker compose -f compose.dev.yml up -d
+
+# Run database migrations
+cd api && cargo sqlx migrate run
 
 # Stop / view logs / clean up
 just down
@@ -31,17 +34,50 @@ just test              # all tests
 just test-api          # cd api && cargo test
 just test-frontend     # cd frontend && bun test (vitest watch mode)
 
-# Run a single Rust test
-cd api && cargo test test_name
+# Deploy
+docker compose pull && docker compose up -d
 
-# Run a single frontend test file
-cd frontend && bunx vitest run src/path/to/file.test.ts
+# View logs
+docker compose logs -f api
+```
 
 # Frontend CI mode (no watch)
 cd frontend && bun run test:run
 
-# Frontend coverage
-cd frontend && bun run test:coverage
+```
+a8n-tools/
+├── api/                    # Rust backend (Actix-Web)
+│   ├── src/
+│   │   ├── main.rs
+│   │   ├── routes/         # Route handlers
+│   │   ├── models/         # Database models
+│   │   ├── services/       # Business logic
+│   │   ├── middleware/     # Auth, rate limiting
+│   │   └── utils/          # Helpers
+│   ├── migrations/         # SQL migrations
+│   ├── Cargo.toml
+│   └── Dockerfile
+├── frontend/               # React SPA
+│   ├── src/
+│   ├── package.json
+│   └── Dockerfile
+├── apps/
+│   ├── shared/
+│   │   └── a8n-auth/      # Shared JWT auth library for child apps
+│   ├── rus/               # RUS application
+│   └── rustylinks/        # Rusty Links application
+├── monitoring/
+│   ├── prometheus.yml
+│   └── grafana/
+├── secrets/
+│   ├── jwt_private.pem
+│   └── jwt_public.pem
+├── docker-compose.yml
+├── docker-compose.dev.yml
+├── .env.example
+├── CLAUDE.md              # This file
+└── a8n-tools-specification.md  # Full spec
+```
 
 # Linting
 cd api && cargo clippy
@@ -109,6 +145,14 @@ PostgreSQL 16. Migrations in `api/migrations/` (sqlx, sequential numbering `2024
 ## CI/CD
 
 Forgejo Actions (`.forgejo/workflows/`). On push to `main`, builds OCI images using `docker buildx build` with the project Dockerfiles and pushes to Forgejo Container Registry. Tag resolution uses `oci-build/get-tags.nu`.
+1. **Always use parameterized queries** — sqlx handles this automatically
+2. **Hash tokens before storing** — never store raw magic link or reset tokens
+3. **Log all auth events** — audit_logs table for security tracking
+4. **Test Stripe webhooks locally** — use Stripe CLI: `stripe listen --forward-to localhost:4000/v1/webhooks/stripe`
+5. **JWT public key shared with apps** — mount as read-only volume
+6. **Cookie domain is `.a8n.tools`** — enables SSO across subdomains
+7. **Validate membership status on every app request** — check JWT claims
+8. **Admin actions require extra logging** — set `is_admin_action = true` in audit logs
 
 ## Conventions
 

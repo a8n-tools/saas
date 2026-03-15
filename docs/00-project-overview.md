@@ -171,8 +171,8 @@ a8n-tools/
 ├── apps/                   # Hosted applications
 │   ├── rus/
 │   └── rustylinks/
-├── docker-compose.yml
-├── docker-compose.dev.yml
+├── compose.yml
+├── compose.dev.yml
 └── docs/
 ```
 
