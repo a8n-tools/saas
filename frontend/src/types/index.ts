@@ -15,6 +15,7 @@ export interface User {
   email: string
   role: UserRole
   email_verified: boolean
+  two_factor_enabled: boolean
   membership_status: MembershipStatus
   membership_tier: MembershipTier | null
   price_locked: boolean
@@ -28,6 +29,7 @@ export interface User {
 export interface LoginRequest {
   email: string
   password: string
+  remember?: boolean
 }
 
 export interface RegisterRequest {
@@ -49,12 +51,31 @@ export interface PasswordResetRequest {
 
 export interface PasswordResetConfirmRequest {
   token: string
-  password: string
+  new_password: string
 }
 
 export interface AuthResponse {
   user: User
   access_token: string
+}
+
+export interface TwoFactorChallengeResponse {
+  requires_2fa: true
+  challenge_token: string
+}
+
+export interface TwoFactorSetupResponse {
+  otpauth_uri: string
+  secret: string
+}
+
+export interface RecoveryCodesResponse {
+  codes: string[]
+}
+
+export interface TwoFactorStatusResponse {
+  enabled: boolean
+  recovery_codes_remaining: number
 }
 
 // Membership types - matches API's MembershipResponse
@@ -69,13 +90,9 @@ export interface Membership {
 
 export interface PaymentHistory {
   id: string
-  user_id: string
-  stripe_invoice_id: string
-  stripe_payment_intent_id: string | null
-  amount_cents: number
+  amount: number
   currency: string
   status: string
-  invoice_pdf_url: string | null
   created_at: string
 }
 
@@ -88,21 +105,36 @@ export interface CheckoutSessionResponse {
   session_id: string
 }
 
+export interface CreateFeedbackRequest {
+  name?: string
+  email?: string
+  subject?: string
+  tags?: string[]
+  message: string
+  page_path?: string
+  website?: string
+}
+
+export interface FeedbackSubmissionResponse {
+  id: string
+  message: string
+}
+
+export type FeedbackStatus = 'new' | 'reviewed' | 'responded' | 'closed'
+
 // Application types
 export interface Application {
   id: string
-  name: string
   slug: string
-  description: string
-  display_name?: string
+  display_name: string
+  description: string | null
   icon_url: string | null
-  subdomain?: string
-  container_name?: string
-  is_active: boolean
-  is_maintenance?: boolean
-  maintenance_mode?: boolean
-  created_at: string
-  updated_at: string
+  version: string | null
+  source_code_url: string | null
+  subdomain: string | null
+  is_accessible: boolean
+  maintenance_mode: boolean
+  maintenance_message: string | null
 }
 
 // API response types

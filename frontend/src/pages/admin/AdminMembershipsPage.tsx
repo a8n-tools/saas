@@ -25,8 +25,10 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { formatDate, formatCurrency } from '@/lib/utils'
-import { CreditCard, MoreVertical, Loader2, XCircle } from 'lucide-react'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { CreditCard, MoreVertical, Loader2, XCircle, AlertCircle } from 'lucide-react'
 import { adminApi, type AdminMembership } from '@/api/admin'
+import type { ApiError } from '@/types'
 
 export function AdminMembershipsPage() {
   const [page, setPage] = useState(1)
@@ -36,7 +38,7 @@ export function AdminMembershipsPage() {
 
   const queryClient = useQueryClient()
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ['admin', 'memberships', page, statusFilter],
     queryFn: () => adminApi.getMemberships(page, 20, statusFilter === 'all' ? undefined : statusFilter),
   })
@@ -102,6 +104,14 @@ export function AdminMembershipsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {isError && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Failed to load memberships</AlertTitle>
+          <AlertDescription>{(error as unknown as ApiError)?.error?.message || 'Could not connect to the API. Please try again later.'}</AlertDescription>
+        </Alert>
+      )}
 
       <Card>
         <CardHeader>

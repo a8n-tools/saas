@@ -30,9 +30,24 @@ pub enum AuditAction {
     AdminPasswordReset,
     AdminMembershipGranted,
     AdminMembershipRevoked,
+    EmailChangeRequested,
+    EmailChangeCompleted,
     AdminUserDeactivated,
     AdminUserActivated,
     ApplicationMaintenanceToggled,
+    TwoFactorEnabled,
+    TwoFactorDisabled,
+    TwoFactorVerified,
+    TwoFactorRecoveryCodeUsed,
+    TwoFactorRecoveryCodesRegenerated,
+    EmailVerificationRequested,
+    EmailVerified,
+    FeedbackSubmitted,
+    FeedbackResponded,
+    FeedbackDeleted,
+    FeedbackRestored,
+    ApplicationCreated,
+    ApplicationDeleted,
 }
 
 impl AuditAction {
@@ -57,9 +72,24 @@ impl AuditAction {
             AuditAction::AdminPasswordReset => "admin_password_reset",
             AuditAction::AdminMembershipGranted => "admin_membership_granted",
             AuditAction::AdminMembershipRevoked => "admin_membership_revoked",
+            AuditAction::EmailChangeRequested => "email_change_requested",
+            AuditAction::EmailChangeCompleted => "email_change_completed",
             AuditAction::AdminUserDeactivated => "admin_user_deactivated",
             AuditAction::AdminUserActivated => "admin_user_activated",
             AuditAction::ApplicationMaintenanceToggled => "application_maintenance_toggled",
+            AuditAction::TwoFactorEnabled => "two_factor_enabled",
+            AuditAction::TwoFactorDisabled => "two_factor_disabled",
+            AuditAction::TwoFactorVerified => "two_factor_verified",
+            AuditAction::TwoFactorRecoveryCodeUsed => "two_factor_recovery_code_used",
+            AuditAction::TwoFactorRecoveryCodesRegenerated => "two_factor_recovery_codes_regenerated",
+            AuditAction::EmailVerificationRequested => "email_verification_requested",
+            AuditAction::EmailVerified => "email_verified",
+            AuditAction::FeedbackSubmitted => "feedback_submitted",
+            AuditAction::FeedbackResponded => "feedback_responded",
+            AuditAction::FeedbackDeleted => "feedback_deleted",
+            AuditAction::FeedbackRestored => "feedback_restored",
+            AuditAction::ApplicationCreated => "application_created",
+            AuditAction::ApplicationDeleted => "application_deleted",
         }
     }
 
@@ -73,6 +103,11 @@ impl AuditAction {
                 | AuditAction::AdminUserDeactivated
                 | AuditAction::AdminUserActivated
                 | AuditAction::ApplicationMaintenanceToggled
+                | AuditAction::ApplicationCreated
+                | AuditAction::ApplicationDeleted
+                | AuditAction::FeedbackResponded
+                | AuditAction::FeedbackDeleted
+                | AuditAction::FeedbackRestored
         )
     }
 }
@@ -194,6 +229,7 @@ pub enum NotificationType {
     MembershipCanceled,
     GracePeriodExpiring,
     SystemAlert,
+    NewFeedback,
 }
 
 impl NotificationType {
@@ -204,6 +240,7 @@ impl NotificationType {
             NotificationType::MembershipCanceled => "membership_canceled",
             NotificationType::GracePeriodExpiring => "grace_period_expiring",
             NotificationType::SystemAlert => "system_alert",
+            NotificationType::NewFeedback => "new_feedback",
         }
     }
 }

@@ -31,8 +31,14 @@ pub fn validate_email_format(email: &str) -> Result<(), ValidationError> {
         return Err(ValidationError::new("email_too_long"));
     }
 
-    // Basic email format check
-    if !email.contains('@') || !email.contains('.') {
+    // Email format check: must have exactly one @, non-empty local and domain parts,
+    // domain must contain a dot and not start/end with one
+    let parts: Vec<&str> = email.splitn(2, '@').collect();
+    if parts.len() != 2 || parts[0].is_empty() || parts[1].is_empty() {
+        return Err(ValidationError::new("invalid_email_format"));
+    }
+    let domain = parts[1];
+    if !domain.contains('.') || domain.starts_with('.') || domain.ends_with('.') {
         return Err(ValidationError::new("invalid_email_format"));
     }
 
@@ -134,8 +140,14 @@ mod tests {
     #[test]
     fn test_validate_email() {
         assert!(validate_email_format("user@example.com").is_ok());
+        assert!(validate_email_format("user+tag@example.com").is_ok());
         assert!(validate_email_format("invalid").is_err());
         assert!(validate_email_format("").is_err());
+        assert!(validate_email_format("@example.com").is_err());
+        assert!(validate_email_format("user@").is_err());
+        assert!(validate_email_format("user@.com").is_err());
+        assert!(validate_email_format("user@com.").is_err());
+        assert!(validate_email_format("user@com").is_err());
     }
 
     #[test]

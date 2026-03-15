@@ -1,11 +1,18 @@
 import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Users, CreditCard, AlertTriangle, TrendingUp, Loader2, Activity } from 'lucide-react'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Users, CreditCard, AlertTriangle, AlertCircle, TrendingUp, Loader2, Activity } from 'lucide-react'
 import { adminApi, type AdminAuditLog } from '@/api/admin'
 import { formatRelativeTime } from '@/lib/utils'
+import type { ApiError } from '@/types'
+
+function getErrorMessage(error: unknown): string {
+  const apiError = error as ApiError | undefined
+  return apiError?.error?.message || 'Could not connect to the API. Please try again later.'
+}
 
 export function AdminDashboardPage() {
-  const { data: stats, isLoading: statsLoading } = useQuery({
+  const { data: stats, isLoading: statsLoading, isError: statsError, error: statsErrorData } = useQuery({
     queryKey: ['admin', 'stats'],
     queryFn: adminApi.getStats,
   })
@@ -27,6 +34,14 @@ export function AdminDashboardPage() {
           Overview of your platform.
         </p>
       </div>
+
+      {statsError && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Failed to load dashboard</AlertTitle>
+          <AlertDescription>{getErrorMessage(statsErrorData)}</AlertDescription>
+        </Alert>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
@@ -146,6 +161,16 @@ export function AdminDashboardPage() {
   )
 }
 
+function formatUptime(seconds: number): string {
+  const days = Math.floor(seconds / 86400)
+  const hours = Math.floor((seconds % 86400) / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+
+  if (days > 0) return `${days}d ${hours}h`
+  if (hours > 0) return `${hours}h ${minutes}m`
+  return `${minutes}m`
+}
+
 function SystemHealth() {
   const { data: health, isLoading } = useQuery({
     queryKey: ['admin', 'health'],
@@ -167,15 +192,15 @@ function SystemHealth() {
       </div>
       <div className="flex items-center justify-between">
         <span className="text-sm">Database</span>
-        <span className={`text-sm font-medium ${health?.database === 'connected' ? 'text-green-600' : 'text-red-600'}`}>
-          {health?.database === 'connected' ? 'Connected' : 'Disconnected'}
+        <span className={`text-sm font-medium ${health?.database === 'healthy' ? 'text-green-600' : 'text-red-600'}`}>
+          {health?.database === 'healthy' ? 'Connected' : 'Disconnected'}
         </span>
       </div>
-      {health?.uptime_seconds && (
+      {health?.uptime_seconds != null && (
         <div className="flex items-center justify-between">
           <span className="text-sm">Uptime</span>
           <span className="text-sm font-medium">
-            {Math.floor(health.uptime_seconds / 3600)}h {Math.floor((health.uptime_seconds % 3600) / 60)}m
+            {formatUptime(health.uptime_seconds)}
           </span>
         </div>
       )}

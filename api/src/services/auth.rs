@@ -9,8 +9,9 @@ use uuid::Uuid;
 
 use crate::errors::AppError;
 use crate::models::{
-    AuditAction, CreateAuditLog, CreateMagicLinkToken, CreatePasswordResetToken,
-    CreateRefreshToken, CreateUser, User, UserResponse, UserRole,
+    AuditAction, CreateAuditLog, CreateEmailChangeRequest, CreateEmailVerificationToken,
+    CreateMagicLinkToken, CreatePasswordResetToken, CreateRefreshToken, CreateUser, User,
+    UserResponse, UserRole,
 };
 use crate::repositories::{AuditLogRepository, TokenRepository, UserRepository};
 use crate::services::{JwtService, PasswordService};
@@ -21,6 +22,18 @@ pub struct AuthTokens {
     pub access_token: String,
     pub refresh_token: String,
     pub expires_in: i64,
+}
+
+/// Result of a login attempt — either full success or 2FA challenge
+pub enum LoginResult {
+    Success(AuthTokens, UserResponse),
+    TwoFactorRequired { challenge_token: String },
+}
+
+/// Result of magic link verification
+pub enum MagicLinkResult {
+    Success(AuthTokens, UserResponse, bool),
+    TwoFactorRequired { challenge_token: String, is_new_user: bool },
 }
 
 /// Authentication service
@@ -93,7 +106,7 @@ impl AuthService {
         password: String,
         device_info: Option<String>,
         ip_address: Option<IpAddr>,
-    ) -> Result<(AuthTokens, UserResponse), AppError> {
+    ) -> Result<LoginResult, AppError> {
         // Find user
         let user = UserRepository::find_by_email(&self.pool, &email)
             .await?
@@ -114,6 +127,12 @@ impl AuthService {
             return Err(AppError::InvalidCredentials);
         }
 
+        // Check if 2FA is enabled
+        if user.two_factor_enabled {
+            let challenge_token = self.jwt.create_2fa_challenge_token(user.id)?;
+            return Ok(LoginResult::TwoFactorRequired { challenge_token });
+        }
+
         // Create tokens
         let tokens = self.create_tokens(&user, device_info.clone(), ip_address).await?;
 
@@ -131,7 +150,7 @@ impl AuthService {
         )
         .await?;
 
-        Ok((tokens, UserResponse::from(user)))
+        Ok(LoginResult::Success(tokens, UserResponse::from(user)))
     }
 
     /// Refresh tokens
@@ -251,12 +270,15 @@ impl AuthService {
     }
 
     /// Verify magic link and login
+    ///
+    /// Returns (tokens, user, is_new_user) so the caller can send
+    /// an account-created email for newly registered users.
     pub async fn verify_magic_link(
         &self,
         token: String,
         device_info: Option<String>,
         ip_address: Option<IpAddr>,
-    ) -> Result<(AuthTokens, UserResponse), AppError> {
+    ) -> Result<MagicLinkResult, AppError> {
         let token_hash = self.jwt.hash_token(&token);
 
         // Find token
@@ -272,15 +294,18 @@ impl AuthService {
         TokenRepository::mark_magic_link_token_used(&self.pool, magic_token.id).await?;
 
         // Find or create user
-        let user = match UserRepository::find_by_email(&self.pool, &magic_token.email).await? {
+        let (user, is_new_user) = match UserRepository::find_by_email(&self.pool, &magic_token.email).await? {
             Some(user) => {
                 // Set email as verified
                 UserRepository::set_email_verified(&self.pool, user.id).await?;
-                UserRepository::find_by_id(&self.pool, user.id).await?.unwrap()
+                let user = UserRepository::find_by_id(&self.pool, user.id)
+                    .await?
+                    .ok_or(AppError::not_found("User"))?;
+                (user, false)
             }
             None => {
                 // Create new user (passwordless)
-                UserRepository::create(
+                let user = UserRepository::create(
                     &self.pool,
                     CreateUser {
                         email: magic_token.email.clone(),
@@ -288,9 +313,21 @@ impl AuthService {
                         role: UserRole::Subscriber,
                     },
                 )
-                .await?
+                .await?;
+                // Set email as verified since they proved ownership via magic link
+                UserRepository::set_email_verified(&self.pool, user.id).await?;
+                let user = UserRepository::find_by_id(&self.pool, user.id)
+                    .await?
+                    .ok_or(AppError::not_found("User"))?;
+                (user, true)
             }
         };
+
+        // Check if 2FA is enabled
+        if user.two_factor_enabled {
+            let challenge_token = self.jwt.create_2fa_challenge_token(user.id)?;
+            return Ok(MagicLinkResult::TwoFactorRequired { challenge_token, is_new_user });
+        }
 
         // Create tokens
         let tokens = self.create_tokens(&user, device_info, ip_address).await?;
@@ -305,6 +342,46 @@ impl AuthService {
             CreateAuditLog::new(AuditAction::MagicLinkUsed)
                 .with_actor(user.id, &user.email, &user.role)
                 .with_ip(ip),
+        )
+        .await?;
+
+        Ok(MagicLinkResult::Success(tokens, UserResponse::from(user), is_new_user))
+    }
+
+    /// Complete 2FA login after challenge token + TOTP/recovery code verification
+    pub async fn complete_2fa_login(
+        &self,
+        challenge_token: &str,
+        device_info: Option<String>,
+        ip_address: Option<IpAddr>,
+    ) -> Result<(AuthTokens, UserResponse), AppError> {
+        // Verify challenge token
+        let claims = self.jwt.verify_2fa_challenge_token(challenge_token)?;
+        let user_id = claims.sub;
+
+        // Get user
+        let user = UserRepository::find_by_id(&self.pool, user_id)
+            .await?
+            .ok_or(AppError::InvalidCredentials)?;
+
+        if user.is_deleted() {
+            return Err(AppError::InvalidCredentials);
+        }
+
+        // Create tokens
+        let tokens = self.create_tokens(&user, device_info.clone(), ip_address).await?;
+
+        // Update last login
+        UserRepository::update_last_login(&self.pool, user.id).await?;
+
+        // Audit log
+        let ip = ip_address.map(|ip| IpNetwork::from(ip));
+        AuditLogRepository::create(
+            &self.pool,
+            CreateAuditLog::new(AuditAction::UserLogin)
+                .with_actor(user.id, &user.email, &user.role)
+                .with_ip(ip)
+                .with_metadata(serde_json::json!({ "method": "2fa", "device_info": device_info })),
         )
         .await?;
 
@@ -375,12 +452,15 @@ impl AuthService {
     }
 
     /// Complete password reset
+    ///
+    /// Returns the user's email so the caller can send a
+    /// password-changed notification.
     pub async fn complete_password_reset(
         &self,
         token: String,
         new_password: String,
         ip_address: Option<IpAddr>,
-    ) -> Result<(), AppError> {
+    ) -> Result<String, AppError> {
         // Validate new password
         self.password.validate_strength(&new_password)?;
 
@@ -425,7 +505,7 @@ impl AuthService {
         )
         .await?;
 
-        Ok(())
+        Ok(user.email)
     }
 
     /// Change password (for logged-in users)
@@ -469,6 +549,330 @@ impl AuthService {
         .await?;
 
         Ok(())
+    }
+
+    /// Request email change
+    ///
+    /// For verified users: creates a verification token and returns it.
+    /// For unverified users: changes email immediately and returns None.
+    /// Returns (old_email, Option<token>) so caller can send appropriate emails.
+    pub async fn request_email_change(
+        &self,
+        user_id: Uuid,
+        new_email: String,
+        current_password: Option<String>,
+        ip_address: Option<IpAddr>,
+    ) -> Result<(String, Option<String>), AppError> {
+        let ip = ip_address.map(|ip| IpNetwork::from(ip));
+
+        // Get user
+        let user = UserRepository::find_by_id(&self.pool, user_id)
+            .await?
+            .ok_or(AppError::not_found("User"))?;
+
+        // Check if new email is same as current
+        if user.email.to_lowercase() == new_email.to_lowercase() {
+            return Err(AppError::validation("email", "New email must be different from current email"));
+        }
+
+        // Check if new email is already taken
+        if UserRepository::find_by_email(&self.pool, &new_email)
+            .await?
+            .is_some()
+        {
+            return Err(AppError::conflict("Email already registered"));
+        }
+
+        // If user has a password, require it for verification
+        if user.password_hash.is_some() {
+            let password = current_password
+                .ok_or(AppError::validation("current_password", "Password is required to change email"))?;
+            let password_hash = user.password_hash.as_ref().unwrap();
+            if !self.password.verify(&password, password_hash)? {
+                return Err(AppError::validation("current_password", "Current password is incorrect"));
+            }
+        }
+
+        let old_email = user.email.clone();
+
+        if user.email_verified {
+            // Rate limit: 3 requests per hour
+            let since = Utc::now() - Duration::hours(1);
+            let count = TokenRepository::count_recent_email_change_requests(&self.pool, user_id, since).await?;
+            if count >= 3 {
+                return Err(AppError::RateLimited { retry_after: 3600 });
+            }
+
+            // Cancel any pending requests
+            TokenRepository::cancel_pending_email_change_requests(&self.pool, user_id).await?;
+
+            // Generate token
+            let token = generate_secure_token(32);
+            let token_hash = self.jwt.hash_token(&token);
+            let expires_at = Utc::now() + Duration::hours(1);
+
+            // Store request
+            TokenRepository::create_email_change_request(
+                &self.pool,
+                CreateEmailChangeRequest {
+                    user_id,
+                    new_email,
+                    token_hash,
+                    expires_at,
+                    ip_address: ip,
+                },
+            )
+            .await?;
+
+            // Audit log
+            AuditLogRepository::create(
+                &self.pool,
+                CreateAuditLog::new(AuditAction::EmailChangeRequested)
+                    .with_actor(user.id, &user.email, &user.role)
+                    .with_ip(ip),
+            )
+            .await?;
+
+            Ok((old_email, Some(token)))
+        } else {
+            // Unverified user: change email immediately, using a transaction
+            // to prevent race conditions on the unique email constraint
+            let mut tx = self.pool.begin().await?;
+
+            // Lock the user row to prevent concurrent email changes
+            sqlx::query("SELECT id FROM users WHERE id = $1 FOR UPDATE")
+                .bind(user_id)
+                .execute(&mut *tx)
+                .await?;
+
+            // Re-check email availability inside the transaction
+            let existing: Option<(Uuid,)> = sqlx::query_as(
+                "SELECT id FROM users WHERE LOWER(email) = LOWER($1) AND deleted_at IS NULL"
+            )
+                .bind(&new_email)
+                .fetch_optional(&mut *tx)
+                .await?;
+            if existing.is_some() {
+                return Err(AppError::conflict("Email already registered"));
+            }
+
+            sqlx::query("UPDATE users SET email = $1, email_verified = $2, updated_at = NOW() WHERE id = $3")
+                .bind(&new_email)
+                .bind(false)
+                .bind(user_id)
+                .execute(&mut *tx)
+                .await?;
+
+            // Revoke all refresh tokens (force re-login with new email)
+            sqlx::query("UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL")
+                .bind(user_id)
+                .execute(&mut *tx)
+                .await?;
+
+            tx.commit().await?;
+
+            // Audit log (outside transaction, non-critical)
+            AuditLogRepository::create(
+                &self.pool,
+                CreateAuditLog::new(AuditAction::EmailChangeCompleted)
+                    .with_actor(user.id, &user.email, &user.role)
+                    .with_ip(ip)
+                    .with_metadata(serde_json::json!({ "new_email": new_email, "immediate": true })),
+            )
+            .await?;
+
+            Ok((old_email, None))
+        }
+    }
+
+    /// Confirm email change using verification token
+    ///
+    /// Returns (old_email, new_email) so caller can send notification.
+    pub async fn confirm_email_change(
+        &self,
+        token: String,
+        ip_address: Option<IpAddr>,
+    ) -> Result<(String, String), AppError> {
+        let ip = ip_address.map(|ip| IpNetwork::from(ip));
+        let token_hash = self.jwt.hash_token(&token);
+
+        // Find request (outside transaction for early rejection)
+        let request = TokenRepository::find_email_change_request_by_hash(&self.pool, &token_hash)
+            .await?
+            .ok_or(AppError::InvalidCredentials)?;
+
+        if !request.is_valid() {
+            return Err(AppError::TokenExpired);
+        }
+
+        let new_email = request.new_email.clone();
+
+        // Use a transaction with row locking to prevent race conditions
+        let mut tx = self.pool.begin().await?;
+
+        // Lock the user row to prevent concurrent email changes
+        let user: User = sqlx::query_as(
+            "SELECT * FROM users WHERE id = $1 AND deleted_at IS NULL FOR UPDATE"
+        )
+            .bind(request.user_id)
+            .fetch_optional(&mut *tx)
+            .await?
+            .ok_or(AppError::not_found("User"))?;
+
+        let old_email = user.email.clone();
+
+        // Re-check email availability inside the transaction
+        let existing: Option<(Uuid,)> = sqlx::query_as(
+            "SELECT id FROM users WHERE LOWER(email) = LOWER($1) AND deleted_at IS NULL"
+        )
+            .bind(&new_email)
+            .fetch_optional(&mut *tx)
+            .await?;
+        if existing.is_some() {
+            return Err(AppError::conflict("Email already registered"));
+        }
+
+        // Update email (set verified since they proved ownership)
+        sqlx::query("UPDATE users SET email = $1, email_verified = TRUE, updated_at = NOW() WHERE id = $2")
+            .bind(&new_email)
+            .bind(user.id)
+            .execute(&mut *tx)
+            .await?;
+
+        // Confirm the request
+        sqlx::query("UPDATE email_change_requests SET confirmed_at = NOW() WHERE id = $1")
+            .bind(request.id)
+            .execute(&mut *tx)
+            .await?;
+
+        // Revoke all refresh tokens (force re-login)
+        sqlx::query("UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL")
+            .bind(user.id)
+            .execute(&mut *tx)
+            .await?;
+
+        tx.commit().await?;
+
+        // Audit log (outside transaction, non-critical)
+        AuditLogRepository::create(
+            &self.pool,
+            CreateAuditLog::new(AuditAction::EmailChangeCompleted)
+                .with_actor(user.id, &old_email, &user.role)
+                .with_ip(ip)
+                .with_metadata(serde_json::json!({ "old_email": old_email, "new_email": new_email })),
+        )
+        .await?;
+
+        Ok((old_email, new_email))
+    }
+
+    /// Request email verification
+    ///
+    /// Generates a token and returns it so the caller can send the verification email.
+    /// Requires 2FA to be enabled and email to not already be verified.
+    pub async fn request_email_verification(
+        &self,
+        user_id: Uuid,
+        ip_address: Option<IpAddr>,
+    ) -> Result<String, AppError> {
+        let ip = ip_address.map(|ip| IpNetwork::from(ip));
+
+        let user = UserRepository::find_by_id(&self.pool, user_id)
+            .await?
+            .ok_or(AppError::not_found("User"))?;
+
+        if user.email_verified {
+            return Err(AppError::validation("email", "Email is already verified"));
+        }
+
+        if !user.two_factor_enabled {
+            return Err(AppError::validation(
+                "two_factor",
+                "Two-factor authentication must be enabled to verify your email",
+            ));
+        }
+
+        // Rate limit: 3 requests per hour
+        let since = Utc::now() - Duration::hours(1);
+        let count =
+            TokenRepository::count_recent_email_verification_tokens(&self.pool, user_id, since)
+                .await?;
+        if count >= 3 {
+            return Err(AppError::RateLimited { retry_after: 3600 });
+        }
+
+        // Generate token
+        let token = generate_secure_token(32);
+        let token_hash = self.jwt.hash_token(&token);
+        let expires_at = Utc::now() + Duration::hours(1);
+
+        // Store token
+        TokenRepository::create_email_verification_token(
+            &self.pool,
+            CreateEmailVerificationToken {
+                user_id,
+                token_hash,
+                expires_at,
+                ip_address: ip,
+            },
+        )
+        .await?;
+
+        // Audit log
+        AuditLogRepository::create(
+            &self.pool,
+            CreateAuditLog::new(AuditAction::EmailVerificationRequested)
+                .with_actor(user.id, &user.email, &user.role)
+                .with_ip(ip),
+        )
+        .await?;
+
+        Ok(token)
+    }
+
+    /// Confirm email verification using token
+    ///
+    /// Returns the user's email so the caller can log it.
+    pub async fn confirm_email_verification(
+        &self,
+        token: String,
+        ip_address: Option<IpAddr>,
+    ) -> Result<String, AppError> {
+        let ip = ip_address.map(|ip| IpNetwork::from(ip));
+        let token_hash = self.jwt.hash_token(&token);
+
+        // Find token
+        let verification_token =
+            TokenRepository::find_email_verification_token_by_hash(&self.pool, &token_hash)
+                .await?
+                .ok_or(AppError::InvalidCredentials)?;
+
+        if !verification_token.is_valid() {
+            return Err(AppError::TokenExpired);
+        }
+
+        // Get user
+        let user = UserRepository::find_by_id(&self.pool, verification_token.user_id)
+            .await?
+            .ok_or(AppError::not_found("User"))?;
+
+        // Mark token as used
+        TokenRepository::mark_email_verification_token_used(&self.pool, verification_token.id)
+            .await?;
+
+        // Set email as verified
+        UserRepository::set_email_verified(&self.pool, user.id).await?;
+
+        // Audit log
+        AuditLogRepository::create(
+            &self.pool,
+            CreateAuditLog::new(AuditAction::EmailVerified)
+                .with_actor(user.id, &user.email, &user.role)
+                .with_ip(ip),
+        )
+        .await?;
+
+        Ok(user.email)
     }
 
     /// Helper to create auth tokens

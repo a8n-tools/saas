@@ -1,10 +1,11 @@
 import { apiClient } from './client'
+import { config } from '@/config'
 import type {
   User,
   Membership,
-  Application,
   AdminNotification,
   PaginatedResponse,
+  FeedbackStatus,
 } from '@/types'
 
 // Actual stats response from API
@@ -61,9 +62,116 @@ export interface UpdateUserRoleRequest {
   role: 'subscriber' | 'admin'
 }
 
+export interface AdminApplication {
+  id: string
+  name: string
+  slug: string
+  display_name: string
+  description: string | null
+  icon_url: string | null
+  is_active: boolean
+  maintenance_mode: boolean
+  maintenance_message: string | null
+  subdomain: string | null
+  container_name: string
+  health_check_url: string | null
+  webhook_url: string | null
+  version: string | null
+  source_code_url: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface UpdateApplicationRequest {
+  display_name?: string
+  description?: string
+  icon_url?: string
+  source_code_url?: string
+  version?: string
+  subdomain?: string
+  container_name?: string
+  health_check_url?: string
+  webhook_url?: string
   is_active?: boolean
-  is_maintenance?: boolean
+  maintenance_mode?: boolean
+  maintenance_message?: string
+}
+
+export interface CreateApplicationRequest {
+  name: string
+  slug: string
+  display_name: string
+  description?: string
+  icon_url?: string
+  container_name: string
+  health_check_url?: string
+  subdomain?: string
+  webhook_url?: string
+  version?: string
+  source_code_url?: string
+}
+
+export interface DeleteApplicationRequest {
+  password: string
+  totp_code: string
+}
+
+export type AdminFeedbackStatus = FeedbackStatus
+
+export interface AdminFeedbackSummary {
+  id: string
+  name: string | null
+  email_masked: string | null
+  subject: string | null
+  tags: string[]
+  message_excerpt: string
+  status: AdminFeedbackStatus
+  created_at: string
+  responded_at: string | null
+}
+
+export interface AdminFeedbackDetail {
+  id: string
+  name: string | null
+  email: string | null
+  email_masked: string | null
+  subject: string | null
+  tags: string[]
+  message: string
+  page_path: string | null
+  status: AdminFeedbackStatus
+  admin_response: string | null
+  responded_by: string | null
+  responded_at: string | null
+  created_at: string
+  updated_at: string
+  attachments: FeedbackAttachmentMeta[]
+}
+
+export interface FeedbackAttachmentMeta {
+  id: string
+  feedback_id: string
+  filename: string
+  mime_type: string
+  size_bytes: number
+  created_at: string
+}
+
+export interface ArchivedFeedbackItem {
+  id: string
+  archived_at: string
+  name: string | null
+  email: string | null
+  subject: string | null
+  tags: string[]
+  message_excerpt: string
+  original_status: string | null
+  created_at: string | null
+}
+
+export interface RespondToFeedbackRequest {
+  response: string
+  status?: AdminFeedbackStatus
 }
 
 export interface GrantMembershipRequest {
@@ -74,6 +182,22 @@ export interface GrantMembershipRequest {
 
 export interface RevokeMembershipRequest {
   user_id: string
+}
+
+export async function downloadFeedbackExport(): Promise<void> {
+  const response = await fetch(`${config.apiUrl}/v1/admin/feedback/export`, { credentials: 'include' })
+  if (!response.ok) throw new Error('Export failed')
+  const blob = await response.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'feedback.csv'
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+export function getFeedbackAttachmentUrl(feedbackId: string, attachmentId: string): string {
+  return `${config.apiUrl}/v1/admin/feedback/${feedbackId}/attachments/${attachmentId}`
 }
 
 export const adminApi = {
@@ -120,13 +244,19 @@ export const adminApi = {
     apiClient.post('/admin/memberships/revoke', data),
 
   // Applications
-  getApplications: async (): Promise<Application[]> => {
-    const response = await apiClient.get<{ applications: Application[] }>('/admin/applications')
+  getApplications: async (): Promise<AdminApplication[]> => {
+    const response = await apiClient.get<{ applications: AdminApplication[] }>('/admin/applications')
     return response.applications
   },
 
-  updateApplication: (appId: string, data: UpdateApplicationRequest): Promise<Application> =>
+  updateApplication: (appId: string, data: UpdateApplicationRequest): Promise<AdminApplication> =>
     apiClient.put(`/admin/applications/${appId}`, data),
+
+  createApplication: (data: CreateApplicationRequest): Promise<AdminApplication> =>
+    apiClient.post('/admin/applications', data),
+
+  deleteApplication: (appId: string, data: DeleteApplicationRequest): Promise<void> =>
+    apiClient.delete(`/admin/applications/${appId}`, data),
 
   // Audit Logs
   getAuditLogs: (
@@ -140,6 +270,37 @@ export const adminApi = {
     if (filters?.admin_only) params.append('admin_only', 'true')
     return apiClient.get(`/admin/audit-logs?${params}`)
   },
+
+  // Feedback
+  getFeedback: (
+    page = 1,
+    pageSize = 20,
+    status?: AdminFeedbackStatus,
+  ): Promise<PaginatedResponse<AdminFeedbackSummary>> => {
+    const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) })
+    if (status) params.append('status', status)
+    return apiClient.get(`/admin/feedback?${params}`)
+  },
+
+  getFeedbackDetail: (feedbackId: string): Promise<AdminFeedbackDetail> =>
+    apiClient.get(`/admin/feedback/${feedbackId}`),
+
+  respondToFeedback: (feedbackId: string, data: RespondToFeedbackRequest): Promise<AdminFeedbackDetail> =>
+    apiClient.post(`/admin/feedback/${feedbackId}/respond`, data),
+
+  updateFeedbackStatus: (feedbackId: string, status: AdminFeedbackStatus): Promise<AdminFeedbackDetail> =>
+    apiClient.put(`/admin/feedback/${feedbackId}/status`, { status }),
+
+  deleteFeedback: (feedbackId: string): Promise<void> =>
+    apiClient.delete(`/admin/feedback/${feedbackId}`),
+
+  getArchivedFeedback: (page = 1, pageSize = 20): Promise<PaginatedResponse<ArchivedFeedbackItem>> => {
+    const params = new URLSearchParams({ page: String(page), per_page: String(pageSize) })
+    return apiClient.get(`/admin/feedback/archive?${params}`)
+  },
+
+  restoreFeedback: (archiveId: string): Promise<AdminFeedbackDetail> =>
+    apiClient.post(`/admin/feedback/archive/${archiveId}/restore`),
 
   // Notifications
   getNotifications: (): Promise<AdminNotification[]> =>

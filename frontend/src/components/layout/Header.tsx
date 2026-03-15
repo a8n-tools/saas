@@ -21,7 +21,7 @@ export function Header() {
       <div className="container flex h-16 items-center justify-between">
         <div className="flex items-center gap-6">
           <Link to="/" className="flex items-center space-x-2">
-            <span className="text-2xl font-bold text-primary">a8n</span>
+            <span className="text-2xl font-bold text-gradient bg-gradient-to-r from-primary to-indigo-500">a8n</span>
             <span className="text-2xl font-light">.tools</span>
           </Link>
           <nav className="hidden md:flex items-center gap-6">

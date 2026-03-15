@@ -142,11 +142,19 @@ impl ResponseError for AppError {
             _ => None,
         };
 
+        let client_message = match self {
+            AppError::ValidationError { message, .. } => message.clone(),
+            AppError::InternalError { .. } | AppError::DatabaseError { .. } => {
+                "An unexpected error occurred".to_string()
+            }
+            _ => self.to_string(),
+        };
+
         let error_response = ErrorResponse {
             success: false,
             error: ErrorDetails {
                 code: self.error_code().to_string(),
-                message: self.to_string(),
+                message: client_message,
                 details,
             },
             meta: ErrorMeta {
@@ -155,7 +163,13 @@ impl ResponseError for AppError {
             },
         };
 
-        HttpResponse::build(self.status_code()).json(error_response)
+        let mut response = HttpResponse::build(self.status_code());
+
+        if let AppError::RateLimited { retry_after } = self {
+            response.insert_header(("Retry-After", retry_after.to_string()));
+        }
+
+        response.json(error_response)
     }
 }
 

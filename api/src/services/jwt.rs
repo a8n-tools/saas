@@ -21,13 +21,13 @@ pub struct JwtConfig {
 
 impl JwtConfig {
     /// Create config from secret key (for development)
-    pub fn from_secret(secret: &str) -> Self {
+    pub fn from_secret(secret: &str, issuer: &str) -> Self {
         Self {
             encoding_key: EncodingKey::from_secret(secret.as_bytes()),
             decoding_key: DecodingKey::from_secret(secret.as_bytes()),
             access_token_expiry: Duration::minutes(15),
             refresh_token_expiry: Duration::days(30),
-            issuer: "a8n.tools".to_string(),
+            issuer: issuer.to_string(),
         }
     }
 }
@@ -47,6 +47,16 @@ pub struct AccessTokenClaims {
     pub exp: i64,
     pub jti: String,
     pub iss: String,
+}
+
+/// Two-factor authentication challenge claims
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TwoFactorChallengeClaims {
+    pub sub: Uuid,
+    pub purpose: String,
+    pub exp: i64,
+    pub iat: i64,
+    pub jti: String,
 }
 
 /// Refresh token claims
@@ -168,6 +178,47 @@ impl JwtService {
         Ok(token_data.claims)
     }
 
+    /// Create a 2FA challenge token (5 min expiry)
+    pub fn create_2fa_challenge_token(&self, user_id: Uuid) -> Result<String, AppError> {
+        let now = Utc::now();
+        let exp = now + Duration::minutes(5);
+
+        let claims = TwoFactorChallengeClaims {
+            sub: user_id,
+            purpose: "2fa_challenge".to_string(),
+            exp: exp.timestamp(),
+            iat: now.timestamp(),
+            jti: format!("2fa_{}", Uuid::new_v4().as_simple()),
+        };
+
+        let header = Header::new(Algorithm::HS256);
+        encode(&header, &claims, &self.config.encoding_key)
+            .map_err(|e| AppError::internal(format!("Failed to create 2FA challenge token: {}", e)))
+    }
+
+    /// Verify a 2FA challenge token
+    pub fn verify_2fa_challenge_token(
+        &self,
+        token: &str,
+    ) -> Result<TwoFactorChallengeClaims, AppError> {
+        let mut validation = Validation::new(Algorithm::HS256);
+        validation.set_required_spec_claims(&["sub", "exp"]);
+        validation.validate_exp = true;
+
+        let token_data =
+            decode::<TwoFactorChallengeClaims>(token, &self.config.decoding_key, &validation)
+                .map_err(|e| match e.kind() {
+                    jsonwebtoken::errors::ErrorKind::ExpiredSignature => AppError::TokenExpired,
+                    _ => AppError::InvalidCredentials,
+                })?;
+
+        if token_data.claims.purpose != "2fa_challenge" {
+            return Err(AppError::InvalidCredentials);
+        }
+
+        Ok(token_data.claims)
+    }
+
     /// Hash a token for database storage
     pub fn hash_token(&self, token: &str) -> String {
         let mut hasher = Sha256::new();
@@ -195,6 +246,7 @@ mod tests {
             locked_price_amount: None,
             grace_period_start: None,
             grace_period_end: None,
+            two_factor_enabled: false,
             created_at: Utc::now(),
             updated_at: Utc::now(),
             last_login_at: None,
@@ -204,7 +256,7 @@ mod tests {
 
     #[test]
     fn test_access_token_creation_and_verification() {
-        let config = JwtConfig::from_secret("test-secret-key-12345");
+        let config = JwtConfig::from_secret("test-secret-key-12345", "localhost");
         let service = JwtService::new(config);
         let user = create_test_user();
 
@@ -218,7 +270,7 @@ mod tests {
 
     #[test]
     fn test_refresh_token_creation() {
-        let config = JwtConfig::from_secret("test-secret-key-12345");
+        let config = JwtConfig::from_secret("test-secret-key-12345", "localhost");
         let service = JwtService::new(config);
         let user_id = Uuid::new_v4();
 
@@ -231,7 +283,7 @@ mod tests {
 
     #[test]
     fn test_token_hashing() {
-        let config = JwtConfig::from_secret("test-secret-key-12345");
+        let config = JwtConfig::from_secret("test-secret-key-12345", "localhost");
         let service = JwtService::new(config);
 
         let token = "test-token";

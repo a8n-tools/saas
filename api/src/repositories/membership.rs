@@ -2,6 +2,7 @@
 
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
+use sqlx::postgres::Postgres;
 use uuid::Uuid;
 
 use crate::errors::AppError;
@@ -87,11 +88,14 @@ impl MembershipRepository {
     }
 
     /// Update membership status
-    pub async fn update_status(
-        pool: &PgPool,
+    pub async fn update_status<'e, E>(
+        executor: E,
         membership_id: Uuid,
         status: &str,
-    ) -> Result<(), AppError> {
+    ) -> Result<(), AppError>
+    where
+        E: sqlx::Executor<'e, Database = Postgres>,
+    {
         sqlx::query(
             r#"
             UPDATE subscriptions
@@ -101,7 +105,7 @@ impl MembershipRepository {
         )
         .bind(status)
         .bind(membership_id)
-        .execute(pool)
+        .execute(executor)
         .await?;
 
         Ok(())

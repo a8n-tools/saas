@@ -9,6 +9,7 @@ beforeEach(() => {
     isAuthenticated: false,
     isLoading: false,
     error: null,
+    pendingChallenge: null,
   })
 })
 

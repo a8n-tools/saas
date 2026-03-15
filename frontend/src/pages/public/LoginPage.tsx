@@ -1,9 +1,10 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useState, useCallback, useEffect, useRef } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useAuthStore } from '@/stores/authStore'
+import { config } from '@/config'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -14,15 +15,31 @@ import { AlertCircle, Loader2 } from 'lucide-react'
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
   password: z.string().min(1, 'Password is required'),
+  remember: z.boolean().optional(),
 })
 
 type LoginFormData = z.infer<typeof loginSchema>
 
+/**
+ * Get the redirect URL from query params.
+ * Returns the raw redirect param (validated server-side), or '/dashboard' as default.
+ */
+function getRedirectUrl(params: URLSearchParams): string {
+  const redirect = params.get('redirect')
+  if (!redirect) return '/dashboard'
+  // Relative paths are used directly
+  if (redirect.startsWith('/') && !redirect.startsWith('//')) {
+    return redirect
+  }
+  // External URLs are validated server-side via /v1/auth/redirect
+  return redirect
+}
+
 export function LoginPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { login, error, clearError } = useAuthStore()
   const [isLoading, setIsLoading] = useState(false)
-
   const {
     register,
     handleSubmit,
@@ -31,12 +48,84 @@ export function LoginPage() {
     resolver: zodResolver(loginSchema),
   })
 
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  const redirectUrl = getRedirectUrl(searchParams)
+  const isExternal = redirectUrl.startsWith('http')
+  // "checked" flag means the API already verified we're not logged in — show the form
+  const alreadyChecked = searchParams.has('checked')
+
+  // For external redirects, go through the server-side /v1/auth/redirect endpoint
+  // which refreshes the access_token cookie if the refresh token is still valid.
+  // The "checked" flag from the server is the loop breaker — if the server can't
+  // authenticate us, it redirects back with ?checked=1 so we show the login form.
+  const shouldServerRedirect = isExternal && !alreadyChecked
+
+  const doRedirect = useCallback(() => {
+    if (isExternal) {
+      // After login, cookies are already set on the shared domain — navigate directly
+      window.location.href = redirectUrl
+    } else {
+      navigate(redirectUrl)
+    }
+  }, [isExternal, redirectUrl, navigate])
+
+  // Handle initial page load — stale state, auto-redirect, already authenticated
+  useEffect(() => {
+    // API already confirmed we're not authenticated — clear stale localStorage
+    if (alreadyChecked && isAuthenticated) {
+      useAuthStore.setState({ user: null, isAuthenticated: false, isLoading: false })
+      return
+    }
+
+    // External redirect: always go through the server endpoint so it can refresh
+    // the access_token cookie before redirecting to the child app.
+    if (shouldServerRedirect) {
+      const apiBase = config.apiUrl || ''
+      window.location.href = `${apiBase}/v1/auth/redirect?url=${encodeURIComponent(redirectUrl)}`
+      return
+    }
+
+    // Already authenticated with an internal redirect — navigate directly
+    if (isAuthenticated) {
+      doRedirect()
+      return
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Cross-tab sync — when another tab logs in, redirect this tab too
+  const mountedRef = useRef(false)
+  useEffect(() => {
+    if (!mountedRef.current) {
+      mountedRef.current = true
+      return
+    }
+    if (isAuthenticated) {
+      doRedirect()
+    }
+  }, [isAuthenticated]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Show spinner while redirecting to API check
+  if (shouldServerRedirect) {
+    return (
+      <div className="flex items-center justify-center min-h-[calc(100vh-8rem)]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    )
+  }
+
   const onSubmit = async (data: LoginFormData) => {
     setIsLoading(true)
     clearError()
     try {
-      await login(data.email, data.password)
-      navigate('/dashboard')
+      await login(data.email, data.password, data.remember)
+      // Check if 2FA is required
+      const { pendingChallenge } = useAuthStore.getState()
+      if (pendingChallenge) {
+        const params = redirectUrl !== '/dashboard' ? `?redirect=${encodeURIComponent(redirectUrl)}` : ''
+        navigate(`/login/2fa${params}`)
+      } else {
+        doRedirect()
+      }
     } catch {
       // Error is handled by the store
     } finally {
@@ -93,6 +182,18 @@ export function LoginPage() {
               {errors.password && (
                 <p className="text-sm text-destructive">{errors.password.message}</p>
               )}
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <input
+                id="remember"
+                type="checkbox"
+                className="h-4 w-4 rounded border-border"
+                {...register('remember')}
+              />
+              <Label htmlFor="remember" className="text-sm font-normal cursor-pointer">
+                Remember me for 30 days
+              </Label>
             </div>
 
             <Button type="submit" className="w-full" disabled={isLoading}>

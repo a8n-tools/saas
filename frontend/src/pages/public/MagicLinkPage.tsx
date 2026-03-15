@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { authApi } from '@/api'
+import { useAuthStore } from '@/stores/authStore'
+import type { AuthResponse, TwoFactorChallengeResponse } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -63,7 +65,7 @@ export function MagicLinkPage() {
             <CardTitle className="text-2xl">Check your email</CardTitle>
             <CardDescription>
               We've sent a magic link to your email address. Click the link to
-              sign in.
+              sign in or create your account.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -90,7 +92,7 @@ export function MagicLinkPage() {
           </div>
           <CardTitle className="text-2xl">Sign in with Magic Link</CardTitle>
           <CardDescription>
-            We'll email you a link to sign in without a password.
+            We'll email you a link to sign in or create an account — no password needed.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -123,7 +125,11 @@ export function MagicLinkPage() {
 
           <p className="mt-6 text-center text-sm text-muted-foreground">
             <Link to="/login" className="text-primary hover:underline">
-              Back to regular login
+              Sign in with password
+            </Link>
+            {' · '}
+            <Link to="/register" className="text-primary hover:underline">
+              Create account with password
             </Link>
           </p>
         </CardContent>
@@ -136,11 +142,25 @@ function MagicLinkVerify({ token }: { token: string }) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useState(() => {
+  useEffect(() => {
     const verify = async () => {
       try {
-        await authApi.verifyMagicLink({ token })
-        window.location.href = '/dashboard'
+        const response = await authApi.verifyMagicLink({ token })
+        if ('requires_2fa' in response && (response as TwoFactorChallengeResponse).requires_2fa) {
+          const challenge = response as TwoFactorChallengeResponse
+          useAuthStore.setState({
+            pendingChallenge: { challenge_token: challenge.challenge_token },
+          })
+          window.location.href = '/login/2fa'
+        } else {
+          const authResponse = response as AuthResponse
+          useAuthStore.setState({
+            user: authResponse.user,
+            isAuthenticated: true,
+            isLoading: false,
+          })
+          window.location.href = '/dashboard'
+        }
       } catch (err) {
         const apiError = err as { error?: { message?: string } }
         setError(apiError.error?.message || 'Invalid or expired magic link')
@@ -149,7 +169,7 @@ function MagicLinkVerify({ token }: { token: string }) {
       }
     }
     verify()
-  })
+  }, [token])
 
   if (isLoading) {
     return (

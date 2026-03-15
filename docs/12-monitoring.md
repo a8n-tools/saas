@@ -152,7 +152,7 @@ prometheus:
     - a8n-network
   labels:
     - "traefik.enable=true"
-    - "traefik.http.routers.prometheus.rule=Host(`prometheus.a8n.tools`)"
+    - "traefik.http.routers.prometheus.rule=Host(`prometheus.example.com`)"
     - "traefik.http.routers.prometheus.middlewares=auth"
 ```
 
@@ -257,7 +257,7 @@ grafana:
   environment:
     - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
     - GF_USERS_ALLOW_SIGN_UP=false
-    - GF_SERVER_ROOT_URL=https://grafana.a8n.tools
+    - GF_SERVER_ROOT_URL=https://grafana.example.com
   volumes:
     - grafana-data:/var/lib/grafana
     - ./grafana/provisioning:/etc/grafana/provisioning:ro
@@ -266,7 +266,7 @@ grafana:
     - a8n-network
   labels:
     - "traefik.enable=true"
-    - "traefik.http.routers.grafana.rule=Host(`grafana.a8n.tools`)"
+    - "traefik.http.routers.grafana.rule=Host(`grafana.example.com`)"
     - "traefik.http.routers.grafana.tls=true"
 ```
 
@@ -368,15 +368,15 @@ glitchtip:
     - DATABASE_URL=postgres://glitchtip:${GLITCHTIP_DB_PASSWORD}@glitchtip-db:5432/glitchtip
     - SECRET_KEY=${GLITCHTIP_SECRET_KEY}
     - EMAIL_URL=smtp://stalwart:587
-    - DEFAULT_FROM_EMAIL=glitchtip@a8n.tools
-    - GLITCHTIP_DOMAIN=https://glitchtip.a8n.tools
+    - DEFAULT_FROM_EMAIL=glitchtip@example.com
+    - GLITCHTIP_DOMAIN=https://glitchtip.example.com
   depends_on:
     - glitchtip-db
   networks:
     - a8n-network
   labels:
     - "traefik.enable=true"
-    - "traefik.http.routers.glitchtip.rule=Host(`glitchtip.a8n.tools`)"
+    - "traefik.http.routers.glitchtip.rule=Host(`glitchtip.example.com`)"
     - "traefik.http.routers.glitchtip.tls=true"
 
 glitchtip-db:

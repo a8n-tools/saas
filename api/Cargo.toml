@@ -2,17 +2,19 @@
 name = "a8n-api"
 version = "0.1.0"
 edition = "2021"
-authors = ["a8n.tools team"]
-description = "Backend API for a8n.tools SaaS platform"
+authors = ["a8n team"]
+description = "Backend API for SaaS platform"
 
 [dependencies]
 # Web framework
 actix-web = "4"
 actix-cors = "0.7"
 actix-rt = "2"
+actix-multipart = "0.7"
 
 # Async runtime
 tokio = { version = "1", features = ["full", "signal"] }
+futures-util = "0.3"
 
 # Database
 sqlx = { version = "0.7", features = ["runtime-tokio", "postgres", "uuid", "chrono", "ipnetwork", "migrate"] }
@@ -59,11 +61,16 @@ reqwest = { version = "0.11", features = ["json"] }
 ipnetwork = "0.20"
 
 # Stripe payments
-async-stripe = { version = "0.37", features = ["runtime-tokio-hyper"] }
+async-stripe = { version = "0.37", features = ["runtime-tokio-hyper", "checkout", "billing", "webhook-events"] }
 
 # HMAC for webhook verification
 hmac = "0.12"
 hex = "0.4"
+
+# TOTP two-factor authentication
+totp-rs = { version = "5", features = ["gen_secret", "otpauth"] }
+aes-gcm = "0.10"
+data-encoding = "2"
 
 # Email
 lettre = { version = "0.11", features = ["tokio1-native-tls", "builder"] }
@@ -71,6 +78,10 @@ tera = "1"
 
 # Lazy static for compile-time statics
 lazy_static = "1.4"
+
+# URL parsing and encoding
+url = "2"
+urlencoding = "2"
 
 [dev-dependencies]
 actix-rt = "2"

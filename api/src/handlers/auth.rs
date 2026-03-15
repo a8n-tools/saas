@@ -4,15 +4,31 @@
 
 use actix_web::{web, HttpRequest, HttpResponse};
 use serde::{Deserialize, Serialize};
+use sqlx::PgPool;
 use std::sync::Arc;
 
 use crate::errors::AppError;
 use crate::middleware::{
-    extract_client_ip, extract_device_info, AuthCookies, AuthenticatedUser,
+    extract_client_ip, extract_device_info, AuthCookies, AuthenticatedUser, OptionalUser,
 };
-use crate::models::UserResponse;
+use crate::models::{RateLimitConfig, UserResponse};
+use crate::repositories::RateLimitRepository;
 use crate::responses::{get_request_id, success};
-use crate::services::AuthService;
+use crate::services::{AuthService, LoginResult};
+
+/// Check rate limit and return RateLimited error if exceeded
+async fn check_rate_limit(
+    pool: &PgPool,
+    key: &str,
+    config: &RateLimitConfig,
+) -> Result<(), AppError> {
+    let (_count, exceeded) = RateLimitRepository::check_and_increment(pool, key, config).await?;
+    if exceeded {
+        let retry_after = RateLimitRepository::get_retry_after(pool, key, config).await?;
+        return Err(AppError::RateLimited { retry_after });
+    }
+    Ok(())
+}
 
 /// Request body for user registration
 #[derive(Debug, Deserialize)]
@@ -66,6 +82,7 @@ pub struct AuthResponse {
 /// Register a new user and log them in
 pub async fn register(
     req: HttpRequest,
+    pool: web::Data<PgPool>,
     auth_service: web::Data<Arc<AuthService>>,
     email_service: web::Data<Arc<crate::services::EmailService>>,
     body: web::Json<RegisterRequest>,
@@ -75,6 +92,10 @@ pub async fn register(
     let ip_address = extract_client_ip(&req);
     let device_info = extract_device_info(&req);
 
+    // Rate limit by IP address
+    let ip_key = ip_address.map(|ip| ip.to_string()).unwrap_or_default();
+    check_rate_limit(&pool, &ip_key, &RateLimitConfig::REGISTRATION).await?;
+
     // Validate email format
     crate::validation::validate_email(&body.email)?;
 
@@ -83,9 +104,18 @@ pub async fn register(
         .await?;
 
     // Generate tokens so the user is logged in immediately
-    let (tokens, user) = auth_service
+    // (newly registered users never have 2FA, so this always returns Success)
+    let result = auth_service
         .login(body.email.clone(), body.password.clone(), device_info, ip_address)
         .await?;
+
+    let (tokens, user) = match result {
+        LoginResult::Success(tokens, user) => (tokens, user),
+        LoginResult::TwoFactorRequired { .. } => {
+            // Should never happen for a brand-new registration
+            return Err(AppError::internal("Unexpected 2FA challenge during registration"));
+        }
+    };
 
     let secure = config.is_production();
     let cookie_domain = config.cookie_domain.as_deref();
@@ -123,6 +153,7 @@ pub async fn register(
 /// Login with email and password
 pub async fn login(
     req: HttpRequest,
+    pool: web::Data<PgPool>,
     auth_service: web::Data<Arc<AuthService>>,
     body: web::Json<LoginRequest>,
     config: web::Data<crate::config::Config>,
@@ -131,7 +162,10 @@ pub async fn login(
     let ip_address = extract_client_ip(&req);
     let device_info = extract_device_info(&req);
 
-    let (tokens, user) = auth_service
+    // Rate limit by email
+    check_rate_limit(&pool, &body.email.to_lowercase(), &RateLimitConfig::LOGIN).await?;
+
+    let result = auth_service
         .login(
             body.email.clone(),
             body.password.clone(),
@@ -140,39 +174,53 @@ pub async fn login(
         )
         .await?;
 
-    let secure = config.is_production();
-    let cookie_domain = config.cookie_domain.as_deref();
+    match result {
+        LoginResult::TwoFactorRequired { challenge_token } => {
+            Ok(success(
+                serde_json::json!({ "requires_2fa": true, "challenge_token": challenge_token }),
+                request_id,
+            ))
+        }
+        LoginResult::Success(tokens, user) => {
+            let secure = config.is_production();
+            let cookie_domain = config.cookie_domain.as_deref();
 
-    let response = AuthResponse {
-        user,
-        expires_in: tokens.expires_in,
-    };
+            let response = AuthResponse {
+                user,
+                expires_in: tokens.expires_in,
+            };
 
-    Ok(HttpResponse::Ok()
-        .cookie(AuthCookies::access_token(&tokens.access_token, secure, cookie_domain))
-        .cookie(AuthCookies::refresh_token(
-            &tokens.refresh_token,
-            secure,
-            body.remember,
-            cookie_domain,
-        ))
-        .json(crate::responses::ApiResponse {
-            success: true,
-            data: Some(response),
-            meta: crate::responses::ResponseMeta::new(request_id),
-        }))
+            Ok(HttpResponse::Ok()
+                .cookie(AuthCookies::access_token(&tokens.access_token, secure, cookie_domain))
+                .cookie(AuthCookies::refresh_token(
+                    &tokens.refresh_token,
+                    secure,
+                    body.remember,
+                    cookie_domain,
+                ))
+                .json(crate::responses::ApiResponse {
+                    success: true,
+                    data: Some(response),
+                    meta: crate::responses::ResponseMeta::new(request_id),
+                }))
+        }
+    }
 }
 
 /// POST /v1/auth/magic-link
 /// Request a magic link for passwordless login
 pub async fn request_magic_link(
     req: HttpRequest,
+    pool: web::Data<PgPool>,
     auth_service: web::Data<Arc<AuthService>>,
     email_service: web::Data<Arc<crate::services::EmailService>>,
     body: web::Json<MagicLinkRequest>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
     let ip_address = extract_client_ip(&req);
+
+    // Rate limit by email
+    check_rate_limit(&pool, &body.email.to_lowercase(), &RateLimitConfig::MAGIC_LINK).await?;
 
     // Validate email format
     crate::validation::validate_email(&body.email)?;
@@ -203,7 +251,9 @@ pub async fn request_magic_link(
 /// Verify a magic link and login
 pub async fn verify_magic_link(
     req: HttpRequest,
+    pool: web::Data<PgPool>,
     auth_service: web::Data<Arc<AuthService>>,
+    email_service: web::Data<Arc<crate::services::EmailService>>,
     body: web::Json<VerifyMagicLinkRequest>,
     config: web::Data<crate::config::Config>,
 ) -> Result<HttpResponse, AppError> {
@@ -211,26 +261,58 @@ pub async fn verify_magic_link(
     let ip_address = extract_client_ip(&req);
     let device_info = extract_device_info(&req);
 
-    let (tokens, user) = auth_service
+    // Rate limit by IP address
+    let ip_key = ip_address.map(|ip| ip.to_string()).unwrap_or_default();
+    check_rate_limit(&pool, &ip_key, &RateLimitConfig::LOGIN).await?;
+
+    let result = auth_service
         .verify_magic_link(body.token.clone(), device_info, ip_address)
         .await?;
 
-    let secure = config.is_production();
-    let cookie_domain = config.cookie_domain.as_deref();
+    match result {
+        crate::services::MagicLinkResult::TwoFactorRequired { challenge_token, is_new_user } => {
+            // Still send welcome email for new users
+            if is_new_user {
+                let email_svc = email_service.get_ref().clone();
+                // We don't have the email easily here, but new users with 2FA is rare
+                // (they'd need to have set up 2FA via magic link account creation then somehow enabled it)
+                let _ = email_svc; // no-op for this edge case
+            }
+            Ok(success(
+                serde_json::json!({ "requires_2fa": true, "challenge_token": challenge_token }),
+                request_id,
+            ))
+        }
+        crate::services::MagicLinkResult::Success(tokens, user, is_new_user) => {
+            // Send account created email for new users (in background, don't wait)
+            if is_new_user {
+                let email = user.email.clone();
+                let email_svc = email_service.get_ref().clone();
+                tokio::spawn(async move {
+                    if let Err(e) = email_svc.send_account_created(&email).await {
+                        tracing::error!(error = %e, email = %email, "Failed to send account created email");
+                    }
+                });
+            }
 
-    let response = AuthResponse {
-        user,
-        expires_in: tokens.expires_in,
-    };
+            let secure = config.is_production();
+            let cookie_domain = config.cookie_domain.as_deref();
 
-    Ok(HttpResponse::Ok()
-        .cookie(AuthCookies::access_token(&tokens.access_token, secure, cookie_domain))
-        .cookie(AuthCookies::refresh_token(&tokens.refresh_token, secure, true, cookie_domain))
-        .json(crate::responses::ApiResponse {
-            success: true,
-            data: Some(response),
-            meta: crate::responses::ResponseMeta::new(request_id),
-        }))
+            let response = AuthResponse {
+                user,
+                expires_in: tokens.expires_in,
+            };
+
+            Ok(HttpResponse::Ok()
+                .cookie(AuthCookies::access_token(&tokens.access_token, secure, cookie_domain))
+                .cookie(AuthCookies::refresh_token(&tokens.refresh_token, secure, true, cookie_domain))
+                .json(crate::responses::ApiResponse {
+                    success: true,
+                    data: Some(response),
+                    meta: crate::responses::ResponseMeta::new(request_id),
+                }))
+        }
+    }
 }
 
 /// POST /v1/auth/refresh
@@ -302,6 +384,80 @@ pub async fn logout(
     Ok(response)
 }
 
+/// GET /v1/auth/logout?url=<url>
+/// SSO logout for child apps — clears cookies and redirects to the login page.
+/// The child app URL is passed through as ?redirect= so the user can log back in
+/// and be sent to the right place.
+pub async fn logout_redirect(
+    req: HttpRequest,
+    query: web::Query<RedirectQuery>,
+    optional_user: OptionalUser,
+    auth_service: web::Data<Arc<AuthService>>,
+    config: web::Data<crate::config::Config>,
+) -> Result<HttpResponse, AppError> {
+    let target_url = &query.url;
+
+    // Validate the redirect URL is on an allowed domain
+    let allowed = match url::Url::parse(target_url) {
+        Ok(parsed) => {
+            if let Some(host) = parsed.host_str() {
+                let cors_domain = url::Url::parse(&config.cors_origin)
+                    .ok()
+                    .and_then(|u| u.host_str().map(|h| h.to_string()));
+
+                let base_domain = config
+                    .cookie_domain
+                    .as_deref()
+                    .map(|d| d.trim_start_matches('.'))
+                    .or(cors_domain.as_deref());
+
+                match base_domain {
+                    Some(domain) => host == domain || host.ends_with(&format!(".{domain}")),
+                    None => false,
+                }
+            } else {
+                false
+            }
+        }
+        Err(_) => false,
+    };
+
+    if !allowed {
+        return Err(AppError::validation("url", "Invalid redirect URL"));
+    }
+
+    // If authenticated, revoke the refresh token
+    if let Some(user) = &optional_user.0 {
+        if let Some(refresh_token) = req.cookie("refresh_token").map(|c| c.value().to_string()) {
+            let ip_address = extract_client_ip(&req);
+            auth_service
+                .logout(refresh_token, user.sub, ip_address)
+                .await
+                .ok();
+        }
+    }
+
+    let secure = config.is_production();
+    let cookie_domain = config.cookie_domain.as_deref();
+    let clear_cookies = AuthCookies::clear(secure, cookie_domain);
+
+    // Redirect to the login page with the child app URL as the redirect param
+    let login_url = format!(
+        "{}/login?redirect={}&checked=1",
+        config.cors_origin.trim_end_matches('/'),
+        urlencoding::encode(target_url)
+    );
+
+    let mut builder = HttpResponse::Found();
+    for cookie in clear_cookies {
+        builder.cookie(cookie);
+    }
+
+    Ok(builder
+        .insert_header(("Location", login_url.as_str()))
+        .finish())
+}
+
 /// POST /v1/auth/logout-all
 /// Logout from all sessions
 pub async fn logout_all(
@@ -335,12 +491,16 @@ pub async fn logout_all(
 /// Request a password reset
 pub async fn request_password_reset(
     req: HttpRequest,
+    pool: web::Data<PgPool>,
     auth_service: web::Data<Arc<AuthService>>,
     email_service: web::Data<Arc<crate::services::EmailService>>,
     body: web::Json<PasswordResetRequest>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
     let ip_address = extract_client_ip(&req);
+
+    // Rate limit by email
+    check_rate_limit(&pool, &body.email.to_lowercase(), &RateLimitConfig::PASSWORD_RESET).await?;
 
     // Validate email format
     crate::validation::validate_email(&body.email)?;
@@ -372,15 +532,29 @@ pub async fn request_password_reset(
 /// Complete password reset with token
 pub async fn confirm_password_reset(
     req: HttpRequest,
+    pool: web::Data<PgPool>,
     auth_service: web::Data<Arc<AuthService>>,
+    email_service: web::Data<Arc<crate::services::EmailService>>,
     body: web::Json<PasswordResetConfirmRequest>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
     let ip_address = extract_client_ip(&req);
 
-    auth_service
+    // Rate limit by IP address
+    let ip_key = ip_address.map(|ip| ip.to_string()).unwrap_or_default();
+    check_rate_limit(&pool, &ip_key, &RateLimitConfig::LOGIN).await?;
+
+    let email = auth_service
         .complete_password_reset(body.token.clone(), body.new_password.clone(), ip_address)
         .await?;
+
+    // Send password changed notification email (in background, don't wait)
+    let email_svc = email_service.get_ref().clone();
+    tokio::spawn(async move {
+        if let Err(e) = email_svc.send_password_changed(&email).await {
+            tracing::error!(error = %e, email = %email, "Failed to send password changed email");
+        }
+    });
 
     Ok(crate::responses::success_no_data(request_id))
 }
@@ -398,4 +572,129 @@ pub async fn verify_password_reset_token(
     auth_service.verify_reset_token(query.token.clone()).await?;
 
     Ok(success(serde_json::json!({ "valid": true }), request_id))
+}
+
+/// Query params for redirect endpoint
+#[derive(Debug, Deserialize)]
+pub struct RedirectQuery {
+    pub url: String,
+}
+
+/// GET /v1/auth/redirect?url=<url>
+/// Check authentication and redirect to the target URL if valid.
+/// If not authenticated, redirects to the login page with ?redirect=<url>.
+/// Also refreshes the access token cookie if expired but refresh token is valid.
+pub async fn auth_redirect(
+    req: HttpRequest,
+    query: web::Query<RedirectQuery>,
+    optional_user: OptionalUser,
+    auth_service: web::Data<Arc<AuthService>>,
+    config: web::Data<crate::config::Config>,
+) -> Result<HttpResponse, AppError> {
+    let target_url = &query.url;
+
+    tracing::info!(
+        target_url = %target_url,
+        has_access_token = req.cookie("access_token").is_some(),
+        has_refresh_token = req.cookie("refresh_token").is_some(),
+        user_authenticated = optional_user.0.is_some(),
+        cookie_domain = ?config.cookie_domain,
+        cors_origin = %config.cors_origin,
+        "auth_redirect: request received"
+    );
+
+    // Validate the redirect URL is on an allowed domain
+    let allowed = match url::Url::parse(target_url) {
+        Ok(parsed) => {
+            if let Some(host) = parsed.host_str() {
+                // Extract base domain from CORS origin for comparison
+                let cors_domain = url::Url::parse(&config.cors_origin)
+                    .ok()
+                    .and_then(|u| u.host_str().map(|h| h.to_string()));
+
+                // Also allow cookie_domain subdomains
+                let base_domain = config
+                    .cookie_domain
+                    .as_deref()
+                    .map(|d| d.trim_start_matches('.'))
+                    .or(cors_domain.as_deref());
+
+                match base_domain {
+                    Some(domain) => host == domain || host.ends_with(&format!(".{domain}")),
+                    None => false,
+                }
+            } else {
+                false
+            }
+        }
+        Err(_) => false,
+    };
+
+    tracing::info!(allowed = allowed, "auth_redirect: URL validation result");
+
+    if !allowed {
+        return Err(AppError::validation("url", "Invalid redirect URL"));
+    }
+
+    let login_url = format!(
+        "{}/login?redirect={}&checked=1",
+        config.cors_origin.trim_end_matches('/'),
+        urlencoding::encode(target_url)
+    );
+
+    // If access token is valid, redirect immediately
+    if optional_user.0.is_some() {
+        tracing::info!(location = %target_url, "auth_redirect: user authenticated, redirecting to target");
+        return Ok(HttpResponse::Found()
+            .insert_header(("Location", target_url.as_str()))
+            .finish());
+    }
+
+    // Access token missing/expired — try refresh token
+    let refresh_token = req
+        .cookie("refresh_token")
+        .map(|c| c.value().to_string());
+
+    if let Some(ref refresh_token) = refresh_token {
+        tracing::info!("auth_redirect: attempting token refresh");
+        let ip_address = extract_client_ip(&req);
+        let device_info = extract_device_info(&req);
+
+        match auth_service
+            .refresh_tokens(refresh_token.clone(), device_info, ip_address)
+            .await
+        {
+            Ok(tokens) => {
+                tracing::info!(location = %target_url, "auth_redirect: refresh succeeded, redirecting to target");
+                let secure = config.is_production();
+                let cookie_domain = config.cookie_domain.as_deref();
+
+                return Ok(HttpResponse::Found()
+                    .cookie(AuthCookies::access_token(
+                        &tokens.access_token,
+                        secure,
+                        cookie_domain,
+                    ))
+                    .cookie(AuthCookies::refresh_token(
+                        &tokens.refresh_token,
+                        secure,
+                        true,
+                        cookie_domain,
+                    ))
+                    .insert_header(("Location", target_url.as_str()))
+                    .finish());
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "auth_redirect: refresh token failed");
+            }
+        }
+    } else {
+        tracing::info!("auth_redirect: no refresh token cookie found");
+    }
+
+    // Not authenticated — redirect to login
+    tracing::info!(location = %login_url, "auth_redirect: not authenticated, redirecting to login");
+    Ok(HttpResponse::Found()
+        .insert_header(("Location", login_url.as_str()))
+        .finish())
 }

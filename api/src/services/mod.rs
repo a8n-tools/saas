@@ -7,10 +7,14 @@ pub mod email;
 pub mod jwt;
 pub mod password;
 pub mod stripe;
+pub mod totp;
+pub mod webhook;
 
 // Re-export service types
-pub use auth::{AuthService, AuthTokens};
+pub use auth::{AuthService, AuthTokens, LoginResult, MagicLinkResult};
 pub use email::EmailService;
-pub use jwt::{AccessTokenClaims, JwtConfig, JwtService, RefreshTokenClaims};
+pub use jwt::{AccessTokenClaims, JwtConfig, JwtService, RefreshTokenClaims, TwoFactorChallengeClaims};
 pub use password::PasswordService;
 pub use stripe::{StripeConfig, StripeService, MembershipTier};
+pub use totp::TotpService;
+pub use webhook::WebhookService;

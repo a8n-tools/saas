@@ -148,6 +148,7 @@ pub struct User {
     pub grace_period_end: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub two_factor_enabled: bool,
     pub last_login_at: Option<DateTime<Utc>>,
     pub deleted_at: Option<DateTime<Utc>>,
 }
@@ -206,6 +207,7 @@ pub struct UserResponse {
     pub membership_tier: Option<String>,
     pub price_locked: bool,
     pub locked_price_amount: Option<i32>,
+    pub two_factor_enabled: bool,
     pub grace_period_end: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub last_login_at: Option<DateTime<Utc>>,
@@ -222,6 +224,7 @@ impl From<User> for UserResponse {
             membership_tier: user.membership_tier,
             price_locked: user.price_locked,
             locked_price_amount: user.locked_price_amount,
+            two_factor_enabled: user.two_factor_enabled,
             grace_period_end: user.grace_period_end,
             created_at: user.created_at,
             last_login_at: user.last_login_at,

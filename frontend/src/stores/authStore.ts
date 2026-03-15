@@ -1,23 +1,58 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { User } from '@/types'
+import type { User, TwoFactorChallengeResponse } from '@/types'
 import { authApi } from '@/api'
+
+// Proactive background refresh: refresh the access token 2 minutes before it expires
+const ACCESS_TOKEN_REFRESH_MS = 13 * 60 * 1000 // 13 minutes (access token expires at 15)
+let refreshTimer: ReturnType<typeof setTimeout> | null = null
+
+function clearRefreshTimer() {
+  if (refreshTimer) {
+    clearTimeout(refreshTimer)
+    refreshTimer = null
+  }
+}
+
+function scheduleRefresh() {
+  clearRefreshTimer()
+  refreshTimer = setTimeout(async () => {
+    try {
+      await authApi.refresh()
+      scheduleRefresh() // reschedule after success
+    } catch {
+      // Token couldn't be refreshed — user will get logged out on next API call
+    }
+  }, ACCESS_TOKEN_REFRESH_MS)
+}
 
 interface AuthState {
   user: User | null
   isAuthenticated: boolean
   isLoading: boolean
   error: string | null
+  pendingChallenge: { challenge_token: string } | null
 
   // Actions
   setUser: (user: User | null) => void
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
-  login: (email: string, password: string) => Promise<void>
+  login: (email: string, password: string, remember?: boolean) => Promise<void>
   register: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
   refreshUser: () => Promise<void>
   clearError: () => void
+  verify2FA: (code: string) => Promise<void>
+  clearPendingChallenge: () => void
+}
+
+function isTwoFactorChallenge(response: unknown): response is TwoFactorChallengeResponse {
+  return (
+    typeof response === 'object' &&
+    response !== null &&
+    'requires_2fa' in response &&
+    (response as TwoFactorChallengeResponse).requires_2fa === true
+  )
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -27,6 +62,7 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       isLoading: true,
       error: null,
+      pendingChallenge: null,
 
       setUser: (user) =>
         set({
@@ -41,19 +77,58 @@ export const useAuthStore = create<AuthState>()(
 
       clearError: () => set({ error: null }),
 
-      login: async (email, password) => {
+      clearPendingChallenge: () => set({ pendingChallenge: null }),
+
+      login: async (email, password, remember) => {
         set({ isLoading: true, error: null })
         try {
-          const response = await authApi.login({ email, password })
-          set({
-            user: response.user,
-            isAuthenticated: true,
-            isLoading: false,
-          })
+          const response = await authApi.login({ email, password, remember })
+          if (isTwoFactorChallenge(response)) {
+            set({
+              pendingChallenge: { challenge_token: response.challenge_token },
+              isLoading: false,
+            })
+          } else {
+            set({
+              user: response.user,
+              isAuthenticated: true,
+              isLoading: false,
+              pendingChallenge: null,
+            })
+            scheduleRefresh()
+          }
         } catch (err) {
           const error = err as { error?: { message?: string } }
           set({
             error: error.error?.message || 'Login failed',
+            isLoading: false,
+          })
+          throw err
+        }
+      },
+
+      verify2FA: async (code: string) => {
+        const { pendingChallenge } = get()
+        if (!pendingChallenge) {
+          throw new Error('No pending 2FA challenge')
+        }
+        set({ isLoading: true, error: null })
+        try {
+          const response = await authApi.verify2FA({
+            challenge_token: pendingChallenge.challenge_token,
+            code,
+          })
+          set({
+            user: response.user,
+            isAuthenticated: true,
+            isLoading: false,
+            pendingChallenge: null,
+          })
+          scheduleRefresh()
+        } catch (err) {
+          const error = err as { error?: { message?: string } }
+          set({
+            error: error.error?.message || 'Verification failed',
             isLoading: false,
           })
           throw err
@@ -69,6 +144,7 @@ export const useAuthStore = create<AuthState>()(
             isAuthenticated: true,
             isLoading: false,
           })
+          scheduleRefresh()
         } catch (err) {
           const error = err as { error?: { message?: string } }
           set({
@@ -80,6 +156,7 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: async () => {
+        clearRefreshTimer()
         try {
           await authApi.logout()
         } catch {
@@ -89,6 +166,7 @@ export const useAuthStore = create<AuthState>()(
             user: null,
             isAuthenticated: false,
             isLoading: false,
+            pendingChallenge: null,
           })
         }
       },
@@ -100,7 +178,9 @@ export const useAuthStore = create<AuthState>()(
           return
         }
 
-        set({ isLoading: true })
+        // Don't set isLoading here — this is a background refresh.
+        // Setting isLoading causes ProtectedRoute to unmount/remount children,
+        // which re-triggers mount effects and creates an infinite loop.
         try {
           const user = await authApi.me()
           set({
@@ -108,12 +188,28 @@ export const useAuthStore = create<AuthState>()(
             isAuthenticated: true,
             isLoading: false,
           })
+          scheduleRefresh()
         } catch {
-          set({
-            user: null,
-            isAuthenticated: false,
-            isLoading: false,
-          })
+          // Access token may be expired — try refreshing it
+          try {
+            // Refresh sets a new JWT cookie but doesn't return user data
+            await authApi.refresh()
+            // Now fetch user with the fresh token
+            const user = await authApi.me()
+            set({
+              user,
+              isAuthenticated: true,
+              isLoading: false,
+            })
+            scheduleRefresh()
+          } catch {
+            // Refresh token also failed — truly logged out
+            set({
+              user: null,
+              isAuthenticated: false,
+              isLoading: false,
+            })
+          }
         }
       },
     }),
@@ -125,3 +221,42 @@ export const useAuthStore = create<AuthState>()(
     }
   )
 )
+
+// Sync auth state across tabs — when another tab/window changes localStorage
+// (e.g., login or logout), update this tab's in-memory state.
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (e) => {
+    if (e.key === 'auth-storage') {
+      if (!e.newValue) {
+        // Key was removed — logged out
+        clearRefreshTimer()
+        useAuthStore.setState({
+          user: null,
+          isAuthenticated: false,
+          isLoading: false,
+          pendingChallenge: null,
+        })
+      } else {
+        try {
+          const parsed = JSON.parse(e.newValue)
+          const isAuthenticated = parsed?.state?.isAuthenticated ?? false
+          if (!isAuthenticated) {
+            clearRefreshTimer()
+            useAuthStore.setState({
+              user: null,
+              isAuthenticated: false,
+              isLoading: false,
+              pendingChallenge: null,
+            })
+          } else if (isAuthenticated && !useAuthStore.getState().isAuthenticated) {
+            // Another tab logged in — mark authenticated and refresh user data
+            useAuthStore.setState({ isAuthenticated: true, isLoading: false })
+            useAuthStore.getState().refreshUser()
+          }
+        } catch {
+          // Ignore parse errors
+        }
+      }
+    }
+  })
+}

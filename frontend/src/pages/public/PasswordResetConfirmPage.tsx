@@ -17,7 +17,8 @@ const confirmSchema = z.object({
     .min(12, 'Password must be at least 12 characters')
     .regex(/[a-z]/, 'Password must contain a lowercase letter')
     .regex(/[A-Z]/, 'Password must contain an uppercase letter')
-    .regex(/[0-9]/, 'Password must contain a number'),
+    .regex(/[0-9]/, 'Password must contain a number')
+    .regex(/[^a-zA-Z0-9]/, 'Password must contain a special character'),
   confirmPassword: z.string(),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords don't match",
@@ -31,6 +32,7 @@ const passwordRequirements = [
   { label: 'One lowercase letter', test: (p: string) => /[a-z]/.test(p) },
   { label: 'One uppercase letter', test: (p: string) => /[A-Z]/.test(p) },
   { label: 'One number', test: (p: string) => /[0-9]/.test(p) },
+  { label: 'One special character', test: (p: string) => /[^a-zA-Z0-9]/.test(p) },
 ]
 
 export function PasswordResetConfirmPage() {
@@ -57,7 +59,7 @@ export function PasswordResetConfirmPage() {
     setIsLoading(true)
     setError(null)
     try {
-      await authApi.confirmPasswordReset({ token, password: data.password })
+      await authApi.confirmPasswordReset({ token, new_password: data.password })
       navigate('/login?reset=success')
     } catch (err) {
       const apiError = err as { error?: { message?: string } }

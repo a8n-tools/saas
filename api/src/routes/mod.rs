@@ -5,6 +5,7 @@
 pub mod admin;
 pub mod application;
 pub mod auth;
+pub mod feedback;
 pub mod health;
 pub mod membership;
 pub mod user;
@@ -21,11 +22,13 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .configure(auth::configure)
             .configure(user::configure)
             .configure(application::configure)
+            .configure(feedback::configure)
             .configure(membership::configure)
             .configure(webhook::configure)
             .configure(admin::configure),
     );
 
-    // Health check at root level too
+    // Root-level endpoints
+    cfg.service(health::root_status);
     cfg.service(health::health_check);
 }

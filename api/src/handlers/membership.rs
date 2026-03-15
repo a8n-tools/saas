@@ -77,10 +77,15 @@ pub async fn create_checkout(
     let request_id = get_request_id(&req);
     let tier = body.tier;
 
-    // Get user from database
-    let db_user = UserRepository::find_by_id(&pool, user.0.sub)
-        .await?
-        .ok_or(AppError::not_found("User"))?;
+    // Lock the user row to prevent concurrent Stripe customer creation
+    let mut tx = pool.begin().await?;
+    let db_user = sqlx::query_as::<_, crate::models::User>(
+        "SELECT * FROM users WHERE id = $1 AND deleted_at IS NULL FOR UPDATE",
+    )
+    .bind(user.0.sub)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or(AppError::not_found("User"))?;
 
     // Check if user already has active membership
     if db_user.membership_status == "active" {
@@ -92,10 +97,11 @@ pub async fn create_checkout(
         Some(id) => id,
         None => {
             let customer_id = stripe.create_customer(&db_user.email, db_user.id).await?;
-            UserRepository::update_stripe_customer_id(&pool, db_user.id, &customer_id).await?;
+            UserRepository::update_stripe_customer_id(&mut *tx, db_user.id, &customer_id).await?;
             customer_id
         }
     };
+    tx.commit().await?;
 
     // Create checkout session for the selected tier
     let (session_id, checkout_url) = stripe
@@ -118,11 +124,12 @@ pub async fn create_checkout(
 }
 
 /// POST /v1/memberships/cancel
-/// Cancel membership immediately
+/// Cancel membership at end of current billing period
 pub async fn cancel_membership(
     req: HttpRequest,
     user: AuthenticatedUser,
     pool: web::Data<PgPool>,
+    stripe: web::Data<Arc<StripeService>>,
     config: web::Data<Config>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
@@ -141,8 +148,18 @@ pub async fn cancel_membership(
         return Err(AppError::conflict("No active membership to cancel"));
     }
 
-    // Update membership status to canceled
-    UserRepository::update_membership_status(&pool, user.0.sub, crate::models::MembershipStatus::Canceled).await?;
+    // Cancel in Stripe (at period end so user keeps access until billing cycle ends)
+    if let Some(membership) = MembershipRepository::find_by_user_id(&pool, user.0.sub).await? {
+        stripe
+            .cancel_subscription(&membership.stripe_subscription_id, true)
+            .await?;
+
+        // Mark as cancel_at_period_end in our DB (Stripe webhook will confirm)
+        MembershipRepository::set_cancel_at_period_end(&pool, membership.id, true).await?;
+    } else {
+        // No Stripe subscription record — just update status directly
+        UserRepository::update_membership_status(pool.get_ref(), user.0.sub, crate::models::MembershipStatus::Canceled).await?;
+    }
 
     // Fetch updated user
     let updated_user = UserRepository::find_by_id(&pool, user.0.sub)
@@ -166,7 +183,64 @@ pub async fn cancel_membership(
         .json(crate::responses::ApiResponse {
             success: true,
             data: Some(serde_json::json!({
-                "message": "Membership canceled successfully",
+                "message": "Membership will be canceled at end of billing period",
+                "membership_status": updated_user.membership_status
+            })),
+            meta: crate::responses::ResponseMeta::new(request_id),
+        }))
+}
+
+/// POST /v1/memberships/cancel-now
+/// Cancel membership immediately (for testing/development)
+pub async fn cancel_membership_immediate(
+    req: HttpRequest,
+    user: AuthenticatedUser,
+    pool: web::Data<PgPool>,
+    stripe: web::Data<Arc<StripeService>>,
+    config: web::Data<Config>,
+) -> Result<HttpResponse, AppError> {
+    let request_id = get_request_id(&req);
+
+    let jwt_service = req
+        .app_data::<Arc<JwtService>>()
+        .ok_or_else(|| AppError::internal("JWT service not configured"))?;
+
+    let db_user = UserRepository::find_by_id(&pool, user.0.sub)
+        .await?
+        .ok_or(AppError::not_found("User"))?;
+
+    if db_user.membership_status == "canceled" || db_user.membership_status == "none" {
+        return Err(AppError::conflict("No active membership to cancel"));
+    }
+
+    // Cancel immediately in Stripe
+    if let Some(membership) = MembershipRepository::find_by_user_id(&pool, user.0.sub).await? {
+        stripe
+            .cancel_subscription(&membership.stripe_subscription_id, false)
+            .await?;
+
+        MembershipRepository::update_status(pool.get_ref(), membership.id, "canceled").await?;
+    }
+
+    // Update user status immediately
+    UserRepository::update_membership_status(pool.get_ref(), user.0.sub, crate::models::MembershipStatus::Canceled).await?;
+
+    let updated_user = UserRepository::find_by_id(&pool, user.0.sub)
+        .await?
+        .ok_or(AppError::not_found("User"))?;
+
+    tracing::info!(user_id = %updated_user.id, "User canceled membership immediately");
+
+    let access_token = jwt_service.create_access_token(&updated_user)?;
+    let secure = config.is_production();
+    let cookie_domain = config.cookie_domain.as_deref();
+
+    Ok(HttpResponse::Ok()
+        .cookie(AuthCookies::access_token(&access_token, secure, cookie_domain))
+        .json(crate::responses::ApiResponse {
+            success: true,
+            data: Some(serde_json::json!({
+                "message": "Membership canceled immediately",
                 "membership_status": "canceled"
             })),
             meta: crate::responses::ResponseMeta::new(request_id),

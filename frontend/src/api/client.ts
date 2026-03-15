@@ -1,10 +1,11 @@
 import type { ApiResponse, ApiError } from '@/types'
+import { config } from '@/config'
 
-// Always use /api for browser requests - Vite proxy handles forwarding to the API server
-const API_BASE_URL = '/api'
+const API_BASE_URL = config.apiUrl + '/v1'
 
 class ApiClient {
   private baseUrl: string
+  private refreshPromise: Promise<void> | null = null
 
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl
@@ -12,20 +13,63 @@ class ApiClient {
 
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    isRetry = false
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`
 
+    const isFormData = options.body instanceof FormData
     const config: RequestInit = {
       ...options,
       credentials: 'include', // Include cookies for auth
       headers: {
-        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
         ...options.headers,
       },
     }
 
     const response = await fetch(url, config)
+
+    // Reject non-JSON responses (e.g. Anubis challenge pages)
+    const contentType = response.headers.get('content-type') || ''
+    if (!contentType.includes('application/json')) {
+      throw {
+        success: false,
+        error: {
+          code: 'INVALID_RESPONSE',
+          message: 'Server returned a non-JSON response. Please refresh and try again.',
+        },
+      } satisfies ApiError
+    }
+
+    // On 401, try refreshing the token once and retry
+    if (
+      response.status === 401 &&
+      !isRetry &&
+      endpoint !== '/auth/refresh' &&
+      endpoint !== '/auth/login'
+    ) {
+      if (!this.refreshPromise) {
+        this.refreshPromise = fetch(`${this.baseUrl}/auth/refresh`, {
+          method: 'POST',
+          credentials: 'include',
+        })
+          .then((r) => {
+            if (!r.ok) throw new Error('refresh failed')
+          })
+          .finally(() => {
+            this.refreshPromise = null
+          })
+      }
+
+      try {
+        await this.refreshPromise
+        return this.request<T>(endpoint, options, true)
+      } catch {
+        // Refresh failed — fall through to normal error handling
+      }
+    }
 
     if (!response.ok) {
       const error: ApiError = await response.json().catch(() => ({
@@ -53,6 +97,10 @@ class ApiClient {
     })
   }
 
+  async postForm<T>(endpoint: string, body: FormData): Promise<T> {
+    return this.request<T>(endpoint, { method: 'POST', body })
+  }
+
   async put<T>(endpoint: string, body?: unknown): Promise<T> {
     return this.request<T>(endpoint, {
       method: 'PUT',
@@ -67,8 +115,11 @@ class ApiClient {
     })
   }
 
-  async delete<T>(endpoint: string): Promise<T> {
-    return this.request<T>(endpoint, { method: 'DELETE' })
+  async delete<T>(endpoint: string, body?: unknown): Promise<T> {
+    return this.request<T>(endpoint, {
+      method: 'DELETE',
+      body: body ? JSON.stringify(body) : undefined,
+    })
   }
 }
 

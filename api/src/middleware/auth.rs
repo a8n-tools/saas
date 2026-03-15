@@ -210,7 +210,7 @@ impl AuthCookies {
         let max_age = if remember {
             actix_web::cookie::time::Duration::days(30)
         } else {
-            actix_web::cookie::time::Duration::days(1)
+            actix_web::cookie::time::Duration::days(7)
         };
 
         let mut builder = Cookie::build("refresh_token", token.to_owned())
@@ -309,10 +309,10 @@ mod tests {
 
     #[test]
     fn test_auth_cookies_clear_with_domain() {
-        let cookies = AuthCookies::clear(true, Some(".a8n.tools"));
+        let cookies = AuthCookies::clear(true, Some(".example.com"));
         assert_eq!(cookies.len(), 2);
         for cookie in cookies {
-            assert_eq!(cookie.domain(), Some(".a8n.tools"));
+            assert_eq!(cookie.domain(), Some(".example.com"));
         }
     }
 }

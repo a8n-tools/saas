@@ -1,43 +1,16 @@
-# Build stage
-FROM node:20-alpine AS builder
+# syntax=docker/dockerfile:1
 
+FROM oven/bun:alpine
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
+# Layer 1: Dependencies (cached unless package.json changes)
+COPY --chmod=644 package.json bun.lock ./
+RUN --mount=type=cache,target=/root/.bun/install/cache \
+    bun install
 
-# Install dependencies
-RUN npm ci
+# Make /app and node_modules writable so the non-root user can create .vite/ at runtime
+RUN chmod 777 /app /app/node_modules
 
-# Copy source code
-COPY . .
-
-# Build arguments for environment variables
-ARG VITE_API_URL=https://api.a8n.tools
-ARG VITE_SHOW_BUSINESS_PRICING=false
-
-# Set environment variables for build
-ENV VITE_API_URL=$VITE_API_URL
-ENV VITE_SHOW_BUSINESS_PRICING=$VITE_SHOW_BUSINESS_PRICING
-
-# Build the application
-RUN npm run build
-
-# Production stage - nginx to serve static files
-FROM nginx:alpine
-
-# Copy custom nginx config
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-# Copy built assets from builder
-COPY --from=builder /app/dist /usr/share/nginx/html
-
-# Expose port
-EXPOSE 80
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget -q --spider http://localhost/health || exit 1
-
-# Run nginx
-CMD ["nginx", "-g", "daemon off;"]
+# Source code is bind-mounted at runtime, not copied
+EXPOSE 5173
+CMD ["bun", "run", "dev", "--", "--host", "0.0.0.0"]

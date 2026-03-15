@@ -1,4 +1,6 @@
 import { Link } from 'react-router-dom'
+import { config } from '@/config'
+import { useAuthStore } from '@/stores/authStore'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -22,9 +24,11 @@ const businessFeatures = [
   'Dedicated account manager',
 ]
 
-const showBusinessPricing = import.meta.env.VITE_SHOW_BUSINESS_PRICING === 'true'
+const showBusinessPricing = config.showBusinessPricing
 
 export function PricingPage() {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+
   return (
     <div className="py-20">
       <div className="container">
@@ -60,9 +64,9 @@ export function PricingPage() {
                   </li>
                 ))}
               </ul>
-              <Link to="/register?tier=personal" className="mt-8 block">
+              <Link to={isAuthenticated ? '/membership' : '/register?tier=personal'} className="mt-8 block">
                 <Button className="w-full" size="lg">
-                  Get Started
+                  {isAuthenticated ? 'Go to Membership' : 'Get Started'}
                 </Button>
               </Link>
               <p className="mt-4 text-center text-sm text-muted-foreground">
@@ -99,9 +103,9 @@ export function PricingPage() {
                     </li>
                   ))}
                 </ul>
-                <Link to="/register?tier=business" className="mt-8 block">
+                <Link to={isAuthenticated ? '/membership' : '/register?tier=business'} className="mt-8 block">
                   <Button className="w-full" size="lg">
-                    Get Started
+                    {isAuthenticated ? 'Go to Membership' : 'Get Started'}
                   </Button>
                 </Link>
                 <p className="mt-4 text-center text-sm text-muted-foreground">

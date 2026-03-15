@@ -1,0 +1,72 @@
+---
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: a8n-tools-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: a8n
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: a8n_platform
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - a8n-tools-private
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U a8n -d a8n_platform"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Rust API Backend
+  api:
+    image: codeberg.org/a8n-tools/saas-api:${API_VERSION:-latest}
+    container_name: a8n-tools-api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://a8n:${POSTGRES_PASSWORD}@postgres:5432/a8n_platform
+      HOST: 0.0.0.0
+      PORT: 8080
+      RUST_LOG: ${RUST_LOG:-info}
+      ENVIRONMENT: production
+      JWT_SECRET: ${JWT_SECRET}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      STRIPE_PRICE_ID: ${STRIPE_PRICE_ID}
+      STRIPE_BUSINESS_PRICE_ID: ${STRIPE_BUSINESS_PRICE_ID}
+      SMTP_HOST: ${SMTP_HOST:-stalwart}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_TLS: ${SMTP_TLS:-implicit}
+      SMTP_FROM: ${SMTP_FROM:-noreply@localhost}
+    volumes:
+      - ./secrets:/secrets:ro
+    networks:
+      - a8n-tools-private
+    expose:
+      - 8080
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # React Frontend (Landing + Dashboard)
+  frontend:
+    image: codeberg.org/a8n-tools/saas-frontend:${FRONTEND_VERSION:-latest}
+    container_name: a8n-tools-frontend
+    restart: unless-stopped
+    environment:
+      PORT: 8080
+    networks:
+      - a8n-tools-private
+    expose:
+      - 8080
+
+networks:
+  a8n-tools-private:
+    external: true
+
+volumes:
+  postgres_data:
+    name: a8n-tools-postgres-data
+    external: true

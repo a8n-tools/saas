@@ -1,61 +1,33 @@
-# Build stage
-FROM rust:1.92-bookworm AS builder
+# syntax=docker/dockerfile:1
 
+FROM rust:1.88
 WORKDIR /app
 
-# Install dependencies
+# Install dependencies needed for cargo-watch and sqlx
 RUN apt-get update && apt-get install -y \
     pkg-config \
     libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy cargo files for dependency caching
-COPY Cargo.toml Cargo.lock ./
+# Install cargo-watch for hot reloading
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    cargo install cargo-watch
 
-# Create dummy src for dependency compilation
+# Copy cargo files first for better caching
+COPY Cargo.toml Cargo.lock* ./
+
+# Create a dummy src to compile dependencies
 RUN mkdir src && echo "fn main() {}" > src/main.rs
 
-# Build dependencies only
-RUN cargo build --release && rm -rf src target/release/deps/a8n_api*
+# Build dependencies (cached unless Cargo.toml/lock changes)
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    cargo build 2>/dev/null || true
 
-# Copy actual source code
-COPY . .
+# Remove dummy src
+RUN rm -rf src
 
-# Build the application
-RUN cargo build --release
+# Pre-create target dir so Docker initializes the named volume with 777 permissions
+RUN mkdir -p /app/target && chmod -R 777 /app
 
-# Runtime stage
-FROM debian:bookworm-slim
-
-WORKDIR /app
-
-# Install runtime dependencies
-RUN apt-get update && apt-get install -y \
-    ca-certificates \
-    libssl3 \
-    && rm -rf /var/lib/apt/lists/*
-
-# Create non-root user
-RUN groupadd -r a8n && useradd -r -g a8n a8n
-
-# Copy the binary from builder
-COPY --from=builder /app/target/release/a8n-api /app/a8n-api
-
-# Copy migrations and templates if they exist
-COPY --from=builder /app/migrations /app/migrations
-COPY --from=builder /app/templates /app/templates
-
-# Set ownership
-RUN chown -R a8n:a8n /app
-
-USER a8n
-
-# Expose port
-EXPOSE 4000
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:4000/health || exit 1
-
-# Run the binary
-CMD ["/app/a8n-api"]
+# Source code is bind-mounted at runtime, not copied
+CMD ["cargo", "watch", "-x", "run"]

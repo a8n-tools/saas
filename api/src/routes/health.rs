@@ -1,4 +1,4 @@
-//! Health check endpoints
+//! Health check and status endpoints
 
 use actix_web::{get, web, HttpResponse};
 use serde::Serialize;
@@ -7,6 +7,23 @@ use serde::Serialize;
 struct HealthResponse {
     status: String,
     version: String,
+}
+
+#[derive(Serialize)]
+struct StatusResponse {
+    service: &'static str,
+    version: &'static str,
+    commit: &'static str,
+}
+
+/// Root status endpoint at /
+#[get("/")]
+pub async fn root_status() -> HttpResponse {
+    HttpResponse::Ok().json(StatusResponse {
+        service: "a8n-api",
+        version: env!("CARGO_PKG_VERSION"),
+        commit: env!("GIT_COMMIT"),
+    })
 }
 
 /// Health check endpoint at /health

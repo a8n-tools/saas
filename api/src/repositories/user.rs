@@ -2,10 +2,11 @@
 
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
+use sqlx::postgres::Postgres;
 use uuid::Uuid;
 
 use crate::errors::AppError;
-use crate::models::{CreateUser, MembershipStatus, User, UserRole};
+use crate::models::{CreateUser, MembershipStatus, User};
 
 pub struct UserRepository;
 
@@ -114,11 +115,14 @@ impl UserRepository {
     }
 
     /// Update membership status
-    pub async fn update_membership_status(
-        pool: &PgPool,
+    pub async fn update_membership_status<'e, E>(
+        executor: E,
         user_id: Uuid,
         status: MembershipStatus,
-    ) -> Result<(), AppError> {
+    ) -> Result<(), AppError>
+    where
+        E: sqlx::Executor<'e, Database = Postgres>,
+    {
         sqlx::query(
             r#"
             UPDATE users
@@ -128,7 +132,7 @@ impl UserRepository {
         )
         .bind(status.as_str())
         .bind(user_id)
-        .execute(pool)
+        .execute(executor)
         .await?;
 
         Ok(())
@@ -160,11 +164,14 @@ impl UserRepository {
     }
 
     /// Update Stripe customer ID
-    pub async fn update_stripe_customer_id(
-        pool: &PgPool,
+    pub async fn update_stripe_customer_id<'e, E>(
+        executor: E,
         user_id: Uuid,
         customer_id: &str,
-    ) -> Result<(), AppError> {
+    ) -> Result<(), AppError>
+    where
+        E: sqlx::Executor<'e, Database = Postgres>,
+    {
         sqlx::query(
             r#"
             UPDATE users
@@ -174,7 +181,7 @@ impl UserRepository {
         )
         .bind(customer_id)
         .bind(user_id)
-        .execute(pool)
+        .execute(executor)
         .await?;
 
         Ok(())
@@ -204,12 +211,15 @@ impl UserRepository {
     }
 
     /// Set grace period
-    pub async fn set_grace_period(
-        pool: &PgPool,
+    pub async fn set_grace_period<'e, E>(
+        executor: E,
         user_id: Uuid,
         start: DateTime<Utc>,
         end: DateTime<Utc>,
-    ) -> Result<(), AppError> {
+    ) -> Result<(), AppError>
+    where
+        E: sqlx::Executor<'e, Database = Postgres>,
+    {
         sqlx::query(
             r#"
             UPDATE users
@@ -220,14 +230,20 @@ impl UserRepository {
         .bind(start)
         .bind(end)
         .bind(user_id)
-        .execute(pool)
+        .execute(executor)
         .await?;
 
         Ok(())
     }
 
     /// Clear grace period
-    pub async fn clear_grace_period(pool: &PgPool, user_id: Uuid) -> Result<(), AppError> {
+    pub async fn clear_grace_period<'e, E>(
+        executor: E,
+        user_id: Uuid,
+    ) -> Result<(), AppError>
+    where
+        E: sqlx::Executor<'e, Database = Postgres>,
+    {
         sqlx::query(
             r#"
             UPDATE users
@@ -235,6 +251,29 @@ impl UserRepository {
             WHERE id = $1
             "#,
         )
+        .bind(user_id)
+        .execute(executor)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Update user's email address
+    pub async fn update_email(
+        pool: &PgPool,
+        user_id: Uuid,
+        new_email: &str,
+        set_verified: bool,
+    ) -> Result<(), AppError> {
+        sqlx::query(
+            r#"
+            UPDATE users
+            SET email = $1, email_verified = $2, updated_at = NOW()
+            WHERE id = $3
+            "#,
+        )
+        .bind(new_email)
+        .bind(set_verified)
         .bind(user_id)
         .execute(pool)
         .await?;
@@ -310,7 +349,7 @@ impl UserRepository {
             conditions.push("LOWER(email) LIKE LOWER($3)".to_string());
         }
 
-        if let Some(status) = &status_filter {
+        if let Some(_status) = &status_filter {
             let idx = if search.is_some() { 4 } else { 3 };
             conditions.push(format!("subscription_status = ${}", idx));
         }
@@ -389,6 +428,17 @@ impl UserRepository {
         };
 
         Ok((users, total))
+    }
+
+    /// Get email addresses of all active admin users for system notifications
+    pub async fn find_admin_emails(pool: &PgPool) -> Result<Vec<String>, AppError> {
+        let rows: Vec<(String,)> = sqlx::query_as(
+            "SELECT email FROM users WHERE role = 'admin' AND deleted_at IS NULL ORDER BY created_at ASC",
+        )
+        .fetch_all(pool)
+        .await?;
+
+        Ok(rows.into_iter().map(|(email,)| email).collect())
     }
 
     /// Find users in grace period

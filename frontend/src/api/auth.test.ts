@@ -10,8 +10,11 @@ describe('authApi', () => {
         password: 'password123',
       })
 
-      expect(response.user).toEqual(mockUser)
-      expect(response.access_token).toBe('mock-access-token')
+      expect('user' in response).toBe(true)
+      if ('user' in response) {
+        expect(response.user).toEqual(mockUser)
+        expect(response.access_token).toBe('mock-access-token')
+      }
     })
 
     it('should throw error on invalid credentials', async () => {
@@ -94,8 +97,11 @@ describe('authApi', () => {
         token: 'valid-token',
       })
 
-      expect(response.user).toEqual(mockUser)
-      expect(response.access_token).toBe('mock-access-token')
+      expect('user' in response).toBe(true)
+      if ('user' in response) {
+        expect(response.user).toEqual(mockUser)
+        expect(response.access_token).toBe('mock-access-token')
+      }
     })
 
     it('should throw error on invalid token', async () => {
@@ -126,7 +132,7 @@ describe('authApi', () => {
     it('should reset password with valid token', async () => {
       const response = await authApi.confirmPasswordReset({
         token: 'valid-reset-token',
-        password: 'newpassword123',
+        new_password: 'newpassword123',
       })
 
       expect(response.message).toContain('Password has been reset')
@@ -136,7 +142,7 @@ describe('authApi', () => {
       await expect(
         authApi.confirmPasswordReset({
           token: 'invalid-token',
-          password: 'newpassword123',
+          new_password: 'newpassword123',
         })
       ).rejects.toMatchObject({
         error: {

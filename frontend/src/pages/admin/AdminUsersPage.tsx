@@ -20,9 +20,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Search, MoreVertical, User, Loader2, KeyRound, Shield, ShieldOff, Trash2 } from 'lucide-react'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Search, MoreVertical, User, Loader2, KeyRound, Shield, ShieldOff, Trash2, AlertCircle } from 'lucide-react'
 import { adminApi, type AdminUser } from '@/api/admin'
 import { formatRelativeTime } from '@/lib/utils'
+import type { ApiError } from '@/types'
 
 type DialogAction = 'deactivate' | 'activate' | 'reset' | 'delete' | 'makeAdmin' | 'removeAdmin' | null
 
@@ -36,7 +38,7 @@ export function AdminUsersPage() {
   const { user: currentUser } = useAuthStore()
   const queryClient = useQueryClient()
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ['admin', 'users', page, searchQuery],
     queryFn: () => adminApi.getUsers(page, 20, searchQuery || undefined),
   })
@@ -117,6 +119,14 @@ export function AdminUsersPage() {
         </div>
       </div>
 
+      {isError && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Failed to load users</AlertTitle>
+          <AlertDescription>{(error as unknown as ApiError)?.error?.message || 'Could not connect to the API. Please try again later.'}</AlertDescription>
+        </Alert>
+      )}
+
       <Card>
         <CardHeader>
           <div className="flex items-center gap-4">
@@ -171,7 +181,7 @@ export function AdminUsersPage() {
                       <MembershipBadge status={user.membership_status} />
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon">
+                          <Button variant="ghost" size="icon" aria-label="Open user actions">
                             <MoreVertical className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>

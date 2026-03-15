@@ -68,7 +68,7 @@ impl RateLimitRepository {
         .await?;
 
         let count = result.0;
-        let exceeded = count >= config.max_requests;
+        let exceeded = count > config.max_requests;
 
         Ok((count, exceeded))
     }

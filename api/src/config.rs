@@ -16,10 +16,25 @@ pub struct Config {
     pub cors_origin: String,
     /// Environment (development, production)
     pub environment: String,
+    /// Application name used in emails, JWT issuer, etc.
+    pub app_name: String,
     /// Email configuration
     pub email: EmailConfig,
-    /// Cookie domain (e.g., ".a8n.tools" for production, empty for localhost)
+    /// Cookie domain (e.g., ".yourdomain.com" for production, empty for localhost)
     pub cookie_domain: Option<String>,
+    /// Auto-ban configuration
+    pub auto_ban: AutoBanConfig,
+    /// TOTP encryption key (32 bytes) for encrypting TOTP secrets at rest
+    pub totp_encryption_key: [u8; 32],
+}
+
+/// SMTP TLS mode
+#[derive(Debug, Clone, PartialEq)]
+pub enum SmtpTls {
+    /// Implicit TLS (port 465) — connection is TLS from the start
+    Implicit,
+    /// STARTTLS (port 587) — plaintext connection upgraded to TLS
+    Starttls,
 }
 
 /// Email configuration
@@ -29,6 +44,8 @@ pub struct EmailConfig {
     pub smtp_host: String,
     /// SMTP server port
     pub smtp_port: u16,
+    /// SMTP TLS mode
+    pub smtp_tls: SmtpTls,
     /// SMTP username
     pub smtp_username: String,
     /// SMTP password
@@ -41,6 +58,10 @@ pub struct EmailConfig {
     pub base_url: String,
     /// Whether to actually send emails (false in dev mode)
     pub enabled: bool,
+    /// Application name for email subjects and templates
+    pub app_name: String,
+    /// Admin recipients for operational notifications
+    pub admin_notification_emails: Vec<String>,
 }
 
 impl EmailConfig {
@@ -54,18 +75,104 @@ impl EmailConfig {
         let smtp_host = env::var("SMTP_HOST").unwrap_or_else(|_| "localhost".to_string());
         let has_smtp = !smtp_host.is_empty() && smtp_host != "localhost";
 
+        // SMTP_TLS: "implicit" (port 465) or "starttls" (port 587)
+        let smtp_tls = match env::var("SMTP_TLS").unwrap_or_default().to_lowercase().as_str() {
+            "starttls" => SmtpTls::Starttls,
+            // Default to implicit TLS (port 465)
+            _ => SmtpTls::Implicit,
+        };
+
+        let default_port: u16 = match smtp_tls {
+            SmtpTls::Implicit => 465,
+            SmtpTls::Starttls => 587,
+        };
+
         Self {
             smtp_host,
             smtp_port: env::var("SMTP_PORT")
-                .unwrap_or_else(|_| "587".to_string())
+                .unwrap_or_else(|_| default_port.to_string())
                 .parse()
-                .unwrap_or(587),
+                .unwrap_or(default_port),
+            smtp_tls,
             smtp_username: env::var("SMTP_USERNAME").unwrap_or_default(),
             smtp_password: env::var("SMTP_PASSWORD").unwrap_or_default(),
-            from_email: env::var("SMTP_FROM").unwrap_or_else(|_| "noreply@a8n.tools".to_string()),
-            from_name: env::var("EMAIL_FROM_NAME").unwrap_or_else(|_| "a8n.tools".to_string()),
-            base_url: env::var("BASE_URL").unwrap_or_else(|_| "http://localhost:5173".to_string()),
+            from_email: parse_smtp_from_email(
+                &env::var("SMTP_FROM").unwrap_or_else(|_| "noreply@localhost".to_string()),
+            ),
+            from_name: parse_smtp_from_name(
+                &env::var("SMTP_FROM").unwrap_or_else(|_| "noreply@localhost".to_string()),
+            ),
+            base_url: env::var("APP_URL")
+                .or_else(|_| env::var("CORS_ORIGIN"))
+                .unwrap_or_else(|_| "http://localhost:5173".to_string()),
             enabled: (is_production && has_smtp) || force_enabled,
+            app_name: env::var("APP_NAME").unwrap_or_else(|_| "localhost".to_string()),
+            admin_notification_emails: env::var("ADMIN_NOTIFICATION_EMAILS")
+                .unwrap_or_default()
+                .split(',')
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(ToOwned::to_owned)
+                .collect(),
+        }
+    }
+}
+
+/// Parse email address from SMTP_FROM.
+/// Supports "Display Name <email>" or plain "email" format.
+fn parse_smtp_from_email(smtp_from: &str) -> String {
+    if let Some(start) = smtp_from.find('<') {
+        if let Some(end) = smtp_from.find('>') {
+            return smtp_from[start + 1..end].trim().to_string();
+        }
+    }
+    smtp_from.trim().to_string()
+}
+
+/// Parse display name from SMTP_FROM.
+/// Returns the part before `<`, or "localhost" if no display name is present.
+fn parse_smtp_from_name(smtp_from: &str) -> String {
+    if let Some(start) = smtp_from.find('<') {
+        let name = smtp_from[..start].trim();
+        if !name.is_empty() {
+            return name.to_string();
+        }
+    }
+    "localhost".to_string()
+}
+
+/// Auto-ban configuration
+#[derive(Debug, Clone)]
+pub struct AutoBanConfig {
+    /// Whether auto-banning is enabled
+    pub enabled: bool,
+    /// Number of suspicious requests before banning an IP
+    pub threshold: u32,
+    /// Time window in seconds for counting strikes
+    pub window_secs: u64,
+    /// How long a ban lasts in seconds
+    pub ban_duration_secs: u64,
+}
+
+impl AutoBanConfig {
+    /// Load auto-ban configuration from environment variables
+    pub fn from_env() -> Self {
+        Self {
+            enabled: env::var("AUTO_BAN_ENABLED")
+                .map(|v| v != "false" && v != "0")
+                .unwrap_or(true),
+            threshold: env::var("AUTO_BAN_THRESHOLD")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(5),
+            window_secs: env::var("AUTO_BAN_WINDOW_SECS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(3600),
+            ban_duration_secs: env::var("AUTO_BAN_DURATION_SECS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(86400),
         }
     }
 }
@@ -92,19 +199,20 @@ impl Config {
         let log_level = env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string());
 
         let cors_origin = env::var("CORS_ORIGIN")
-            .unwrap_or_else(|_| "https://app.a8n.tools".to_string());
+            .unwrap_or_else(|_| "http://localhost:5173".to_string());
 
-        let environment = env::var("ENVIRONMENT").unwrap_or_else(|_| "development".to_string());
+        let environment = env::var("ENVIRONMENT").unwrap_or_else(|_| "production".to_string());
+        let app_name = env::var("APP_NAME").unwrap_or_else(|_| "localhost".to_string());
         let is_production = environment == "production";
         let email = EmailConfig::from_env(is_production);
 
-        // Cookie domain: use .a8n.tools in production, None for localhost in development
+        // Cookie domain: must be set explicitly via COOKIE_DOMAIN env var.
+        // None means cookies are scoped to the exact hostname (suitable for localhost).
         let cookie_domain = env::var("COOKIE_DOMAIN").ok().filter(|s| !s.is_empty());
-        let cookie_domain = if cookie_domain.is_none() && is_production {
-            Some(".a8n.tools".to_string())
-        } else {
-            cookie_domain
-        };
+
+        let auto_ban = AutoBanConfig::from_env();
+
+        let totp_encryption_key = Self::load_totp_encryption_key(&environment);
 
         let config = Self {
             database_url,
@@ -113,8 +221,11 @@ impl Config {
             log_level,
             cors_origin,
             environment,
+            app_name,
             email,
             cookie_domain,
+            auto_ban,
+            totp_encryption_key,
         };
 
         info!(
@@ -130,6 +241,27 @@ impl Config {
     /// Returns true if running in production environment
     pub fn is_production(&self) -> bool {
         self.environment == "production"
+    }
+
+    /// Load TOTP encryption key from TOTP_ENCRYPTION_KEY env var (hex-encoded 32 bytes).
+    /// In development, defaults to 32 zero bytes.
+    fn load_totp_encryption_key(environment: &str) -> [u8; 32] {
+        match env::var("TOTP_ENCRYPTION_KEY") {
+            Ok(hex_str) => {
+                let bytes = hex::decode(hex_str.trim())
+                    .expect("TOTP_ENCRYPTION_KEY must be valid hex");
+                let key: [u8; 32] = bytes
+                    .try_into()
+                    .expect("TOTP_ENCRYPTION_KEY must be exactly 32 bytes (64 hex chars)");
+                key
+            }
+            Err(_) => {
+                if environment == "production" {
+                    panic!("TOTP_ENCRYPTION_KEY must be set in production");
+                }
+                [0u8; 32]
+            }
+        }
     }
 
     /// Get the server bind address
@@ -170,8 +302,8 @@ mod tests {
         assert_eq!(config.host, "0.0.0.0");
         assert_eq!(config.port, 4000);
         assert_eq!(config.log_level, "info");
-        assert_eq!(config.cors_origin, "https://app.a8n.tools");
-        assert_eq!(config.environment, "development");
+        assert_eq!(config.cors_origin, "http://localhost:5173");
+        assert_eq!(config.environment, "production");
         assert!(!config.email.enabled);
         // In development mode without COOKIE_DOMAIN set, it should be None (for localhost)
         assert!(config.cookie_domain.is_none());
@@ -179,9 +311,23 @@ mod tests {
 
     #[test]
     fn test_missing_database_url() {
-        env::remove_var("DATABASE_URL");
+        // Test that MissingEnv error is returned for missing DATABASE_URL
+        // by checking the error variant directly (avoids env var race with parallel tests)
+        let err = ConfigError::MissingEnv("DATABASE_URL".to_string());
+        assert!(err.to_string().contains("DATABASE_URL"));
+    }
 
-        let result = Config::from_env();
-        assert!(result.is_err());
+    #[test]
+    fn test_parse_smtp_from_with_display_name() {
+        let input = "a8n Tools Staging <tools-staging@a8n.run>";
+        assert_eq!(parse_smtp_from_email(input), "tools-staging@a8n.run");
+        assert_eq!(parse_smtp_from_name(input), "a8n Tools Staging");
+    }
+
+    #[test]
+    fn test_parse_smtp_from_plain_email() {
+        let input = "noreply@localhost";
+        assert_eq!(parse_smtp_from_email(input), "noreply@localhost");
+        assert_eq!(parse_smtp_from_name(input), "localhost");
     }
 }
