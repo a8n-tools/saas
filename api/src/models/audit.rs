@@ -46,6 +46,8 @@ pub enum AuditAction {
     FeedbackResponded,
     FeedbackDeleted,
     FeedbackRestored,
+    ApplicationCreated,
+    ApplicationDeleted,
 }
 
 impl AuditAction {
@@ -86,6 +88,8 @@ impl AuditAction {
             AuditAction::FeedbackResponded => "feedback_responded",
             AuditAction::FeedbackDeleted => "feedback_deleted",
             AuditAction::FeedbackRestored => "feedback_restored",
+            AuditAction::ApplicationCreated => "application_created",
+            AuditAction::ApplicationDeleted => "application_deleted",
         }
     }
 
@@ -99,6 +103,8 @@ impl AuditAction {
                 | AuditAction::AdminUserDeactivated
                 | AuditAction::AdminUserActivated
                 | AuditAction::ApplicationMaintenanceToggled
+                | AuditAction::ApplicationCreated
+                | AuditAction::ApplicationDeleted
                 | AuditAction::FeedbackResponded
                 | AuditAction::FeedbackDeleted
                 | AuditAction::FeedbackRestored

@@ -67,7 +67,7 @@ impl ApplicationResponse {
 }
 
 /// Data for creating an application (admin only)
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateApplication {
     pub name: String,
     pub slug: String,
@@ -76,8 +76,17 @@ pub struct CreateApplication {
     pub icon_url: Option<String>,
     pub container_name: String,
     pub health_check_url: Option<String>,
+    pub subdomain: Option<String>,
+    pub webhook_url: Option<String>,
     pub version: Option<String>,
     pub source_code_url: Option<String>,
+}
+
+/// Request body for deleting an application (requires password + 2FA)
+#[derive(Debug, Clone, Deserialize)]
+pub struct DeleteApplicationRequest {
+    pub password: String,
+    pub totp_code: String,
 }
 
 /// Data for updating an application (admin only)

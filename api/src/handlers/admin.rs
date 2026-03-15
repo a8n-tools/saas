@@ -12,15 +12,16 @@ use chrono::{Duration, Utc};
 use crate::errors::AppError;
 use crate::middleware::{AdminUser, AuthenticatedUser};
 use crate::models::{
-    AuditAction, CreateAuditLog, CreatePasswordResetToken, CreateRefreshToken, MembershipStatus,
-    UpdateApplication, UserResponse,
+    AuditAction, CreateAuditLog, CreateApplication, CreatePasswordResetToken, CreateRefreshToken,
+    DeleteApplicationRequest, MembershipStatus, UpdateApplication, UserResponse,
 };
 use crate::repositories::{
     ApplicationRepository, AuditLogRepository, MembershipRepository, NotificationRepository,
     TokenRepository, UserRepository,
 };
-use crate::responses::{get_request_id, paginated, success, success_no_data};
-use crate::services::{EmailService, JwtService, WebhookService};
+use crate::responses::{get_request_id, created, paginated, success, success_no_data};
+use crate::services::{EmailService, JwtService, PasswordService, TotpService, WebhookService};
+use crate::validation;
 
 // =============================================================================
 // User Management
@@ -328,6 +329,116 @@ pub async fn update_application(
     }
 
     Ok(success(app, request_id))
+}
+
+/// POST /v1/admin/applications
+/// Create a new application
+pub async fn create_application(
+    req: HttpRequest,
+    admin: AdminUser,
+    pool: web::Data<PgPool>,
+    body: web::Json<CreateApplication>,
+) -> Result<HttpResponse, AppError> {
+    let request_id = get_request_id(&req);
+
+    // Validate required fields
+    if body.name.trim().is_empty() {
+        return Err(AppError::validation("name", "Name is required"));
+    }
+    if body.slug.trim().is_empty() {
+        return Err(AppError::validation("slug", "Slug is required"));
+    }
+    if body.display_name.trim().is_empty() {
+        return Err(AppError::validation("display_name", "Display name is required"));
+    }
+    if body.container_name.trim().is_empty() {
+        return Err(AppError::validation("container_name", "Container name is required"));
+    }
+
+    // Validate slug format
+    validation::validate_slug(&body.slug).map_err(|_| {
+        AppError::validation("slug", "Slug must contain only lowercase letters, numbers, and hyphens")
+    })?;
+
+    // Check slug uniqueness
+    if ApplicationRepository::find_by_slug(&pool, &body.slug)
+        .await?
+        .is_some()
+    {
+        return Err(AppError::conflict("An application with this slug already exists"));
+    }
+
+    let app = ApplicationRepository::create(&pool, &body).await?;
+
+    // Audit log
+    let audit_log = CreateAuditLog::new(AuditAction::ApplicationCreated)
+        .with_actor(admin.0.sub, &admin.0.email, &admin.0.role)
+        .with_resource("application", app.id)
+        .with_metadata(serde_json::json!({
+            "application_name": app.name,
+            "application_slug": app.slug,
+        }));
+    AuditLogRepository::create(&pool, audit_log).await?;
+
+    Ok(created(app, request_id))
+}
+
+/// DELETE /v1/admin/applications/{app_id}
+/// Delete an application (requires password + 2FA)
+pub async fn delete_application(
+    req: HttpRequest,
+    admin: AdminUser,
+    pool: web::Data<PgPool>,
+    path: web::Path<uuid::Uuid>,
+    body: web::Json<DeleteApplicationRequest>,
+    totp_service: web::Data<Arc<TotpService>>,
+) -> Result<HttpResponse, AppError> {
+    let request_id = get_request_id(&req);
+    let app_id = path.into_inner();
+
+    // Look up the admin user to get password hash
+    let admin_user = UserRepository::find_by_id(&pool, admin.0.sub)
+        .await?
+        .ok_or(AppError::not_found("User"))?;
+
+    // Verify password
+    let password_service = PasswordService::new();
+    let password_hash = admin_user
+        .password_hash
+        .as_deref()
+        .ok_or_else(|| AppError::validation("password", "Account has no password set"))?;
+    if !password_service.verify(&body.password, password_hash)? {
+        return Err(AppError::validation("password", "Invalid password"));
+    }
+
+    // Verify TOTP code (2FA must be enabled)
+    let totp_valid = totp_service
+        .verify_code(admin.0.sub, &body.totp_code)
+        .await
+        .map_err(|_| AppError::validation("totp_code", "2FA must be enabled to delete applications"))?;
+    if !totp_valid {
+        return Err(AppError::validation("totp_code", "Invalid 2FA code"));
+    }
+
+    // Find the application (for audit metadata)
+    let app = ApplicationRepository::find_by_id(&pool, app_id)
+        .await?
+        .ok_or(AppError::not_found("Application"))?;
+
+    // Delete
+    ApplicationRepository::delete(&pool, app_id).await?;
+
+    // Audit log
+    let audit_log = CreateAuditLog::new(AuditAction::ApplicationDeleted)
+        .with_actor(admin.0.sub, &admin.0.email, &admin.0.role)
+        .with_resource("application", app_id)
+        .with_metadata(serde_json::json!({
+            "application_name": app.name,
+            "application_slug": app.slug,
+        }));
+    AuditLogRepository::create(&pool, audit_log).await?;
+
+    Ok(success_no_data(request_id))
 }
 
 // =============================================================================

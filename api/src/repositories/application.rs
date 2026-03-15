@@ -4,7 +4,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::errors::AppError;
-use crate::models::{Application, UpdateApplication};
+use crate::models::{Application, CreateApplication, UpdateApplication};
 
 pub struct ApplicationRepository;
 
@@ -173,6 +173,47 @@ impl ApplicationRepository {
         .await?;
 
         Ok(app)
+    }
+
+    /// Create a new application (admin)
+    pub async fn create(pool: &PgPool, data: &CreateApplication) -> Result<Application, AppError> {
+        let app = sqlx::query_as::<_, Application>(
+            r#"
+            INSERT INTO applications (name, slug, display_name, description, icon_url,
+                container_name, health_check_url, subdomain, webhook_url, version, source_code_url)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            RETURNING *
+            "#,
+        )
+        .bind(&data.name)
+        .bind(&data.slug)
+        .bind(&data.display_name)
+        .bind(data.description.as_deref())
+        .bind(data.icon_url.as_deref())
+        .bind(&data.container_name)
+        .bind(data.health_check_url.as_deref())
+        .bind(data.subdomain.as_deref())
+        .bind(data.webhook_url.as_deref())
+        .bind(data.version.as_deref())
+        .bind(data.source_code_url.as_deref())
+        .fetch_one(pool)
+        .await?;
+
+        Ok(app)
+    }
+
+    /// Delete an application by ID (admin)
+    pub async fn delete(pool: &PgPool, id: Uuid) -> Result<(), AppError> {
+        let result = sqlx::query("DELETE FROM applications WHERE id = $1")
+            .bind(id)
+            .execute(pool)
+            .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::not_found("Application"));
+        }
+
+        Ok(())
     }
 
     /// List all applications (admin)

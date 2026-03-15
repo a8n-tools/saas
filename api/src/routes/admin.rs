@@ -26,7 +26,9 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route("/memberships/revoke", web::post().to(handlers::revoke_membership))
             // Application management
             .route("/applications", web::get().to(handlers::list_all_applications))
+            .route("/applications", web::post().to(handlers::create_application))
             .route("/applications/{app_id}", web::put().to(handlers::update_application))
+            .route("/applications/{app_id}", web::delete().to(handlers::delete_application))
             // Audit logs
             .route("/audit-logs", web::get().to(handlers::list_audit_logs))
             // Feedback
