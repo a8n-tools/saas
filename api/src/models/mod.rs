@@ -18,8 +18,9 @@ pub use audit::{
     CreateAuditLog, NotificationType,
 };
 pub use feedback::{
-    AdminFeedbackDetail, AdminFeedbackSummary, CreateFeedback, CreateFeedbackRequest, Feedback,
-    FeedbackStatus, FeedbackSubmissionResponse, RespondToFeedback, RespondToFeedbackRequest,
+    AdminFeedbackDetail, AdminFeedbackSummary, ArchivedFeedbackItem, CreateFeedback,
+    CreateFeedbackRequest, Feedback, FeedbackAttachmentMeta, FeedbackStatus,
+    FeedbackSubmissionResponse, RespondToFeedback, RespondToFeedbackRequest,
     UpdateFeedbackStatusRequest,
 };
 pub use rate_limit::{RateLimit, RateLimitConfig};

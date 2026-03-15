@@ -18,7 +18,7 @@ use a8n_api::{
         request_id::RequestIdMiddleware,
         AutoBanMiddleware, SecurityHeaders,
     },
-    repositories::RateLimitRepository,
+    repositories::{FeedbackRepository, RateLimitRepository},
     routes,
     services::{AuthService, EmailService, JwtConfig, JwtService, StripeConfig, StripeService, TotpService, WebhookService},
 };
@@ -198,6 +198,27 @@ async fn main() -> anyhow::Result<()> {
                 }
                 Err(e) => {
                     error!(error = %e, "Failed to cleanup expired IP bans");
+                }
+            }
+        }
+    });
+
+    // Spawn feedback archive+purge background task (every 24h)
+    // Archives closed feedback older than 90 days into feedback_archive, then hard-deletes it
+    let feedback_purge_pool = pool.clone();
+    tokio::spawn(async move {
+        info!("Feedback archive/purge task started");
+        let mut interval = tokio::time::interval(Duration::from_secs(86400));
+        loop {
+            interval.tick().await;
+            match FeedbackRepository::archive_and_purge_closed(&feedback_purge_pool).await {
+                Ok(purged) => {
+                    if purged > 0 {
+                        info!(purged, "Archived and purged closed feedback records");
+                    }
+                }
+                Err(e) => {
+                    error!(error = %e, "Failed to archive/purge closed feedback");
                 }
             }
         }

@@ -1,4 +1,5 @@
 import { apiClient } from './client'
+import { config } from '@/config'
 import type {
   User,
   Membership,
@@ -144,6 +145,28 @@ export interface AdminFeedbackDetail {
   responded_at: string | null
   created_at: string
   updated_at: string
+  attachments: FeedbackAttachmentMeta[]
+}
+
+export interface FeedbackAttachmentMeta {
+  id: string
+  feedback_id: string
+  filename: string
+  mime_type: string
+  size_bytes: number
+  created_at: string
+}
+
+export interface ArchivedFeedbackItem {
+  id: string
+  archived_at: string
+  name: string | null
+  email: string | null
+  subject: string | null
+  tags: string[]
+  message_excerpt: string
+  original_status: string | null
+  created_at: string | null
 }
 
 export interface RespondToFeedbackRequest {
@@ -159,6 +182,22 @@ export interface GrantMembershipRequest {
 
 export interface RevokeMembershipRequest {
   user_id: string
+}
+
+export async function downloadFeedbackExport(): Promise<void> {
+  const response = await fetch(`${config.apiUrl}/v1/admin/feedback/export`, { credentials: 'include' })
+  if (!response.ok) throw new Error('Export failed')
+  const blob = await response.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'feedback.csv'
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+export function getFeedbackAttachmentUrl(feedbackId: string, attachmentId: string): string {
+  return `${config.apiUrl}/v1/admin/feedback/${feedbackId}/attachments/${attachmentId}`
 }
 
 export const adminApi = {
@@ -251,6 +290,17 @@ export const adminApi = {
 
   updateFeedbackStatus: (feedbackId: string, status: AdminFeedbackStatus): Promise<AdminFeedbackDetail> =>
     apiClient.put(`/admin/feedback/${feedbackId}/status`, { status }),
+
+  deleteFeedback: (feedbackId: string): Promise<void> =>
+    apiClient.delete(`/admin/feedback/${feedbackId}`),
+
+  getArchivedFeedback: (page = 1, pageSize = 20): Promise<PaginatedResponse<ArchivedFeedbackItem>> => {
+    const params = new URLSearchParams({ page: String(page), per_page: String(pageSize) })
+    return apiClient.get(`/admin/feedback/archive?${params}`)
+  },
+
+  restoreFeedback: (archiveId: string): Promise<AdminFeedbackDetail> =>
+    apiClient.post(`/admin/feedback/archive/${archiveId}/restore`),
 
   // Notifications
   getNotifications: (): Promise<AdminNotification[]> =>

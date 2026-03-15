@@ -18,12 +18,13 @@ class ApiClient {
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`
 
+    const isFormData = options.body instanceof FormData
     const config: RequestInit = {
       ...options,
       credentials: 'include', // Include cookies for auth
       headers: {
         'Accept': 'application/json',
-        'Content-Type': 'application/json',
+        ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
         ...options.headers,
       },
     }
@@ -94,6 +95,10 @@ class ApiClient {
       method: 'POST',
       body: body ? JSON.stringify(body) : undefined,
     })
+  }
+
+  async postForm<T>(endpoint: string, body: FormData): Promise<T> {
+    return this.request<T>(endpoint, { method: 'POST', body })
   }
 
   async put<T>(endpoint: string, body?: unknown): Promise<T> {
