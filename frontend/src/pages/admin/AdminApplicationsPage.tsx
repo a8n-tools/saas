@@ -16,7 +16,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Loader2, AppWindow, ExternalLink, Pencil, AlertCircle, Plus, Trash2, ShieldAlert } from 'lucide-react'
+import { Loader2, AppWindow, ExternalLink, Pencil, AlertCircle, Plus, Trash2, ShieldAlert, ArrowUp, ArrowDown } from 'lucide-react'
 import { adminApi } from '@/api/admin'
 import { authApi } from '@/api/auth'
 import type { AdminApplication, UpdateApplicationRequest, CreateApplicationRequest } from '@/api/admin'
@@ -79,6 +79,15 @@ export function AdminApplicationsPage() {
     },
   })
 
+  const reorderMutation = useMutation({
+    mutationFn: ({ appId, targetAppId }: { appId: string; targetAppId: string }) =>
+      adminApi.swapApplicationOrder(appId, targetAppId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'applications'] })
+      queryClient.invalidateQueries({ queryKey: ['applications'] })
+    },
+  })
+
   const deleteMutation = useMutation({
     mutationFn: ({ appId, password, totp_code }: { appId: string; password: string; totp_code: string }) =>
       adminApi.deleteApplication(appId, { password, totp_code }),
@@ -103,6 +112,22 @@ export function AdminApplicationsPage() {
     updateMutation.mutate({
       appId: app.id,
       data: { maintenance_mode: !app.maintenance_mode },
+    })
+  }
+
+  const handleMoveUp = (index: number) => {
+    if (!applications || index <= 0) return
+    reorderMutation.mutate({
+      appId: applications[index].id,
+      targetAppId: applications[index - 1].id,
+    })
+  }
+
+  const handleMoveDown = (index: number) => {
+    if (!applications || index >= applications.length - 1) return
+    reorderMutation.mutate({
+      appId: applications[index].id,
+      targetAppId: applications[index + 1].id,
     })
   }
 
@@ -203,11 +228,31 @@ export function AdminApplicationsPage() {
       )}
 
       <div className="grid gap-6">
-        {applications?.map((app) => (
+        {applications?.map((app, index) => (
           <Card key={app.id}>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
+                  <div className="flex flex-col gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      disabled={index === 0 || reorderMutation.isPending}
+                      onClick={() => handleMoveUp(index)}
+                    >
+                      <ArrowUp className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      disabled={index === (applications?.length ?? 0) - 1 || reorderMutation.isPending}
+                      onClick={() => handleMoveDown(index)}
+                    >
+                      <ArrowDown className="h-4 w-4" />
+                    </Button>
+                  </div>
                   <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
                     <AppWindow className="h-6 w-6 text-primary" />
                   </div>

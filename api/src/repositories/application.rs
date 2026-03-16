@@ -15,7 +15,7 @@ impl ApplicationRepository {
             r#"
             SELECT * FROM applications
             WHERE is_active = TRUE
-            ORDER BY display_name ASC
+            ORDER BY sort_order ASC, display_name ASC
             "#,
         )
         .fetch_all(pool)
@@ -216,11 +216,34 @@ impl ApplicationRepository {
         Ok(())
     }
 
+    /// Swap sort_order between two applications (admin)
+    pub async fn swap_sort_order(
+        pool: &PgPool,
+        app_id_a: Uuid,
+        app_id_b: Uuid,
+    ) -> Result<(), AppError> {
+        sqlx::query(
+            r#"
+            UPDATE applications AS a
+            SET sort_order = b.sort_order, updated_at = NOW()
+            FROM (
+                SELECT id, sort_order FROM applications WHERE id = ANY($1)
+            ) AS b
+            WHERE a.id = ANY($1) AND a.id != b.id
+            "#,
+        )
+        .bind(&[app_id_a, app_id_b][..])
+        .execute(pool)
+        .await?;
+
+        Ok(())
+    }
+
     /// List all applications (admin)
     pub async fn list_all(pool: &PgPool) -> Result<Vec<Application>, AppError> {
         let apps = sqlx::query_as::<_, Application>(
             r#"
-            SELECT * FROM applications ORDER BY display_name ASC
+            SELECT * FROM applications ORDER BY sort_order ASC, display_name ASC
             "#,
         )
         .fetch_all(pool)
