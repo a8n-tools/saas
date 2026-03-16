@@ -5,6 +5,7 @@ import { authApi } from '@/api'
 
 // Proactive background refresh: refresh the access token 2 minutes before it expires
 const ACCESS_TOKEN_REFRESH_MS = 13 * 60 * 1000 // 13 minutes (access token expires at 15)
+const REFRESH_RETRY_MS = 30 * 1000 // 30 seconds retry on failure
 let refreshTimer: ReturnType<typeof setTimeout> | null = null
 
 function clearRefreshTimer() {
@@ -14,16 +15,31 @@ function clearRefreshTimer() {
   }
 }
 
-function scheduleRefresh() {
+function scheduleRefresh(delayMs: number = ACCESS_TOKEN_REFRESH_MS) {
   clearRefreshTimer()
   refreshTimer = setTimeout(async () => {
     try {
       await authApi.refresh()
       scheduleRefresh() // reschedule after success
     } catch {
-      // Token couldn't be refreshed — user will get logged out on next API call
+      // Retry after 30 seconds instead of giving up permanently
+      scheduleRefresh(REFRESH_RETRY_MS)
     }
-  }, ACCESS_TOKEN_REFRESH_MS)
+  }, delayMs)
+}
+
+// Restart proactive timer when the 401 interceptor refreshes the token
+if (typeof window !== 'undefined') {
+  window.addEventListener('auth:refreshed', () => {
+    scheduleRefresh()
+  })
+
+  // When a backgrounded tab becomes visible, refresh immediately if timer may have drifted
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && refreshTimer !== null) {
+      scheduleRefresh(0) // refresh immediately
+    }
+  })
 }
 
 interface AuthState {

@@ -65,6 +65,7 @@ class ApiClient {
 
       try {
         await this.refreshPromise
+        window.dispatchEvent(new Event('auth:refreshed'))
         return this.request<T>(endpoint, options, true)
       } catch {
         // Refresh failed — fall through to normal error handling
