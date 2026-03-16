@@ -178,10 +178,10 @@ impl FeedbackRepository {
     }
 
     pub async fn delete(pool: &PgPool, id: Uuid) -> Result<(), AppError> {
-        let result = sqlx::query!(
+        let result = sqlx::query(
             "DELETE FROM feedback WHERE id = $1 AND status = 'closed'",
-            id
         )
+        .bind(id)
         .execute(pool)
         .await?;
 
@@ -254,7 +254,7 @@ impl FeedbackRepository {
     }
 
     pub async fn archive_and_purge_closed(pool: &PgPool) -> Result<u64, AppError> {
-        let result = sqlx::query!(
+        let result = sqlx::query(
             r#"
             WITH to_purge AS (
                 SELECT id FROM feedback
@@ -272,7 +272,7 @@ impl FeedbackRepository {
             DELETE FROM feedback f
             USING archived a
             WHERE f.id = a.id
-            "#
+            "#,
         )
         .execute(pool)
         .await?;
