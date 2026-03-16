@@ -71,9 +71,10 @@ export function LoginPage() {
 
   // Handle initial page load — stale state, auto-redirect, already authenticated
   useEffect(() => {
-    // API already confirmed we're not authenticated — clear stale localStorage
-    if (alreadyChecked && isAuthenticated) {
-      useAuthStore.setState({ user: null, isAuthenticated: false, isLoading: false })
+    // "checked" flag means auth_redirect already tried and failed to authenticate us.
+    // Just show the login form — do NOT clear isAuthenticated in the store, because
+    // that would broadcast to other tabs via localStorage and log them out too.
+    if (alreadyChecked) {
       return
     }
 
