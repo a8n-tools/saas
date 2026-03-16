@@ -160,7 +160,7 @@ pub async fn request_email_change(
     // Validate email format
     validate_email(&body.new_email)?;
 
-    let (old_email, token) = auth_service
+    let (_old_email, token) = auth_service
         .request_email_change(
             user.0.sub,
             body.new_email.clone(),
