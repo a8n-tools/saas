@@ -12,7 +12,7 @@ pub mod totp;
 pub mod user;
 
 // Re-export commonly used types
-pub use application::{Application, ApplicationResponse, CreateApplication, DeleteApplicationRequest, UpdateApplication};
+pub use application::{Application, ApplicationResponse, CreateApplication, DeleteApplicationRequest, SwapApplicationOrderRequest, UpdateApplication};
 pub use audit::{
     AdminNotification, AuditAction, AuditLog, AuditSeverity, CreateAdminNotification,
     CreateAuditLog, NotificationType,
