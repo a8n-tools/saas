@@ -23,6 +23,7 @@ pub struct Application {
     pub webhook_url: Option<String>,
     pub version: Option<String>,
     pub source_code_url: Option<String>,
+    pub sort_order: i32,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -87,6 +88,12 @@ pub struct CreateApplication {
 pub struct DeleteApplicationRequest {
     pub password: String,
     pub totp_code: String,
+}
+
+/// Request body for swapping application order
+#[derive(Debug, Clone, Deserialize)]
+pub struct SwapApplicationOrderRequest {
+    pub target_app_id: Uuid,
 }
 
 /// Data for updating an application (admin only)

@@ -78,6 +78,7 @@ export interface AdminApplication {
   webhook_url: string | null
   version: string | null
   source_code_url: string | null
+  sort_order: number
   created_at: string
   updated_at: string
 }
@@ -257,6 +258,14 @@ export const adminApi = {
 
   deleteApplication: (appId: string, data: DeleteApplicationRequest): Promise<void> =>
     apiClient.delete(`/admin/applications/${appId}`, data),
+
+  swapApplicationOrder: async (appId: string, targetAppId: string): Promise<AdminApplication[]> => {
+    const response = await apiClient.put<{ applications: AdminApplication[] }>(
+      `/admin/applications/${appId}/swap-order`,
+      { target_app_id: targetAppId }
+    )
+    return response.applications
+  },
 
   // Audit Logs
   getAuditLogs: (

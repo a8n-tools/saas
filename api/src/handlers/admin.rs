@@ -13,7 +13,8 @@ use crate::errors::AppError;
 use crate::middleware::{AdminUser, AuthenticatedUser};
 use crate::models::{
     AuditAction, CreateAuditLog, CreateApplication, CreatePasswordResetToken, CreateRefreshToken,
-    DeleteApplicationRequest, MembershipStatus, UpdateApplication, UserResponse,
+    DeleteApplicationRequest, MembershipStatus, SwapApplicationOrderRequest, UpdateApplication,
+    UserResponse,
 };
 use crate::repositories::{
     ApplicationRepository, AuditLogRepository, MembershipRepository, NotificationRepository,
@@ -287,6 +288,25 @@ pub async fn list_all_applications(
     pool: web::Data<PgPool>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
+
+    let apps = ApplicationRepository::list_all(&pool).await?;
+
+    Ok(success(serde_json::json!({ "applications": apps }), request_id))
+}
+
+/// PUT /v1/admin/applications/{app_id}/swap-order
+/// Swap the sort order of two applications
+pub async fn swap_application_order(
+    req: HttpRequest,
+    _admin: AdminUser,
+    pool: web::Data<PgPool>,
+    path: web::Path<uuid::Uuid>,
+    body: web::Json<SwapApplicationOrderRequest>,
+) -> Result<HttpResponse, AppError> {
+    let request_id = get_request_id(&req);
+    let app_id = path.into_inner();
+
+    ApplicationRepository::swap_sort_order(&pool, app_id, body.target_app_id).await?;
 
     let apps = ApplicationRepository::list_all(&pool).await?;
 
