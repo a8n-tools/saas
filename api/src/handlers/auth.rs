@@ -327,14 +327,39 @@ pub async fn refresh_token(
     let device_info = extract_device_info(&req);
 
     // Get refresh token from cookie
-    let refresh_token = req
-        .cookie("refresh_token")
-        .map(|c| c.value().to_string())
-        .ok_or(AppError::Unauthorized)?;
+    let refresh_token = match req.cookie("refresh_token") {
+        Some(c) => c.value().to_string(),
+        None => {
+            tracing::warn!(
+                request_id = %request_id,
+                ip = ?ip_address,
+                "token_refresh: no refresh_token cookie present"
+            );
+            return Err(AppError::Unauthorized);
+        }
+    };
 
-    let tokens = auth_service
+    let tokens = match auth_service
         .refresh_tokens(refresh_token, device_info, ip_address)
-        .await?;
+        .await
+    {
+        Ok(tokens) => {
+            tracing::info!(
+                request_id = %request_id,
+                "token_refresh: success"
+            );
+            tokens
+        }
+        Err(e) => {
+            tracing::warn!(
+                request_id = %request_id,
+                error = %e,
+                ip = ?extract_client_ip(&req),
+                "token_refresh: failed"
+            );
+            return Err(e);
+        }
+    };
 
     let secure = config.is_production();
     let cookie_domain = config.cookie_domain.as_deref();

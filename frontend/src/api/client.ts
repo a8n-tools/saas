@@ -67,7 +67,8 @@ class ApiClient {
         await this.refreshPromise
         window.dispatchEvent(new Event('auth:refreshed'))
         return this.request<T>(endpoint, options, true)
-      } catch {
+      } catch (err) {
+        console.warn('[auth] 401 interceptor refresh failed, falling through', err)
         // Refresh failed — fall through to normal error handling
       }
     }

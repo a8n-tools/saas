@@ -6,7 +6,9 @@ import { authApi } from '@/api'
 // Proactive background refresh: refresh the access token 2 minutes before it expires
 const ACCESS_TOKEN_REFRESH_MS = 13 * 60 * 1000 // 13 minutes (access token expires at 15)
 const REFRESH_RETRY_MS = 30 * 1000 // 30 seconds retry on failure
+const MAX_REFRESH_RETRIES = 5
 let refreshTimer: ReturnType<typeof setTimeout> | null = null
+let consecutiveFailures = 0
 
 function clearRefreshTimer() {
   if (refreshTimer) {
@@ -20,10 +22,21 @@ function scheduleRefresh(delayMs: number = ACCESS_TOKEN_REFRESH_MS) {
   refreshTimer = setTimeout(async () => {
     try {
       await authApi.refresh()
+      consecutiveFailures = 0
       scheduleRefresh() // reschedule after success
-    } catch {
-      // Retry after 30 seconds instead of giving up permanently
-      scheduleRefresh(REFRESH_RETRY_MS)
+    } catch (err) {
+      consecutiveFailures++
+      console.warn(
+        `[auth] proactive refresh failed (attempt ${consecutiveFailures}/${MAX_REFRESH_RETRIES})`,
+        err
+      )
+      if (consecutiveFailures >= MAX_REFRESH_RETRIES) {
+        console.warn('[auth] max refresh retries reached, logging out')
+        consecutiveFailures = 0
+        useAuthStore.getState().logout()
+      } else {
+        scheduleRefresh(REFRESH_RETRY_MS)
+      }
     }
   }, delayMs)
 }
@@ -31,6 +44,7 @@ function scheduleRefresh(delayMs: number = ACCESS_TOKEN_REFRESH_MS) {
 // Restart proactive timer when the 401 interceptor refreshes the token
 if (typeof window !== 'undefined') {
   window.addEventListener('auth:refreshed', () => {
+    consecutiveFailures = 0
     scheduleRefresh()
   })
 
