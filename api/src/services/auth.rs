@@ -161,18 +161,41 @@ impl AuthService {
         ip_address: Option<IpAddr>,
     ) -> Result<AuthTokens, AppError> {
         // Verify refresh token signature
-        let claims = self.jwt.verify_refresh_token(&refresh_token)?;
+        let claims = match self.jwt.verify_refresh_token(&refresh_token) {
+            Ok(claims) => claims,
+            Err(e) => {
+                tracing::warn!(
+                    error = %e,
+                    "token_refresh: JWT signature verification failed"
+                );
+                return Err(e);
+            }
+        };
 
         // Hash token to find in database
         let token_hash = self.jwt.hash_token(&refresh_token);
 
         // Find token in database
-        let stored_token = TokenRepository::find_refresh_token_by_hash(&self.pool, &token_hash)
-            .await?
-            .ok_or(AppError::InvalidCredentials)?;
+        let stored_token = match TokenRepository::find_refresh_token_by_hash(&self.pool, &token_hash).await? {
+            Some(token) => token,
+            None => {
+                tracing::warn!(
+                    user_id = %claims.sub,
+                    token_id = %claims.jti,
+                    hash_prefix = %&token_hash[..8],
+                    "token_refresh: token hash not found in DB (revoked or missing)"
+                );
+                return Err(AppError::InvalidCredentials);
+            }
+        };
 
         // Check if token is valid
         if !stored_token.is_valid() {
+            tracing::warn!(
+                user_id = %claims.sub,
+                token_id = %claims.jti,
+                "token_refresh: stored token is no longer valid"
+            );
             return Err(AppError::TokenExpired);
         }
 
