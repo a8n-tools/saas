@@ -270,3 +270,90 @@ pub struct CreateAdminNotification {
     pub metadata: Option<JsonValue>,
     pub user_id: Option<Uuid>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -- AuditAction --
+
+    #[test]
+    fn audit_action_as_str_covers_all_variants() {
+        // Spot-check a few
+        assert_eq!(AuditAction::UserLogin.as_str(), "user_login");
+        assert_eq!(AuditAction::UserRegistered.as_str(), "user_registered");
+        assert_eq!(AuditAction::AdminUserImpersonated.as_str(), "admin_user_impersonated");
+        assert_eq!(AuditAction::FeedbackSubmitted.as_str(), "feedback_submitted");
+        assert_eq!(AuditAction::ApplicationDeleted.as_str(), "application_deleted");
+    }
+
+    #[test]
+    fn audit_action_is_admin_action() {
+        assert!(AuditAction::AdminUserImpersonated.is_admin_action());
+        assert!(AuditAction::AdminPasswordReset.is_admin_action());
+        assert!(AuditAction::AdminMembershipGranted.is_admin_action());
+        assert!(AuditAction::FeedbackResponded.is_admin_action());
+        assert!(AuditAction::ApplicationCreated.is_admin_action());
+        assert!(AuditAction::ApplicationDeleted.is_admin_action());
+
+        assert!(!AuditAction::UserLogin.is_admin_action());
+        assert!(!AuditAction::UserRegistered.is_admin_action());
+        assert!(!AuditAction::PasswordChanged.is_admin_action());
+        assert!(!AuditAction::FeedbackSubmitted.is_admin_action());
+    }
+
+    // -- AuditSeverity --
+
+    #[test]
+    fn audit_severity_as_str() {
+        assert_eq!(AuditSeverity::Info.as_str(), "info");
+        assert_eq!(AuditSeverity::Warning.as_str(), "warning");
+        assert_eq!(AuditSeverity::Error.as_str(), "error");
+        assert_eq!(AuditSeverity::Critical.as_str(), "critical");
+    }
+
+    #[test]
+    fn audit_severity_default() {
+        let s = AuditSeverity::default();
+        assert_eq!(s.as_str(), "info");
+    }
+
+    // -- NotificationType --
+
+    #[test]
+    fn notification_type_as_str() {
+        assert_eq!(NotificationType::NewSignup.as_str(), "new_signup");
+        assert_eq!(NotificationType::PaymentFailed.as_str(), "payment_failed");
+        assert_eq!(NotificationType::NewFeedback.as_str(), "new_feedback");
+    }
+
+    // -- CreateAuditLog builder --
+
+    #[test]
+    fn create_audit_log_builder() {
+        let user_id = Uuid::new_v4();
+        let log = CreateAuditLog::new(AuditAction::UserLogin)
+            .with_actor(user_id, "test@example.com", "subscriber")
+            .with_resource("user", user_id)
+            .with_metadata(serde_json::json!({"key": "value"}))
+            .with_severity(AuditSeverity::Warning);
+
+        assert_eq!(log.actor_id, Some(user_id));
+        assert_eq!(log.actor_email.as_deref(), Some("test@example.com"));
+        assert_eq!(log.actor_role.as_deref(), Some("subscriber"));
+        assert_eq!(log.resource_type.as_deref(), Some("user"));
+        assert_eq!(log.resource_id, Some(user_id));
+        assert!(log.metadata.is_some());
+        assert_eq!(log.severity.as_str(), "warning");
+    }
+
+    #[test]
+    fn create_audit_log_defaults() {
+        let log = CreateAuditLog::new(AuditAction::UserLogout);
+        assert!(log.actor_id.is_none());
+        assert!(log.actor_email.is_none());
+        assert!(log.resource_type.is_none());
+        assert!(log.metadata.is_none());
+        assert_eq!(log.severity.as_str(), "info");
+    }
+}

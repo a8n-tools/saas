@@ -957,8 +957,49 @@ impl AuthService {
 }
 
 /// Generate a cryptographically secure random token
-fn generate_secure_token(length: usize) -> String {
+pub(crate) fn generate_secure_token(length: usize) -> String {
     let mut bytes = vec![0u8; length];
     rand::thread_rng().fill_bytes(&mut bytes);
     base64::Engine::encode(&base64::engine::general_purpose::URL_SAFE_NO_PAD, &bytes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn generate_secure_token_correct_length() {
+        // 32 bytes base64url-encoded = 43 chars (no padding)
+        let token = generate_secure_token(32);
+        assert_eq!(token.len(), 43);
+    }
+
+    #[test]
+    fn generate_secure_token_unique() {
+        let token1 = generate_secure_token(32);
+        let token2 = generate_secure_token(32);
+        assert_ne!(token1, token2);
+    }
+
+    #[test]
+    fn generate_secure_token_url_safe() {
+        let token = generate_secure_token(64);
+        // URL-safe base64 only contains [A-Za-z0-9_-]
+        assert!(token.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-'));
+    }
+
+    #[test]
+    fn generate_secure_token_various_lengths() {
+        for len in [1, 8, 16, 32, 64] {
+            let token = generate_secure_token(len);
+            assert!(!token.is_empty());
+            // Decode back to verify it's valid base64
+            let decoded = base64::Engine::decode(
+                &base64::engine::general_purpose::URL_SAFE_NO_PAD,
+                &token,
+            )
+            .unwrap();
+            assert_eq!(decoded.len(), len);
+        }
+    }
 }

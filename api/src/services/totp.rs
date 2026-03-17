@@ -246,3 +246,89 @@ impl TotpService {
         format!("{:x}", hasher.finalize())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_encryption_key() -> [u8; 32] {
+        let mut key = [0u8; 32];
+        key[..16].copy_from_slice(b"test-encrypt-key");
+        key[16..].copy_from_slice(b"0123456789abcdef");
+        key
+    }
+
+    // -- encrypt/decrypt round-trip --
+
+    #[test]
+    fn encrypt_decrypt_roundtrip() {
+        let key = test_encryption_key();
+        // Cannot use TotpService::new (needs PgPool), test the crypto directly
+        let cipher = Aes256Gcm::new_from_slice(&key).unwrap();
+
+        let secret = b"my-totp-secret-data";
+        let mut nonce_bytes = [0u8; 12];
+        rand::thread_rng().fill_bytes(&mut nonce_bytes);
+        let nonce = Nonce::from_slice(&nonce_bytes);
+
+        let encrypted = cipher.encrypt(nonce, secret.as_ref()).unwrap();
+        let decrypted = cipher.decrypt(nonce, encrypted.as_ref()).unwrap();
+
+        assert_eq!(decrypted, secret);
+    }
+
+    #[test]
+    fn decrypt_with_wrong_key_fails() {
+        let key1 = test_encryption_key();
+        let mut key2 = test_encryption_key();
+        key2[0] ^= 0xFF;
+
+        let cipher1 = Aes256Gcm::new_from_slice(&key1).unwrap();
+        let cipher2 = Aes256Gcm::new_from_slice(&key2).unwrap();
+
+        let secret = b"secret-data";
+        let nonce_bytes = [0u8; 12];
+        let nonce = Nonce::from_slice(&nonce_bytes);
+
+        let encrypted = cipher1.encrypt(nonce, secret.as_ref()).unwrap();
+        assert!(cipher2.decrypt(nonce, encrypted.as_ref()).is_err());
+    }
+
+    // -- generate_recovery_code --
+
+    #[test]
+    fn recovery_code_format() {
+        let code = TotpService::generate_recovery_code();
+        // Format: XXXX-XXXX (uppercase hex)
+        assert_eq!(code.len(), 9);
+        assert_eq!(&code[4..5], "-");
+        assert!(code[..4].chars().all(|c| c.is_ascii_hexdigit()));
+        assert!(code[5..].chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn recovery_codes_are_unique() {
+        let code1 = TotpService::generate_recovery_code();
+        let code2 = TotpService::generate_recovery_code();
+        // Extremely unlikely to collide
+        assert_ne!(code1, code2);
+    }
+
+    // -- hash_code --
+
+    #[test]
+    fn hash_code_deterministic() {
+        let hash1 = TotpService::hash_code("ABCD1234");
+        let hash2 = TotpService::hash_code("ABCD1234");
+        assert_eq!(hash1, hash2);
+        // SHA256 = 64 hex chars
+        assert_eq!(hash1.len(), 64);
+    }
+
+    #[test]
+    fn hash_code_different_inputs() {
+        let hash1 = TotpService::hash_code("CODE1");
+        let hash2 = TotpService::hash_code("CODE2");
+        assert_ne!(hash1, hash2);
+    }
+}

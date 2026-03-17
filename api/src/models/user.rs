@@ -231,3 +231,173 @@ impl From<User> for UserResponse {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+
+    fn test_user() -> User {
+        User {
+            id: Uuid::new_v4(),
+            email: "test@example.com".to_string(),
+            email_verified: true,
+            password_hash: Some("hash".to_string()),
+            role: "subscriber".to_string(),
+            stripe_customer_id: None,
+            membership_status: "active".to_string(),
+            membership_tier: Some("personal".to_string()),
+            price_locked: false,
+            locked_price_id: None,
+            locked_price_amount: None,
+            grace_period_start: None,
+            grace_period_end: None,
+            two_factor_enabled: false,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            last_login_at: None,
+            deleted_at: None,
+        }
+    }
+
+    // -- UserRole --
+
+    #[test]
+    fn user_role_as_str() {
+        assert_eq!(UserRole::Subscriber.as_str(), "subscriber");
+        assert_eq!(UserRole::Admin.as_str(), "admin");
+    }
+
+    #[test]
+    fn user_role_from_string() {
+        assert_eq!(UserRole::from("admin".to_string()), UserRole::Admin);
+        assert_eq!(UserRole::from("subscriber".to_string()), UserRole::Subscriber);
+        assert_eq!(UserRole::from("unknown".to_string()), UserRole::Subscriber);
+    }
+
+    #[test]
+    fn user_role_from_str() {
+        assert_eq!(UserRole::from("admin"), UserRole::Admin);
+        assert_eq!(UserRole::from("anything"), UserRole::Subscriber);
+    }
+
+    // -- MembershipStatus --
+
+    #[test]
+    fn membership_status_as_str() {
+        assert_eq!(MembershipStatus::None.as_str(), "none");
+        assert_eq!(MembershipStatus::Active.as_str(), "active");
+        assert_eq!(MembershipStatus::PastDue.as_str(), "past_due");
+        assert_eq!(MembershipStatus::Canceled.as_str(), "canceled");
+        assert_eq!(MembershipStatus::GracePeriod.as_str(), "grace_period");
+    }
+
+    #[test]
+    fn membership_status_has_access() {
+        assert!(MembershipStatus::Active.has_access());
+        assert!(MembershipStatus::GracePeriod.has_access());
+        assert!(!MembershipStatus::None.has_access());
+        assert!(!MembershipStatus::PastDue.has_access());
+        assert!(!MembershipStatus::Canceled.has_access());
+    }
+
+    #[test]
+    fn membership_status_from_string() {
+        assert_eq!(MembershipStatus::from("active".to_string()), MembershipStatus::Active);
+        assert_eq!(MembershipStatus::from("past_due".to_string()), MembershipStatus::PastDue);
+        assert_eq!(MembershipStatus::from("canceled".to_string()), MembershipStatus::Canceled);
+        assert_eq!(MembershipStatus::from("grace_period".to_string()), MembershipStatus::GracePeriod);
+        assert_eq!(MembershipStatus::from("unknown".to_string()), MembershipStatus::None);
+    }
+
+    // -- MembershipTier --
+
+    #[test]
+    fn membership_tier_as_str() {
+        assert_eq!(MembershipTier::Personal.as_str(), "personal");
+        assert_eq!(MembershipTier::Business.as_str(), "business");
+    }
+
+    #[test]
+    fn membership_tier_from_string() {
+        assert_eq!(MembershipTier::from("business".to_string()), MembershipTier::Business);
+        assert_eq!(MembershipTier::from("personal".to_string()), MembershipTier::Personal);
+        assert_eq!(MembershipTier::from("unknown".to_string()), MembershipTier::Personal);
+    }
+
+    // -- User methods --
+
+    #[test]
+    fn user_role_enum() {
+        let user = test_user();
+        assert_eq!(user.role_enum(), UserRole::Subscriber);
+
+        let mut admin = test_user();
+        admin.role = "admin".to_string();
+        assert_eq!(admin.role_enum(), UserRole::Admin);
+    }
+
+    #[test]
+    fn user_membership_status_enum() {
+        let user = test_user();
+        assert_eq!(user.membership_status_enum(), MembershipStatus::Active);
+    }
+
+    #[test]
+    fn user_membership_tier_enum() {
+        let user = test_user();
+        assert_eq!(user.membership_tier_enum(), MembershipTier::Personal);
+
+        let mut biz = test_user();
+        biz.membership_tier = Some("business".to_string());
+        assert_eq!(biz.membership_tier_enum(), MembershipTier::Business);
+
+        let mut none = test_user();
+        none.membership_tier = None;
+        assert_eq!(none.membership_tier_enum(), MembershipTier::Personal);
+    }
+
+    #[test]
+    fn user_is_admin() {
+        let user = test_user();
+        assert!(!user.is_admin());
+
+        let mut admin = test_user();
+        admin.role = "admin".to_string();
+        assert!(admin.is_admin());
+    }
+
+    #[test]
+    fn user_has_active_membership() {
+        let user = test_user();
+        assert!(user.has_active_membership()); // "active"
+
+        let mut canceled = test_user();
+        canceled.membership_status = "canceled".to_string();
+        assert!(!canceled.has_active_membership());
+
+        let mut grace = test_user();
+        grace.membership_status = "grace_period".to_string();
+        assert!(grace.has_active_membership());
+    }
+
+    #[test]
+    fn user_is_deleted() {
+        let user = test_user();
+        assert!(!user.is_deleted());
+
+        let mut deleted = test_user();
+        deleted.deleted_at = Some(Utc::now());
+        assert!(deleted.is_deleted());
+    }
+
+    #[test]
+    fn user_response_from_user() {
+        let user = test_user();
+        let id = user.id;
+        let response = UserResponse::from(user);
+        assert_eq!(response.id, id);
+        assert_eq!(response.email, "test@example.com");
+        assert_eq!(response.role, "subscriber");
+    }
+}
