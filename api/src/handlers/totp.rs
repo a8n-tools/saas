@@ -195,7 +195,11 @@ pub async fn verify_2fa(
         expires_in: tokens.expires_in,
     };
 
-    Ok(HttpResponse::Ok()
+    let mut resp = HttpResponse::Ok();
+    for cookie in AuthCookies::clear_stale(secure) {
+        resp.cookie(cookie);
+    }
+    Ok(resp
         .cookie(AuthCookies::access_token(&tokens.access_token, secure, cookie_domain))
         .cookie(AuthCookies::refresh_token(
             &tokens.refresh_token,

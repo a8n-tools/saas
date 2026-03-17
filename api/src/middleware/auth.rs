@@ -227,8 +227,35 @@ impl AuthCookies {
         builder.finish()
     }
 
+    /// Create cookies to clear stale hostname-scoped tokens.
+    /// When COOKIE_DOMAIN is set (e.g. `.example.com`), any old cookies set
+    /// without a domain attribute (scoped to the exact hostname like `api.example.com`)
+    /// won't be overwritten by the new domain-scoped cookies. The browser sends
+    /// the more-specific hostname cookie first, so the server reads the stale value.
+    /// These clearing cookies (no domain attribute) force the browser to delete them.
+    pub fn clear_stale(secure: bool) -> Vec<Cookie<'static>> {
+        vec![
+            Cookie::build("access_token", "")
+                .path("/")
+                .http_only(true)
+                .secure(secure)
+                .same_site(SameSite::Lax)
+                .max_age(actix_web::cookie::time::Duration::seconds(0))
+                .finish(),
+            Cookie::build("refresh_token", "")
+                .path("/")
+                .http_only(true)
+                .secure(secure)
+                .same_site(SameSite::Lax)
+                .max_age(actix_web::cookie::time::Duration::seconds(0))
+                .finish(),
+        ]
+    }
+
     /// Create cookies to clear auth tokens
     pub fn clear(secure: bool, cookie_domain: Option<&str>) -> Vec<Cookie<'static>> {
+        let mut cookies = Self::clear_stale(secure);
+
         let mut access_builder = Cookie::build("access_token", "")
             .path("/")
             .http_only(true)
@@ -246,9 +273,12 @@ impl AuthCookies {
         if let Some(domain) = cookie_domain {
             access_builder = access_builder.domain(domain.to_owned());
             refresh_builder = refresh_builder.domain(domain.to_owned());
+            // Only add domain-scoped clearing cookies if a domain is configured
+            cookies.push(access_builder.finish());
+            cookies.push(refresh_builder.finish());
         }
 
-        vec![access_builder.finish(), refresh_builder.finish()]
+        cookies
     }
 }
 
