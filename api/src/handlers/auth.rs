@@ -134,7 +134,11 @@ pub async fn register(
         expires_in: tokens.expires_in,
     };
 
-    Ok(HttpResponse::Created()
+    let mut resp = HttpResponse::Created();
+    for cookie in AuthCookies::clear_stale(secure) {
+        resp.cookie(cookie);
+    }
+    Ok(resp
         .cookie(AuthCookies::access_token(&tokens.access_token, secure, cookie_domain))
         .cookie(AuthCookies::refresh_token(
             &tokens.refresh_token,
@@ -190,7 +194,12 @@ pub async fn login(
                 expires_in: tokens.expires_in,
             };
 
-            Ok(HttpResponse::Ok()
+            let mut resp = HttpResponse::Ok();
+                // Clear stale hostname-scoped cookies before setting domain-scoped ones
+                for cookie in AuthCookies::clear_stale(secure) {
+                    resp.cookie(cookie);
+                }
+                Ok(resp
                 .cookie(AuthCookies::access_token(&tokens.access_token, secure, cookie_domain))
                 .cookie(AuthCookies::refresh_token(
                     &tokens.refresh_token,
@@ -303,7 +312,11 @@ pub async fn verify_magic_link(
                 expires_in: tokens.expires_in,
             };
 
-            Ok(HttpResponse::Ok()
+            let mut resp = HttpResponse::Ok();
+            for cookie in AuthCookies::clear_stale(secure) {
+                resp.cookie(cookie);
+            }
+            Ok(resp
                 .cookie(AuthCookies::access_token(&tokens.access_token, secure, cookie_domain))
                 .cookie(AuthCookies::refresh_token(&tokens.refresh_token, secure, true, cookie_domain))
                 .json(crate::responses::ApiResponse {
@@ -364,7 +377,11 @@ pub async fn refresh_token(
     let secure = config.is_production();
     let cookie_domain = config.cookie_domain.as_deref();
 
-    Ok(HttpResponse::Ok()
+    let mut resp = HttpResponse::Ok();
+    for cookie in AuthCookies::clear_stale(secure) {
+        resp.cookie(cookie);
+    }
+    Ok(resp
         .cookie(AuthCookies::access_token(&tokens.access_token, secure, cookie_domain))
         .cookie(AuthCookies::refresh_token(&tokens.refresh_token, secure, true, cookie_domain))
         .json(crate::responses::ApiResponse {
@@ -694,7 +711,11 @@ pub async fn auth_redirect(
                 let secure = config.is_production();
                 let cookie_domain = config.cookie_domain.as_deref();
 
-                return Ok(HttpResponse::Found()
+                let mut resp = HttpResponse::Found();
+                for cookie in AuthCookies::clear_stale(secure) {
+                    resp.cookie(cookie);
+                }
+                return Ok(resp
                     .cookie(AuthCookies::access_token(
                         &tokens.access_token,
                         secure,
