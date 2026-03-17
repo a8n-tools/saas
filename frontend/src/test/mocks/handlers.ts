@@ -531,12 +531,51 @@ export const handlers = [
     })
   }),
 
+  http.get(`${API_BASE}/admin/users/:userId`, () => {
+    return HttpResponse.json({ success: true, data: { ...mockUser, last_login_at: null, grace_period_end: null } })
+  }),
+
+  http.post(`${API_BASE}/admin/users/:userId/impersonate`, () => {
+    return HttpResponse.json({ success: true, data: { message: 'Impersonation started' } })
+  }),
+
   http.put(`${API_BASE}/admin/applications/:appId`, () => {
     return HttpResponse.json({ success: true, data: mockAdminApplication })
   }),
 
+  http.post(`${API_BASE}/admin/applications`, () => {
+    return HttpResponse.json({ success: true, data: { ...mockAdminApplication, id: 'app-new' } })
+  }),
+
+  http.delete(`${API_BASE}/admin/applications/:appId`, () => {
+    return HttpResponse.json({ success: true, data: null })
+  }),
+
+  http.put(`${API_BASE}/admin/applications/:appId/swap-order`, () => {
+    return HttpResponse.json({ success: true, data: { applications: [mockAdminApplication] } })
+  }),
+
+  http.post(`${API_BASE}/admin/memberships/grant`, () => {
+    return HttpResponse.json({
+      success: true,
+      data: { status: 'active', price_locked: false, locked_price_amount: null, current_period_end: '2026-04-01T00:00:00Z', cancel_at_period_end: false, grace_period_end: null },
+    })
+  }),
+
   http.post(`${API_BASE}/admin/memberships/revoke`, () => {
     return HttpResponse.json({ success: true, data: { message: 'Revoked' } })
+  }),
+
+  http.get(`${API_BASE}/admin/notifications`, () => {
+    return HttpResponse.json({ success: true, data: [] })
+  }),
+
+  http.post(`${API_BASE}/admin/notifications/:notificationId/read`, () => {
+    return HttpResponse.json({ success: true, data: null })
+  }),
+
+  http.post(`${API_BASE}/admin/notifications/read-all`, () => {
+    return HttpResponse.json({ success: true, data: null })
   }),
 
   // Feedback (admin)
@@ -550,6 +589,30 @@ export const handlers = [
         total_pages: 1,
       },
     })
+  }),
+
+  // Static feedback routes must come before :feedbackId to avoid path param matching
+  http.get(`${API_BASE}/admin/feedback/export`, () => {
+    return new HttpResponse('id,name,email\r\nfb-001,Alice,al***@example.com\r\n', {
+      headers: { 'Content-Type': 'text/csv' },
+    })
+  }),
+
+  http.get(`${API_BASE}/admin/feedback/archive`, () => {
+    return HttpResponse.json({
+      success: true,
+      data: {
+        items: [],
+        total: 0,
+        page: 1,
+        per_page: 20,
+        total_pages: 1,
+      },
+    })
+  }),
+
+  http.post(`${API_BASE}/admin/feedback/archive/:archiveId/restore`, () => {
+    return HttpResponse.json({ success: true, data: { ...mockFeedbackDetail, status: 'reviewed' } })
   }),
 
   http.get(`${API_BASE}/admin/feedback/:feedbackId`, () => {
@@ -572,29 +635,6 @@ export const handlers = [
 
   http.delete(`${API_BASE}/admin/feedback/:feedbackId`, () => {
     return HttpResponse.json({ success: true, data: {} })
-  }),
-
-  http.get(`${API_BASE}/admin/feedback/export`, () => {
-    return new HttpResponse('id,name,email\r\nfb-001,Alice,al***@example.com\r\n', {
-      headers: { 'Content-Type': 'text/csv' },
-    })
-  }),
-
-  http.get(`${API_BASE}/admin/feedback/archive`, () => {
-    return HttpResponse.json({
-      success: true,
-      data: {
-        items: [],
-        total: 0,
-        page: 1,
-        per_page: 20,
-        total_pages: 1,
-      },
-    })
-  }),
-
-  http.post(`${API_BASE}/admin/feedback/archive/:archiveId/restore`, () => {
-    return HttpResponse.json({ success: true, data: { ...mockFeedbackDetail, status: 'reviewed' } })
   }),
 
   // Feedback (public)
