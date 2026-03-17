@@ -366,3 +366,140 @@ impl StripeService {
         &self.config.business_price_id
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_config() -> StripeConfig {
+        StripeConfig {
+            secret_key: "sk_test_xxx".to_string(),
+            webhook_secret: "whsec_test_secret".to_string(),
+            personal_price_id: "price_personal".to_string(),
+            business_price_id: "price_business".to_string(),
+            success_url: "http://localhost/success".to_string(),
+            cancel_url: "http://localhost/cancel".to_string(),
+        }
+    }
+
+    fn test_service() -> StripeService {
+        StripeService::new(test_config())
+    }
+
+    // -- MembershipTier --
+
+    #[test]
+    fn tier_as_str() {
+        assert_eq!(MembershipTier::Personal.as_str(), "personal");
+        assert_eq!(MembershipTier::Business.as_str(), "business");
+    }
+
+    #[test]
+    fn tier_amount_cents() {
+        assert_eq!(MembershipTier::Personal.amount_cents(), 300);
+        assert_eq!(MembershipTier::Business.amount_cents(), 1500);
+    }
+
+    #[test]
+    fn tier_default() {
+        assert_eq!(MembershipTier::default(), MembershipTier::Personal);
+    }
+
+    // -- StripeConfig --
+
+    #[test]
+    fn price_id_for_tier() {
+        let config = test_config();
+        assert_eq!(config.price_id_for_tier(MembershipTier::Personal), "price_personal");
+        assert_eq!(config.price_id_for_tier(MembershipTier::Business), "price_business");
+    }
+
+    // -- StripeService --
+
+    #[test]
+    fn tier_from_price_id_personal() {
+        let service = test_service();
+        assert_eq!(service.tier_from_price_id("price_personal"), MembershipTier::Personal);
+    }
+
+    #[test]
+    fn tier_from_price_id_business() {
+        let service = test_service();
+        assert_eq!(service.tier_from_price_id("price_business"), MembershipTier::Business);
+    }
+
+    #[test]
+    fn tier_from_unknown_price_defaults_to_personal() {
+        let service = test_service();
+        assert_eq!(service.tier_from_price_id("price_unknown"), MembershipTier::Personal);
+    }
+
+    #[test]
+    fn price_id_accessors() {
+        let service = test_service();
+        assert_eq!(service.price_id(), "price_personal");
+        assert_eq!(service.business_price_id(), "price_business");
+    }
+
+    // -- Webhook signature verification --
+
+    #[test]
+    fn verify_webhook_signature_valid() {
+        let service = test_service();
+        let payload = b"{\"type\":\"test\"}";
+        let timestamp = chrono::Utc::now().timestamp().to_string();
+
+        // Compute the expected signature
+        let signed_payload = format!("{}.{}", timestamp, std::str::from_utf8(payload).unwrap());
+        let mut mac = HmacSha256::new_from_slice(b"whsec_test_secret").unwrap();
+        mac.update(signed_payload.as_bytes());
+        let sig = hex::encode(mac.finalize().into_bytes());
+
+        let header = format!("t={},v1={}", timestamp, sig);
+        assert!(service.verify_webhook_signature(payload, &header).is_ok());
+    }
+
+    #[test]
+    fn verify_webhook_signature_invalid() {
+        let service = test_service();
+        let payload = b"{\"type\":\"test\"}";
+        let timestamp = chrono::Utc::now().timestamp().to_string();
+        let header = format!("t={},v1=invalid_signature", timestamp);
+
+        assert!(service.verify_webhook_signature(payload, &header).is_err());
+    }
+
+    #[test]
+    fn verify_webhook_signature_missing_timestamp() {
+        let service = test_service();
+        let payload = b"{\"type\":\"test\"}";
+        let header = "v1=some_signature";
+
+        assert!(service.verify_webhook_signature(payload, header).is_err());
+    }
+
+    #[test]
+    fn verify_webhook_signature_no_v1() {
+        let service = test_service();
+        let payload = b"{\"type\":\"test\"}";
+        let header = "t=12345";
+
+        assert!(service.verify_webhook_signature(payload, header).is_err());
+    }
+
+    #[test]
+    fn verify_webhook_signature_old_timestamp() {
+        let service = test_service();
+        let payload = b"{\"type\":\"test\"}";
+        // Use a timestamp from 10 minutes ago (beyond 5-minute tolerance)
+        let old_ts = (chrono::Utc::now().timestamp() - 600).to_string();
+
+        let signed_payload = format!("{}.{}", old_ts, std::str::from_utf8(payload).unwrap());
+        let mut mac = HmacSha256::new_from_slice(b"whsec_test_secret").unwrap();
+        mac.update(signed_payload.as_bytes());
+        let sig = hex::encode(mac.finalize().into_bytes());
+
+        let header = format!("t={},v1={}", old_ts, sig);
+        assert!(service.verify_webhook_signature(payload, &header).is_err());
+    }
+}

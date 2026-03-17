@@ -214,3 +214,78 @@ impl Feedback {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -- FeedbackStatus --
+
+    #[test]
+    fn feedback_status_as_str() {
+        assert_eq!(FeedbackStatus::New.as_str(), "new");
+        assert_eq!(FeedbackStatus::Reviewed.as_str(), "reviewed");
+        assert_eq!(FeedbackStatus::Responded.as_str(), "responded");
+        assert_eq!(FeedbackStatus::Closed.as_str(), "closed");
+    }
+
+    #[test]
+    fn feedback_status_from_str() {
+        assert_eq!(FeedbackStatus::from_str("new"), Some(FeedbackStatus::New));
+        assert_eq!(FeedbackStatus::from_str("reviewed"), Some(FeedbackStatus::Reviewed));
+        assert_eq!(FeedbackStatus::from_str("responded"), Some(FeedbackStatus::Responded));
+        assert_eq!(FeedbackStatus::from_str("closed"), Some(FeedbackStatus::Closed));
+        assert_eq!(FeedbackStatus::from_str("invalid"), None);
+    }
+
+    // -- Feedback::mask_email --
+
+    #[test]
+    fn mask_email_normal() {
+        assert_eq!(Feedback::mask_email("alice@example.com"), "a***@example.com");
+    }
+
+    #[test]
+    fn mask_email_single_char_local() {
+        assert_eq!(Feedback::mask_email("a@example.com"), "a***@example.com");
+    }
+
+    #[test]
+    fn mask_email_no_at_sign() {
+        assert_eq!(Feedback::mask_email("noemail"), "***");
+    }
+
+    #[test]
+    fn mask_email_empty() {
+        assert_eq!(Feedback::mask_email(""), "***");
+    }
+
+    #[test]
+    fn mask_email_missing_local() {
+        assert_eq!(Feedback::mask_email("@domain.com"), "***");
+    }
+
+    // -- Feedback::excerpt --
+
+    #[test]
+    fn excerpt_short_message() {
+        let msg = "Short message";
+        assert_eq!(Feedback::excerpt(msg), "Short message");
+    }
+
+    #[test]
+    fn excerpt_long_message() {
+        let msg = "a".repeat(200);
+        let result = Feedback::excerpt(&msg);
+        assert_eq!(result.len(), 123); // 120 chars + "..."
+        assert!(result.ends_with("..."));
+    }
+
+    #[test]
+    fn excerpt_exactly_120_chars() {
+        let msg = "a".repeat(120);
+        let result = Feedback::excerpt(&msg);
+        assert_eq!(result.len(), 120);
+        assert!(!result.ends_with("..."));
+    }
+}

@@ -57,13 +57,13 @@ migrate-create name:
     docker compose exec api cargo sqlx migrate add {{ name }}
 
 # Testing
-# Run API tests
+# Run API unit tests (no database required)
 test-api:
-    docker compose exec api cargo test
+    docker compose exec -e GIT_COMMIT=dev api cargo test --lib
 
-# Run frontend tests
+# Run frontend tests (single run, no watch)
 test-frontend:
-    docker compose exec frontend bun test
+    docker compose exec frontend bun run test:run
 
 # Run all tests
 test: test-api test-frontend

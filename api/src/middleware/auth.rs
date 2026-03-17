@@ -340,9 +340,11 @@ mod tests {
     #[test]
     fn test_auth_cookies_clear_with_domain() {
         let cookies = AuthCookies::clear(true, Some(".example.com"));
-        assert_eq!(cookies.len(), 2);
-        for cookie in cookies {
-            assert_eq!(cookie.domain(), Some(".example.com"));
-        }
+        // 2 stale-clearing cookies (no domain) + 2 domain-scoped clearing cookies
+        assert_eq!(cookies.len(), 4);
+        let domain_cookies: Vec<_> = cookies.iter().filter(|c| c.domain() == Some(".example.com")).collect();
+        assert_eq!(domain_cookies.len(), 2);
+        assert!(domain_cookies.iter().any(|c| c.name() == "access_token"));
+        assert!(domain_cookies.iter().any(|c| c.name() == "refresh_token"));
     }
 }

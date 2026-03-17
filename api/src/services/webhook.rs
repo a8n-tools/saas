@@ -106,3 +106,40 @@ impl WebhookService {
         hex::encode(result.into_bytes())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sign_produces_deterministic_hex_output() {
+        let service = WebhookService::new("test-secret".to_string());
+        let sig1 = service.sign("{\"event\":\"test\"}");
+        let sig2 = service.sign("{\"event\":\"test\"}");
+
+        assert_eq!(sig1, sig2);
+        // SHA256 HMAC produces 64 hex characters
+        assert_eq!(sig1.len(), 64);
+        // Should be valid hex
+        assert!(sig1.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn sign_different_payloads_produce_different_signatures() {
+        let service = WebhookService::new("test-secret".to_string());
+        let sig1 = service.sign("payload1");
+        let sig2 = service.sign("payload2");
+
+        assert_ne!(sig1, sig2);
+    }
+
+    #[test]
+    fn sign_different_secrets_produce_different_signatures() {
+        let service1 = WebhookService::new("secret-1".to_string());
+        let service2 = WebhookService::new("secret-2".to_string());
+        let sig1 = service1.sign("same payload");
+        let sig2 = service2.sign("same payload");
+
+        assert_ne!(sig1, sig2);
+    }
+}
