@@ -179,12 +179,36 @@ impl AuthService {
         let stored_token = match TokenRepository::find_refresh_token_by_hash(&self.pool, &token_hash).await? {
             Some(token) => token,
             None => {
-                tracing::warn!(
-                    user_id = %claims.sub,
-                    token_id = %claims.jti,
-                    hash_prefix = %&token_hash[..8],
-                    "token_refresh: token hash not found in DB (revoked or missing)"
-                );
+                // Diagnostic: check if the token exists at all (revoked/expired)
+                match TokenRepository::find_refresh_token_by_hash_any(&self.pool, &token_hash).await {
+                    Ok(Some(stale)) => {
+                        tracing::warn!(
+                            user_id = %claims.sub,
+                            token_id = %claims.jti,
+                            hash_prefix = %&token_hash[..8],
+                            revoked_at = ?stale.revoked_at,
+                            expires_at = %stale.expires_at,
+                            created_at = %stale.created_at,
+                            "token_refresh: token exists in DB but is revoked or expired"
+                        );
+                    }
+                    Ok(None) => {
+                        tracing::warn!(
+                            user_id = %claims.sub,
+                            token_id = %claims.jti,
+                            hash_prefix = %&token_hash[..8],
+                            "token_refresh: token hash does not exist in DB at all"
+                        );
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            user_id = %claims.sub,
+                            token_id = %claims.jti,
+                            error = %e,
+                            "token_refresh: diagnostic query failed"
+                        );
+                    }
+                }
                 return Err(AppError::InvalidCredentials);
             }
         };
