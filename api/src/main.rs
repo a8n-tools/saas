@@ -289,13 +289,13 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Initialize tracing subscriber with JSON output for production
+/// Initialize tracing subscriber with compact human-readable output
 fn init_tracing(log_level: &str) {
     let env_filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new(log_level));
 
     tracing_subscriber::registry()
         .with(env_filter)
-        .with(tracing_subscriber::fmt::layer().json())
+        .with(tracing_subscriber::fmt::layer().compact())
         .init();
 }
