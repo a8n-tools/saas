@@ -287,13 +287,14 @@ mod tests {
 
     #[test]
     fn test_config_defaults() {
-        // Set required env var
+        // Set required env vars
         env::set_var("DATABASE_URL", "postgres://test:test@localhost/test");
+        // Use development to avoid requiring TOTP_ENCRYPTION_KEY
+        env::set_var("ENVIRONMENT", "development");
         env::remove_var("HOST_IP");
         env::remove_var("APP_PORT");
         env::remove_var("RUST_LOG");
         env::remove_var("CORS_ORIGIN");
-        env::remove_var("ENVIRONMENT");
         env::remove_var("SMTP_HOST");
         env::remove_var("COOKIE_DOMAIN");
 
@@ -303,7 +304,7 @@ mod tests {
         assert_eq!(config.port, 4000);
         assert_eq!(config.log_level, "info");
         assert_eq!(config.cors_origin, "http://localhost:5173");
-        assert_eq!(config.environment, "production");
+        assert_eq!(config.environment, "development");
         assert!(!config.email.enabled);
         // In development mode without COOKIE_DOMAIN set, it should be None (for localhost)
         assert!(config.cookie_domain.is_none());
