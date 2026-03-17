@@ -176,7 +176,7 @@ export function AdminUsersPage() {
                     </div>
                     <div className="flex items-center gap-4">
                       <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>
-                        {user.role}
+                        {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
                       </Badge>
                       <MembershipBadge status={user.membership_status} />
                       <DropdownMenu>
