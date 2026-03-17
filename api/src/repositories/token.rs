@@ -59,6 +59,24 @@ impl TokenRepository {
         Ok(token)
     }
 
+    /// Find refresh token by hash regardless of validity (for diagnostics)
+    pub async fn find_refresh_token_by_hash_any(
+        pool: &PgPool,
+        token_hash: &str,
+    ) -> Result<Option<RefreshToken>, AppError> {
+        let token = sqlx::query_as::<_, RefreshToken>(
+            r#"
+            SELECT * FROM refresh_tokens
+            WHERE token_hash = $1
+            "#,
+        )
+        .bind(token_hash)
+        .fetch_optional(pool)
+        .await?;
+
+        Ok(token)
+    }
+
     /// Find all active refresh tokens for a user
     pub async fn find_user_refresh_tokens(
         pool: &PgPool,
