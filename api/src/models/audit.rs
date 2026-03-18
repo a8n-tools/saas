@@ -51,6 +51,9 @@ pub enum AuditAction {
     AdminUserRoleChanged,
     AdminUserDeleted,
     ApplicationUpdated,
+    AdminInviteCreated,
+    AdminInviteAccepted,
+    AdminInviteRevoked,
 }
 
 impl AuditAction {
@@ -96,6 +99,9 @@ impl AuditAction {
             AuditAction::AdminUserRoleChanged => "admin_user_role_changed",
             AuditAction::AdminUserDeleted => "admin_user_deleted",
             AuditAction::ApplicationUpdated => "application_updated",
+            AuditAction::AdminInviteCreated => "admin_invite_created",
+            AuditAction::AdminInviteAccepted => "admin_invite_accepted",
+            AuditAction::AdminInviteRevoked => "admin_invite_revoked",
         }
     }
 
@@ -117,6 +123,9 @@ impl AuditAction {
                 | AuditAction::FeedbackResponded
                 | AuditAction::FeedbackDeleted
                 | AuditAction::FeedbackRestored
+                | AuditAction::AdminInviteCreated
+                | AuditAction::AdminInviteAccepted
+                | AuditAction::AdminInviteRevoked
         )
     }
 }

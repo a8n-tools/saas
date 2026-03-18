@@ -44,6 +44,10 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route("/feedback/{feedback_id}", web::delete().to(handlers::delete_feedback))
             // Test email
             .route("/test-email", web::post().to(handlers::send_test_email))
+            // Admin Invites
+            .route("/invites", web::post().to(handlers::create_admin_invite))
+            .route("/invites", web::get().to(handlers::list_admin_invites))
+            .route("/invites/{invite_id}", web::delete().to(handlers::revoke_admin_invite))
             // Notifications
             .route("/notifications", web::get().to(handlers::list_notifications))
             .route("/notifications/{notification_id}/read", web::post().to(handlers::mark_notification_read))

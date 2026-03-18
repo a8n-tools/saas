@@ -9,11 +9,11 @@ use uuid::Uuid;
 
 use crate::errors::AppError;
 use crate::models::{
-    AuditAction, CreateAuditLog, CreateEmailChangeRequest, CreateEmailVerificationToken,
-    CreateMagicLinkToken, CreatePasswordResetToken, CreateRefreshToken, CreateUser, User,
-    UserResponse, UserRole,
+    AuditAction, CreateAdminInvite, CreateAuditLog, CreateEmailChangeRequest,
+    CreateEmailVerificationToken, CreateMagicLinkToken, CreatePasswordResetToken,
+    CreateRefreshToken, CreateUser, User, UserResponse, UserRole,
 };
-use crate::repositories::{AuditLogRepository, TokenRepository, UserRepository};
+use crate::repositories::{AuditLogRepository, InviteRepository, TokenRepository, UserRepository};
 use crate::services::{JwtService, PasswordService};
 
 /// Authentication tokens returned after login
@@ -34,6 +34,12 @@ pub enum LoginResult {
 pub enum MagicLinkResult {
     Success(AuthTokens, UserResponse, bool),
     TwoFactorRequired { challenge_token: String, is_new_user: bool },
+}
+
+/// Result of accepting an admin invite
+pub enum AcceptInviteResult {
+    Success(AuthTokens, UserResponse),
+    PasswordRequired { email: String },
 }
 
 /// Authentication service
@@ -936,6 +942,195 @@ impl AuthService {
         .await?;
 
         Ok(user.email)
+    }
+
+    /// Create an admin invite
+    pub async fn create_admin_invite(
+        &self,
+        email: String,
+        admin_id: Uuid,
+        admin_email: &str,
+        admin_role: &str,
+        ip_address: Option<IpAddr>,
+    ) -> Result<String, AppError> {
+        let ip = ip_address.map(IpNetwork::from);
+
+        // Check if user is already an admin
+        if let Some(user) = UserRepository::find_by_email(&self.pool, &email).await? {
+            if user.role == "admin" {
+                return Err(AppError::conflict("User is already an admin"));
+            }
+        }
+
+        // Revoke any pending invites for this email
+        InviteRepository::revoke_pending_by_email(&self.pool, &email).await?;
+
+        // Generate token
+        let token = generate_secure_token(32);
+        let token_hash = self.jwt.hash_token(&token);
+        let expires_at = Utc::now() + Duration::days(7);
+
+        // Store invite
+        let invite = InviteRepository::create(
+            &self.pool,
+            CreateAdminInvite {
+                email: email.clone(),
+                token_hash,
+                invited_by: admin_id,
+                role: "admin".to_string(),
+                expires_at,
+            },
+        )
+        .await?;
+
+        // Audit log
+        AuditLogRepository::create(
+            &self.pool,
+            CreateAuditLog::new(AuditAction::AdminInviteCreated)
+                .with_actor(admin_id, admin_email, admin_role)
+                .with_ip(ip)
+                .with_resource("admin_invite", invite.id)
+                .with_metadata(serde_json::json!({ "invited_email": email })),
+        )
+        .await?;
+
+        Ok(token)
+    }
+
+    /// Accept an admin invite
+    pub async fn accept_admin_invite(
+        &self,
+        token: String,
+        password: Option<String>,
+        device_info: Option<String>,
+        ip_address: Option<IpAddr>,
+    ) -> Result<AcceptInviteResult, AppError> {
+        let ip = ip_address.map(IpNetwork::from);
+        let token_hash = self.jwt.hash_token(&token);
+
+        // Find invite
+        let invite = InviteRepository::find_valid_by_token_hash(&self.pool, &token_hash)
+            .await?
+            .ok_or(AppError::InvalidCredentials)?;
+
+        if !invite.is_valid() {
+            return Err(AppError::TokenExpired);
+        }
+
+        // Check if user exists
+        match UserRepository::find_by_email(&self.pool, &invite.email).await? {
+            Some(user) if user.role == "admin" => {
+                // Already an admin — stale invite
+                return Err(AppError::conflict("User is already an admin"));
+            }
+            Some(user) => {
+                // Existing non-admin user — upgrade to admin
+                InviteRepository::mark_accepted(&self.pool, invite.id).await?;
+                let updated_user = UserRepository::update_role(&self.pool, user.id, "admin").await?;
+                UserRepository::set_email_verified(&self.pool, user.id).await?;
+
+                // Create auth tokens
+                let tokens = self.create_tokens(&updated_user, device_info, ip_address).await?;
+                UserRepository::update_last_login(&self.pool, user.id).await?;
+
+                // Audit log
+                AuditLogRepository::create(
+                    &self.pool,
+                    CreateAuditLog::new(AuditAction::AdminInviteAccepted)
+                        .with_actor(user.id, &user.email, "admin")
+                        .with_ip(ip)
+                        .with_resource("admin_invite", invite.id)
+                        .with_metadata(serde_json::json!({
+                            "existing_user": true,
+                            "previous_role": user.role,
+                        })),
+                )
+                .await?;
+
+                let refreshed = UserRepository::find_by_id(&self.pool, updated_user.id)
+                    .await?
+                    .ok_or(AppError::not_found("User"))?;
+
+                Ok(AcceptInviteResult::Success(tokens, UserResponse::from(refreshed)))
+            }
+            None => {
+                // New user — need password
+                let password = match password {
+                    Some(p) => p,
+                    None => {
+                        return Ok(AcceptInviteResult::PasswordRequired {
+                            email: invite.email.clone(),
+                        });
+                    }
+                };
+
+                // Validate password
+                self.password.validate_strength(&password)?;
+                self.password.validate_not_contains_email(&password, &invite.email)?;
+                let password_hash = self.password.hash(&password)?;
+
+                // Create user as admin
+                let user = UserRepository::create(
+                    &self.pool,
+                    CreateUser {
+                        email: invite.email.clone(),
+                        password_hash: Some(password_hash),
+                        role: UserRole::Admin,
+                    },
+                )
+                .await?;
+                UserRepository::set_email_verified(&self.pool, user.id).await?;
+
+                // Mark invite accepted
+                InviteRepository::mark_accepted(&self.pool, invite.id).await?;
+
+                // Create auth tokens
+                let tokens = self.create_tokens(&user, device_info, ip_address).await?;
+                UserRepository::update_last_login(&self.pool, user.id).await?;
+
+                // Audit log
+                AuditLogRepository::create(
+                    &self.pool,
+                    CreateAuditLog::new(AuditAction::AdminInviteAccepted)
+                        .with_actor(user.id, &invite.email, "admin")
+                        .with_ip(ip)
+                        .with_resource("admin_invite", invite.id)
+                        .with_metadata(serde_json::json!({
+                            "existing_user": false,
+                            "new_user_id": user.id,
+                        })),
+                )
+                .await?;
+
+                let refreshed = UserRepository::find_by_id(&self.pool, user.id)
+                    .await?
+                    .ok_or(AppError::not_found("User"))?;
+
+                Ok(AcceptInviteResult::Success(tokens, UserResponse::from(refreshed)))
+            }
+        }
+    }
+
+    /// Revoke an admin invite
+    pub async fn revoke_admin_invite(
+        &self,
+        invite_id: Uuid,
+        admin_id: Uuid,
+        admin_email: &str,
+        admin_role: &str,
+    ) -> Result<(), AppError> {
+        InviteRepository::mark_revoked(&self.pool, invite_id).await?;
+
+        // Audit log
+        AuditLogRepository::create(
+            &self.pool,
+            CreateAuditLog::new(AuditAction::AdminInviteRevoked)
+                .with_actor(admin_id, admin_email, admin_role)
+                .with_resource("admin_invite", invite_id),
+        )
+        .await?;
+
+        Ok(())
     }
 
     /// Helper to create auth tokens

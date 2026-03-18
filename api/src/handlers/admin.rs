@@ -17,11 +17,11 @@ use crate::models::{
     UserResponse,
 };
 use crate::repositories::{
-    ApplicationRepository, AuditLogRepository, MembershipRepository, NotificationRepository,
-    TokenRepository, UserRepository,
+    ApplicationRepository, AuditLogRepository, InviteRepository, MembershipRepository,
+    NotificationRepository, TokenRepository, UserRepository,
 };
 use crate::responses::{get_request_id, created, paginated, success, success_no_data};
-use crate::services::{EmailService, JwtService, PasswordService, TotpService, WebhookService};
+use crate::services::{AuthService, EmailService, JwtService, PasswordService, TotpService, WebhookService};
 use crate::validation;
 
 // =============================================================================
@@ -877,6 +877,96 @@ pub struct HealthStatus {
     pub status: String,
     pub latency_ms: Option<u64>,
     pub message: Option<String>,
+}
+
+// =============================================================================
+// Admin Invites
+// =============================================================================
+
+/// Request body for creating an admin invite
+#[derive(Debug, Deserialize)]
+pub struct CreateAdminInviteRequest {
+    pub email: String,
+}
+
+/// Query parameters for listing admin invites
+#[derive(Debug, Deserialize)]
+pub struct ListAdminInvitesQuery {
+    pub page: Option<i32>,
+    pub per_page: Option<i32>,
+}
+
+/// POST /v1/admin/invites
+/// Create an admin invite and send email
+pub async fn create_admin_invite(
+    req: HttpRequest,
+    admin: AdminUser,
+    auth_service: web::Data<Arc<AuthService>>,
+    email_service: web::Data<Arc<EmailService>>,
+    body: web::Json<CreateAdminInviteRequest>,
+) -> Result<HttpResponse, AppError> {
+    let request_id = get_request_id(&req);
+    let ip_address = crate::middleware::extract_client_ip(&req);
+
+    // Validate email format
+    crate::validation::validate_email(&body.email)?;
+
+    let token = auth_service
+        .create_admin_invite(
+            body.email.clone(),
+            admin.0.sub,
+            &admin.0.email,
+            &admin.0.role,
+            ip_address,
+        )
+        .await?;
+
+    // Send invite email (in background)
+    let email = body.email.clone();
+    let email_svc = email_service.get_ref().clone();
+    tokio::spawn(async move {
+        if let Err(e) = email_svc.send_admin_invite(&email, &token).await {
+            tracing::error!(error = %e, email = %email, "Failed to send admin invite email");
+        }
+    });
+
+    Ok(created(serde_json::json!({ "email": body.email }), request_id))
+}
+
+/// GET /v1/admin/invites
+/// List admin invites with pagination
+pub async fn list_admin_invites(
+    req: HttpRequest,
+    _admin: AdminUser,
+    pool: web::Data<PgPool>,
+    query: web::Query<ListAdminInvitesQuery>,
+) -> Result<HttpResponse, AppError> {
+    let request_id = get_request_id(&req);
+
+    let page = query.page.unwrap_or(1).max(1);
+    let per_page = query.per_page.unwrap_or(20).min(100);
+
+    let (invites, total) = InviteRepository::list_all(&pool, page, per_page).await?;
+
+    Ok(paginated(invites, total, page, per_page, request_id))
+}
+
+/// DELETE /v1/admin/invites/{invite_id}
+/// Revoke a pending admin invite
+pub async fn revoke_admin_invite(
+    req: HttpRequest,
+    admin: AdminUser,
+    auth_service: web::Data<Arc<AuthService>>,
+    path: web::Path<uuid::Uuid>,
+) -> Result<HttpResponse, AppError> {
+    let request_id = get_request_id(&req);
+    let invite_id = path.into_inner();
+
+    auth_service
+        .revoke_admin_invite(invite_id, admin.0.sub, &admin.0.email, &admin.0.role)
+        .await?;
+
+    Ok(success_no_data(request_id))
 }
 
 /// GET /v1/admin/health

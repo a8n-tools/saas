@@ -72,4 +72,7 @@ export const authApi = {
 
   get2FAStatus: (): Promise<TwoFactorStatusResponse> =>
     apiClient.get('/auth/2fa/status'),
+
+  acceptInvite: (data: { token: string; password?: string }): Promise<AuthResponse | { needs_password: true; email: string }> =>
+    apiClient.post('/auth/invite/accept', data),
 }
