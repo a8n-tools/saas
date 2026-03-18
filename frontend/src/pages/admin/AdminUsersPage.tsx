@@ -116,6 +116,13 @@ export function AdminUsersPage() {
   }
 
   const confirmAction = () => {
+    if (dialogType === 'invite') {
+      if (inviteEmail.trim()) {
+        createInviteMutation.mutate(inviteEmail.trim())
+      }
+      return
+    }
+
     if (!selectedUser) return
 
     if (dialogType === 'deactivate') {
@@ -130,10 +137,6 @@ export function AdminUsersPage() {
       updateRoleMutation.mutate({ userId: selectedUser.id, role: 'admin' })
     } else if (dialogType === 'removeAdmin') {
       updateRoleMutation.mutate({ userId: selectedUser.id, role: 'subscriber' })
-    } else if (dialogType === 'invite') {
-      if (inviteEmail.trim()) {
-        createInviteMutation.mutate(inviteEmail.trim())
-      }
     }
   }
 
