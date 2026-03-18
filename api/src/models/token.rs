@@ -236,6 +236,53 @@ pub struct CreateEmailVerificationToken {
     pub ip_address: Option<IpNetwork>,
 }
 
+/// Admin invite database model
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct AdminInvite {
+    pub id: Uuid,
+    pub email: String,
+    #[serde(skip_serializing)]
+    pub token_hash: String,
+    pub invited_by: Uuid,
+    pub role: String,
+    pub expires_at: DateTime<Utc>,
+    pub accepted_at: Option<DateTime<Utc>>,
+    pub revoked_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+}
+
+impl AdminInvite {
+    /// Check if the invite is expired
+    pub fn is_expired(&self) -> bool {
+        self.expires_at < Utc::now()
+    }
+
+    /// Check if the invite has been accepted
+    pub fn is_accepted(&self) -> bool {
+        self.accepted_at.is_some()
+    }
+
+    /// Check if the invite has been revoked
+    pub fn is_revoked(&self) -> bool {
+        self.revoked_at.is_some()
+    }
+
+    /// Check if the invite is valid (not expired, accepted, or revoked)
+    pub fn is_valid(&self) -> bool {
+        !self.is_expired() && !self.is_accepted() && !self.is_revoked()
+    }
+}
+
+/// Data for creating a new admin invite
+#[derive(Debug, Clone)]
+pub struct CreateAdminInvite {
+    pub email: String,
+    pub token_hash: String,
+    pub invited_by: Uuid,
+    pub role: String,
+    pub expires_at: DateTime<Utc>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

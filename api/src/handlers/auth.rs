@@ -14,7 +14,7 @@ use crate::middleware::{
 use crate::models::{RateLimitConfig, UserResponse};
 use crate::repositories::RateLimitRepository;
 use crate::responses::{get_request_id, success};
-use crate::services::{AuthService, LoginResult};
+use crate::services::{AcceptInviteResult, AuthService, LoginResult};
 
 /// Check rate limit and return RateLimited error if exceeded
 async fn check_rate_limit(
@@ -304,6 +304,66 @@ pub async fn verify_magic_link(
                 });
             }
 
+            let secure = config.is_production();
+            let cookie_domain = config.cookie_domain.as_deref();
+
+            let response = AuthResponse {
+                user,
+                expires_in: tokens.expires_in,
+            };
+
+            let mut resp = HttpResponse::Ok();
+            for cookie in AuthCookies::clear_stale(secure) {
+                resp.cookie(cookie);
+            }
+            Ok(resp
+                .cookie(AuthCookies::access_token(&tokens.access_token, secure, cookie_domain))
+                .cookie(AuthCookies::refresh_token(&tokens.refresh_token, secure, true, cookie_domain))
+                .json(crate::responses::ApiResponse {
+                    success: true,
+                    data: Some(response),
+                    meta: crate::responses::ResponseMeta::new(request_id),
+                }))
+        }
+    }
+}
+
+/// Request body for accepting an admin invite
+#[derive(Debug, Deserialize)]
+pub struct AcceptInviteRequest {
+    pub token: String,
+    pub password: Option<String>,
+}
+
+/// POST /v1/auth/invite/accept
+/// Accept an admin invite
+pub async fn accept_admin_invite(
+    req: HttpRequest,
+    pool: web::Data<PgPool>,
+    auth_service: web::Data<Arc<AuthService>>,
+    body: web::Json<AcceptInviteRequest>,
+    config: web::Data<crate::config::Config>,
+) -> Result<HttpResponse, AppError> {
+    let request_id = get_request_id(&req);
+    let ip_address = extract_client_ip(&req);
+    let device_info = extract_device_info(&req);
+
+    // Rate limit by IP address
+    let ip_key = ip_address.map(|ip| ip.to_string()).unwrap_or_default();
+    check_rate_limit(&pool, &ip_key, &RateLimitConfig::LOGIN).await?;
+
+    let result = auth_service
+        .accept_admin_invite(body.token.clone(), body.password.clone(), device_info, ip_address)
+        .await?;
+
+    match result {
+        AcceptInviteResult::PasswordRequired { email } => {
+            Ok(success(
+                serde_json::json!({ "needs_password": true, "email": email }),
+                request_id,
+            ))
+        }
+        AcceptInviteResult::Success(tokens, user) => {
             let secure = config.is_production();
             let cookie_domain = config.cookie_domain.as_deref();
 

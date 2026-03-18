@@ -21,6 +21,7 @@ import { PrivacyPolicyPage } from '@/pages/public/PrivacyPolicyPage'
 import { TwoFactorVerifyPage } from '@/pages/public/TwoFactorVerifyPage'
 import { LogoutPage } from '@/pages/public/LogoutPage'
 import { FeedbackPage } from '@/pages/public/FeedbackPage'
+import { AcceptInvitePage } from '@/pages/public/AcceptInvitePage'
 
 // Dashboard pages
 import { DashboardPage } from '@/pages/dashboard/DashboardPage'
@@ -142,6 +143,7 @@ export default function App() {
         <Route path="/login/2fa" element={<TwoFactorVerifyPage />} />
         <Route path="/logout" element={<LogoutPage />} />
         <Route path="/feedback" element={<FeedbackPage />} />
+        <Route path="/invite/accept" element={<AcceptInvitePage />} />
       </Route>
 
       {/* Protected dashboard routes */}

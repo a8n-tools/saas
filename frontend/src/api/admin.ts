@@ -158,6 +158,17 @@ export interface FeedbackAttachmentMeta {
   created_at: string
 }
 
+export interface AdminInvite {
+  id: string
+  email: string
+  role: string
+  invited_by: string
+  expires_at: string
+  accepted_at: string | null
+  revoked_at: string | null
+  created_at: string
+}
+
 export interface ArchivedFeedbackItem {
   id: string
   archived_at: string
@@ -320,6 +331,18 @@ export const adminApi = {
 
   markAllNotificationsRead: (): Promise<void> =>
     apiClient.post('/admin/notifications/read-all'),
+
+  // Admin Invites
+  createInvite: (data: { email: string }): Promise<{ email: string }> =>
+    apiClient.post('/admin/invites', data),
+
+  getInvites: (page = 1, pageSize = 20): Promise<PaginatedResponse<AdminInvite>> => {
+    const params = new URLSearchParams({ page: String(page), per_page: String(pageSize) })
+    return apiClient.get(`/admin/invites?${params}`)
+  },
+
+  revokeInvite: (inviteId: string): Promise<void> =>
+    apiClient.delete(`/admin/invites/${inviteId}`),
 
   // Health
   getHealth: async (): Promise<{ status: string; database: string; uptime_seconds: number }> => {

@@ -21,12 +21,12 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Search, MoreVertical, User, Loader2, KeyRound, Shield, ShieldOff, Trash2, AlertCircle } from 'lucide-react'
-import { adminApi, type AdminUser } from '@/api/admin'
+import { Search, MoreVertical, User, Loader2, KeyRound, Shield, ShieldOff, Trash2, AlertCircle, UserPlus, Mail, X, Clock, ChevronDown, ChevronRight } from 'lucide-react'
+import { adminApi, type AdminUser, type AdminInvite } from '@/api/admin'
 import { formatRelativeTime } from '@/lib/utils'
 import type { ApiError } from '@/types'
 
-type DialogAction = 'deactivate' | 'activate' | 'reset' | 'delete' | 'makeAdmin' | 'removeAdmin' | null
+type DialogAction = 'deactivate' | 'activate' | 'reset' | 'delete' | 'makeAdmin' | 'removeAdmin' | 'invite' | null
 
 export function AdminUsersPage() {
   const [searchQuery, setSearchQuery] = useState('')
@@ -34,6 +34,10 @@ export function AdminUsersPage() {
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null)
   const [dialogType, setDialogType] = useState<DialogAction>(null)
   const [tempPassword, setTempPassword] = useState<string | null>(null)
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteSuccess, setInviteSuccess] = useState(false)
+  const [inviteError, setInviteError] = useState<string | null>(null)
+  const [showInvites, setShowInvites] = useState(false)
 
   const { user: currentUser } = useAuthStore()
   const queryClient = useQueryClient()
@@ -79,6 +83,32 @@ export function AdminUsersPage() {
     },
   })
 
+  const invitesQuery = useQuery({
+    queryKey: ['admin', 'invites'],
+    queryFn: () => adminApi.getInvites(1, 50),
+    enabled: showInvites,
+  })
+
+  const createInviteMutation = useMutation({
+    mutationFn: (email: string) => adminApi.createInvite({ email }),
+    onSuccess: () => {
+      setInviteSuccess(true)
+      setInviteError(null)
+      queryClient.invalidateQueries({ queryKey: ['admin', 'invites'] })
+    },
+    onError: (err) => {
+      const apiError = err as unknown as ApiError
+      setInviteError(apiError?.error?.message || 'Failed to send invite')
+    },
+  })
+
+  const revokeInviteMutation = useMutation({
+    mutationFn: (inviteId: string) => adminApi.revokeInvite(inviteId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'invites'] })
+    },
+  })
+
   const handleAction = (user: AdminUser, action: DialogAction) => {
     setSelectedUser(user)
     setDialogType(action)
@@ -100,13 +130,18 @@ export function AdminUsersPage() {
       updateRoleMutation.mutate({ userId: selectedUser.id, role: 'admin' })
     } else if (dialogType === 'removeAdmin') {
       updateRoleMutation.mutate({ userId: selectedUser.id, role: 'subscriber' })
+    } else if (dialogType === 'invite') {
+      if (inviteEmail.trim()) {
+        createInviteMutation.mutate(inviteEmail.trim())
+      }
     }
   }
 
   const isActionPending = updateStatusMutation.isPending ||
     resetPasswordMutation.isPending ||
     deleteUserMutation.isPending ||
-    updateRoleMutation.isPending
+    updateRoleMutation.isPending ||
+    createInviteMutation.isPending
 
   return (
     <div className="space-y-6">
@@ -117,6 +152,15 @@ export function AdminUsersPage() {
             Manage user accounts and memberships.
           </p>
         </div>
+        <Button onClick={() => {
+          setDialogType('invite')
+          setInviteEmail('')
+          setInviteSuccess(false)
+          setInviteError(null)
+        }}>
+          <UserPlus className="h-4 w-4 mr-2" />
+          Invite Admin
+        </Button>
       </div>
 
       {isError && (
@@ -258,10 +302,69 @@ export function AdminUsersPage() {
         </CardContent>
       </Card>
 
+      {/* Pending Invites */}
+      <Card>
+        <CardHeader>
+          <button
+            onClick={() => setShowInvites(!showInvites)}
+            className="flex items-center gap-2 text-sm font-medium text-left w-full"
+          >
+            {showInvites ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            Pending Invites
+          </button>
+        </CardHeader>
+        {showInvites && (
+          <CardContent>
+            {invitesQuery.isLoading ? (
+              <div className="flex justify-center py-4">
+                <Loader2 className="h-6 w-6 animate-spin" />
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {invitesQuery.data?.items
+                  .filter((inv: AdminInvite) => !inv.accepted_at && !inv.revoked_at && new Date(inv.expires_at) > new Date())
+                  .map((invite: AdminInvite) => (
+                    <div key={invite.id} className="flex items-center justify-between py-2 border-b last:border-0">
+                      <div className="flex items-center gap-3">
+                        <Mail className="h-4 w-4 text-muted-foreground" />
+                        <div>
+                          <p className="text-sm font-medium">{invite.email}</p>
+                          <p className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            Expires {formatRelativeTime(invite.expires_at)}
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => revokeInviteMutation.mutate(invite.id)}
+                        disabled={revokeInviteMutation.isPending}
+                        aria-label="Revoke invite"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                {invitesQuery.data?.items.filter(
+                  (inv: AdminInvite) => !inv.accepted_at && !inv.revoked_at && new Date(inv.expires_at) > new Date()
+                ).length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    No pending invites
+                  </p>
+                )}
+              </div>
+            )}
+          </CardContent>
+        )}
+      </Card>
+
       <Dialog open={dialogType !== null} onOpenChange={() => {
         setDialogType(null)
         setSelectedUser(null)
         setTempPassword(null)
+        setInviteSuccess(false)
+        setInviteError(null)
       }}>
         <DialogContent>
           <DialogHeader>
@@ -272,6 +375,7 @@ export function AdminUsersPage() {
               {dialogType === 'delete' && 'Delete User'}
               {dialogType === 'makeAdmin' && 'Make Admin'}
               {dialogType === 'removeAdmin' && 'Remove Admin'}
+              {dialogType === 'invite' && 'Invite Admin'}
             </DialogTitle>
             <DialogDescription>
               {dialogType === 'deactivate' && `Are you sure you want to deactivate ${selectedUser?.email}? They will lose access to all applications.`}
@@ -284,6 +388,8 @@ export function AdminUsersPage() {
               {dialogType === 'delete' && `Are you sure you want to delete ${selectedUser?.email}? This action cannot be undone.`}
               {dialogType === 'makeAdmin' && `Are you sure you want to make ${selectedUser?.email} an admin? They will have full access to the admin panel.`}
               {dialogType === 'removeAdmin' && `Are you sure you want to remove admin privileges from ${selectedUser?.email}?`}
+              {dialogType === 'invite' && !inviteSuccess && 'Send an invite link to grant admin access. If the user already has an account, they will be upgraded.'}
+              {dialogType === 'invite' && inviteSuccess && `Invite sent to ${inviteEmail}. They will receive an email with a link to accept.`}
             </DialogDescription>
           </DialogHeader>
 
@@ -293,12 +399,37 @@ export function AdminUsersPage() {
             </div>
           )}
 
+          {dialogType === 'invite' && !inviteSuccess && (
+            <div className="space-y-3">
+              {inviteError && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{inviteError}</AlertDescription>
+                </Alert>
+              )}
+              <Input
+                type="email"
+                placeholder="email@example.com"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    confirmAction()
+                  }
+                }}
+              />
+            </div>
+          )}
+
           <DialogFooter>
-            {tempPassword ? (
+            {tempPassword || inviteSuccess ? (
               <Button onClick={() => {
                 setDialogType(null)
                 setSelectedUser(null)
                 setTempPassword(null)
+                setInviteSuccess(false)
+                setInviteError(null)
               }}>
                 Done
               </Button>
@@ -313,12 +444,12 @@ export function AdminUsersPage() {
                 <Button
                   variant={dialogType === 'deactivate' || dialogType === 'delete' || dialogType === 'removeAdmin' ? 'destructive' : 'default'}
                   onClick={confirmAction}
-                  disabled={isActionPending}
+                  disabled={isActionPending || (dialogType === 'invite' && !inviteEmail.trim())}
                 >
                   {isActionPending && (
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   )}
-                  Confirm
+                  {dialogType === 'invite' ? 'Send Invite' : 'Confirm'}
                 </Button>
               </>
             )}

@@ -135,6 +135,11 @@ impl EmailService {
         templates.add_raw_template("feedback_response.txt", include_str!("../../templates/emails/feedback_response.txt"))
             .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
 
+        templates.add_raw_template("admin_invite.html", include_str!("../../templates/emails/admin_invite.html"))
+            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
+        templates.add_raw_template("admin_invite.txt", include_str!("../../templates/emails/admin_invite.txt"))
+            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
+
         Ok(Self {
             transport,
             templates,
@@ -520,6 +525,35 @@ impl EmailService {
         self.send_email(
             email,
             &format!("Response to your feedback - {}", self.config.app_name),
+            html,
+            text,
+        )
+        .await
+    }
+
+    /// Send admin invite email
+    pub async fn send_admin_invite(&self, email: &str, token: &str) -> Result<(), AppError> {
+        let invite_url = format!(
+            "{}/invite/accept?token={}",
+            self.config.base_url, token
+        );
+
+        if !self.config.enabled {
+            tracing::info!(
+                email = %email,
+                link = %invite_url,
+                "Admin invite link (dev mode - not sending email)"
+            );
+            return Ok(());
+        }
+
+        let mut context = self.base_context();
+        context.insert("invite_url", &invite_url);
+
+        let (html, text) = self.render_template("admin_invite", &context)?;
+        self.send_email(
+            email,
+            &format!("You've been invited to join {} as an admin", self.config.app_name),
             html,
             text,
         )

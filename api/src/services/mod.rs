@@ -11,7 +11,7 @@ pub mod totp;
 pub mod webhook;
 
 // Re-export service types
-pub use auth::{AuthService, AuthTokens, LoginResult, MagicLinkResult};
+pub use auth::{AcceptInviteResult, AuthService, AuthTokens, LoginResult, MagicLinkResult};
 pub use email::EmailService;
 pub use jwt::{AccessTokenClaims, JwtConfig, JwtService, RefreshTokenClaims, TwoFactorChallengeClaims};
 pub use password::PasswordService;
