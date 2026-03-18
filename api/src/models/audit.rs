@@ -48,6 +48,9 @@ pub enum AuditAction {
     FeedbackRestored,
     ApplicationCreated,
     ApplicationDeleted,
+    AdminUserRoleChanged,
+    AdminUserDeleted,
+    ApplicationUpdated,
 }
 
 impl AuditAction {
@@ -90,6 +93,9 @@ impl AuditAction {
             AuditAction::FeedbackRestored => "feedback_restored",
             AuditAction::ApplicationCreated => "application_created",
             AuditAction::ApplicationDeleted => "application_deleted",
+            AuditAction::AdminUserRoleChanged => "admin_user_role_changed",
+            AuditAction::AdminUserDeleted => "admin_user_deleted",
+            AuditAction::ApplicationUpdated => "application_updated",
         }
     }
 
@@ -105,6 +111,9 @@ impl AuditAction {
                 | AuditAction::ApplicationMaintenanceToggled
                 | AuditAction::ApplicationCreated
                 | AuditAction::ApplicationDeleted
+                | AuditAction::ApplicationUpdated
+                | AuditAction::AdminUserRoleChanged
+                | AuditAction::AdminUserDeleted
                 | AuditAction::FeedbackResponded
                 | AuditAction::FeedbackDeleted
                 | AuditAction::FeedbackRestored
@@ -209,6 +218,16 @@ impl CreateAuditLog {
         self
     }
 
+    pub fn with_old_values(mut self, old_values: JsonValue) -> Self {
+        self.old_values = Some(old_values);
+        self
+    }
+
+    pub fn with_new_values(mut self, new_values: JsonValue) -> Self {
+        self.new_values = Some(new_values);
+        self
+    }
+
     pub fn with_metadata(mut self, metadata: JsonValue) -> Self {
         self.metadata = Some(metadata);
         self
@@ -285,6 +304,9 @@ mod tests {
         assert_eq!(AuditAction::AdminUserImpersonated.as_str(), "admin_user_impersonated");
         assert_eq!(AuditAction::FeedbackSubmitted.as_str(), "feedback_submitted");
         assert_eq!(AuditAction::ApplicationDeleted.as_str(), "application_deleted");
+        assert_eq!(AuditAction::AdminUserRoleChanged.as_str(), "admin_user_role_changed");
+        assert_eq!(AuditAction::AdminUserDeleted.as_str(), "admin_user_deleted");
+        assert_eq!(AuditAction::ApplicationUpdated.as_str(), "application_updated");
     }
 
     #[test]
@@ -295,6 +317,9 @@ mod tests {
         assert!(AuditAction::FeedbackResponded.is_admin_action());
         assert!(AuditAction::ApplicationCreated.is_admin_action());
         assert!(AuditAction::ApplicationDeleted.is_admin_action());
+        assert!(AuditAction::ApplicationUpdated.is_admin_action());
+        assert!(AuditAction::AdminUserRoleChanged.is_admin_action());
+        assert!(AuditAction::AdminUserDeleted.is_admin_action());
 
         assert!(!AuditAction::UserLogin.is_admin_action());
         assert!(!AuditAction::UserRegistered.is_admin_action());
@@ -345,6 +370,16 @@ mod tests {
         assert_eq!(log.resource_id, Some(user_id));
         assert!(log.metadata.is_some());
         assert_eq!(log.severity.as_str(), "warning");
+    }
+
+    #[test]
+    fn create_audit_log_with_old_new_values() {
+        let log = CreateAuditLog::new(AuditAction::AdminUserRoleChanged)
+            .with_old_values(serde_json::json!({"role": "subscriber"}))
+            .with_new_values(serde_json::json!({"role": "admin"}));
+
+        assert_eq!(log.old_values, Some(serde_json::json!({"role": "subscriber"})));
+        assert_eq!(log.new_values, Some(serde_json::json!({"role": "admin"})));
     }
 
     #[test]

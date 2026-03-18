@@ -8,8 +8,8 @@ use sqlx::PgPool;
 use std::sync::Arc;
 
 use crate::errors::AppError;
-use crate::models::{CreatePayment, CreateMembership, PaymentStatus, MembershipStatus};
-use crate::repositories::{PaymentRepository, MembershipRepository, UserRepository};
+use crate::models::{AuditAction, AuditSeverity, CreateAuditLog, CreatePayment, CreateMembership, PaymentStatus, MembershipStatus};
+use crate::repositories::{AuditLogRepository, PaymentRepository, MembershipRepository, UserRepository};
 use crate::services::{EmailService, StripeService};
 
 /// POST /v1/webhooks/stripe
@@ -110,10 +110,21 @@ async fn handle_checkout_completed(
 
     tracing::info!(user_id = %user_id, "Checkout completed, membership activated");
 
-    // Send welcome email
+    // Send welcome email and audit log
     if let Ok(Some(user)) = UserRepository::find_by_id(pool, user_id).await {
         if let Err(e) = email.send_welcome(&user.email, amount).await {
             tracing::error!(error = %e, user_id = %user_id, "Failed to send welcome email");
+        }
+
+        let audit_log = CreateAuditLog::new(AuditAction::MembershipCreated)
+            .with_actor(user.id, &user.email, &user.role)
+            .with_resource("user", user.id)
+            .with_metadata(serde_json::json!({
+                "source": "stripe_checkout",
+                "amount": amount,
+            }));
+        if let Err(e) = AuditLogRepository::create(pool, audit_log).await {
+            tracing::error!(error = %e, user_id = %user_id, "Failed to create audit log for checkout");
         }
     }
 
@@ -169,7 +180,7 @@ async fn handle_subscription_created(
         .unwrap_or("active");
 
     // Create membership record
-    MembershipRepository::create(
+    let membership = MembershipRepository::create(
         pool,
         CreateMembership {
             user_id: user.id,
@@ -189,6 +200,18 @@ async fn handle_subscription_created(
         membership_id = %stripe_subscription_id,
         "Membership created"
     );
+
+    let audit_log = CreateAuditLog::new(AuditAction::MembershipCreated)
+        .with_actor(user.id, &user.email, &user.role)
+        .with_resource("membership", membership.id)
+        .with_metadata(serde_json::json!({
+            "stripe_subscription_id": stripe_subscription_id,
+            "stripe_price_id": price_id,
+            "amount": amount,
+        }));
+    if let Err(e) = AuditLogRepository::create(pool, audit_log).await {
+        tracing::error!(error = %e, user_id = %user.id, "Failed to create audit log for subscription created");
+    }
 
     Ok(())
 }
@@ -233,6 +256,29 @@ async fn handle_subscription_updated(
             status = %status,
             "Membership updated"
         );
+
+        // Audit log
+        let action = if cancel_at_period_end {
+            AuditAction::MembershipCanceled
+        } else if status == "active" {
+            AuditAction::MembershipReactivated
+        } else {
+            AuditAction::MembershipCanceled
+        };
+
+        if let Ok(Some(user)) = UserRepository::find_by_id(pool, membership.user_id).await {
+            let audit_log = CreateAuditLog::new(action)
+                .with_actor(user.id, &user.email, &user.role)
+                .with_resource("membership", membership.id)
+                .with_metadata(serde_json::json!({
+                    "stripe_subscription_id": stripe_subscription_id,
+                    "status": status,
+                    "cancel_at_period_end": cancel_at_period_end,
+                }));
+            if let Err(e) = AuditLogRepository::create(pool, audit_log).await {
+                tracing::error!(error = %e, "Failed to create audit log for subscription update");
+            }
+        }
     }
 
     Ok(())
@@ -264,10 +310,21 @@ async fn handle_subscription_deleted(
             "Membership deleted"
         );
 
-        // Send cancellation email
+        // Send cancellation email and audit log
         if let Ok(Some(user)) = UserRepository::find_by_id(pool, membership.user_id).await {
             if let Err(e) = email.send_membership_canceled(&user.email, membership.current_period_end).await {
                 tracing::error!(error = %e, user_id = %membership.user_id, "Failed to send membership canceled email");
+            }
+
+            let audit_log = CreateAuditLog::new(AuditAction::MembershipCanceled)
+                .with_actor(user.id, &user.email, &user.role)
+                .with_resource("membership", membership.id)
+                .with_metadata(serde_json::json!({
+                    "source": "stripe_subscription_deleted",
+                    "stripe_subscription_id": stripe_subscription_id,
+                }));
+            if let Err(e) = AuditLogRepository::create(pool, audit_log).await {
+                tracing::error!(error = %e, user_id = %user.id, "Failed to create audit log for subscription deleted");
             }
         }
     }
@@ -333,7 +390,8 @@ async fn handle_payment_succeeded(
     .await?;
 
     // Clear any grace period if exists
-    if user.grace_period_start.is_some() {
+    let had_grace_period = user.grace_period_start.is_some();
+    if had_grace_period {
         let mut tx = pool.begin().await?;
         UserRepository::clear_grace_period(&mut *tx, user.id).await?;
         UserRepository::update_membership_status(&mut *tx, user.id, MembershipStatus::Active).await?;
@@ -345,6 +403,28 @@ async fn handle_payment_succeeded(
         amount = amount,
         "Payment succeeded"
     );
+
+    // Audit log for payment
+    let audit_log = CreateAuditLog::new(AuditAction::PaymentSucceeded)
+        .with_actor(user.id, &user.email, &user.role)
+        .with_resource("user", user.id)
+        .with_metadata(serde_json::json!({
+            "amount": amount,
+            "currency": "usd",
+        }));
+    if let Err(e) = AuditLogRepository::create(pool, audit_log).await {
+        tracing::error!(error = %e, user_id = %user.id, "Failed to create audit log for payment succeeded");
+    }
+
+    // Audit log for grace period ended
+    if had_grace_period {
+        let audit_log = CreateAuditLog::new(AuditAction::GracePeriodEnded)
+            .with_actor(user.id, &user.email, &user.role)
+            .with_resource("user", user.id);
+        if let Err(e) = AuditLogRepository::create(pool, audit_log).await {
+            tracing::error!(error = %e, user_id = %user.id, "Failed to create audit log for grace period ended");
+        }
+    }
 
     // Send payment receipt email
     if let Err(e) = email.send_payment_succeeded(&user.email, amount).await {
@@ -407,6 +487,19 @@ async fn handle_payment_failed(
     )
     .await?;
 
+    // Audit log for payment failure
+    let audit_log = CreateAuditLog::new(AuditAction::PaymentFailed)
+        .with_actor(user.id, &user.email, &user.role)
+        .with_resource("user", user.id)
+        .with_severity(AuditSeverity::Warning)
+        .with_metadata(serde_json::json!({
+            "amount": amount,
+            "currency": "usd",
+        }));
+    if let Err(e) = AuditLogRepository::create(pool, audit_log).await {
+        tracing::error!(error = %e, user_id = %user.id, "Failed to create audit log for payment failed");
+    }
+
     // Start grace period if not already started
     if user.grace_period_start.is_none() {
         let now = Utc::now();
@@ -422,6 +515,18 @@ async fn handle_payment_failed(
             grace_period_end = %grace_end,
             "Payment failed, grace period started"
         );
+
+        // Audit log for grace period started
+        let audit_log = CreateAuditLog::new(AuditAction::GracePeriodStarted)
+            .with_actor(user.id, &user.email, &user.role)
+            .with_resource("user", user.id)
+            .with_severity(AuditSeverity::Warning)
+            .with_metadata(serde_json::json!({
+                "grace_period_end": grace_end.to_rfc3339(),
+            }));
+        if let Err(e) = AuditLogRepository::create(pool, audit_log).await {
+            tracing::error!(error = %e, user_id = %user.id, "Failed to create audit log for grace period started");
+        }
     }
 
     // Send payment failed email

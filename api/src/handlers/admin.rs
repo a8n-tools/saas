@@ -93,7 +93,7 @@ pub struct UpdateUserStatusRequest {
 /// Activate or deactivate a user
 pub async fn update_user_status(
     req: HttpRequest,
-    _admin: AdminUser,
+    admin: AdminUser,
     pool: web::Data<PgPool>,
     path: web::Path<uuid::Uuid>,
     body: web::Json<UpdateUserStatusRequest>,
@@ -109,7 +109,19 @@ pub async fn update_user_status(
             "Cannot reactivate deleted users through this endpoint",
         ));
     } else {
+        let target_user = UserRepository::find_by_id(&pool, user_id)
+            .await?
+            .ok_or(AppError::not_found("User"))?;
+
         UserRepository::soft_delete(&pool, user_id).await?;
+
+        let audit_log = CreateAuditLog::new(AuditAction::AdminUserDeactivated)
+            .with_actor(admin.0.sub, &admin.0.email, &admin.0.role)
+            .with_resource("user", user_id)
+            .with_metadata(serde_json::json!({
+                "target_email": target_user.email,
+            }));
+        AuditLogRepository::create(&pool, audit_log).await?;
     }
 
     Ok(success_no_data(request_id))
@@ -150,6 +162,15 @@ pub async fn delete_user(
         "Admin deleted user"
     );
 
+    let audit_log = CreateAuditLog::new(AuditAction::AdminUserDeleted)
+        .with_actor(admin.0.sub, &admin.0.email, &admin.0.role)
+        .with_resource("user", user_id)
+        .with_metadata(serde_json::json!({
+            "target_email": target_user.email,
+            "target_role": target_user.role,
+        }));
+    AuditLogRepository::create(&pool, audit_log).await?;
+
     Ok(success_no_data(request_id))
 }
 
@@ -182,6 +203,11 @@ pub async fn update_user_role(
         return Err(AppError::validation("user_id", "Cannot change your own role"));
     }
 
+    let target_user = UserRepository::find_by_id(&pool, user_id)
+        .await?
+        .ok_or(AppError::not_found("User"))?;
+    let old_role = target_user.role.clone();
+
     let updated_user = UserRepository::update_role(&pool, user_id, &body.role).await?;
 
     tracing::info!(
@@ -190,6 +216,16 @@ pub async fn update_user_role(
         new_role = %body.role,
         "Admin changed user role"
     );
+
+    let audit_log = CreateAuditLog::new(AuditAction::AdminUserRoleChanged)
+        .with_actor(admin.0.sub, &admin.0.email, &admin.0.role)
+        .with_resource("user", user_id)
+        .with_old_values(serde_json::json!({ "role": old_role }))
+        .with_new_values(serde_json::json!({ "role": &body.role }))
+        .with_metadata(serde_json::json!({
+            "target_email": target_user.email,
+        }));
+    AuditLogRepository::create(&pool, audit_log).await?;
 
     Ok(success(UserResponse::from(updated_user), request_id))
 }
@@ -210,7 +246,7 @@ pub struct GrantMembershipRequest {
 /// Grant a membership to a user
 pub async fn grant_membership(
     req: HttpRequest,
-    _admin: AdminUser,
+    admin: AdminUser,
     pool: web::Data<PgPool>,
     body: web::Json<GrantMembershipRequest>,
 ) -> Result<HttpResponse, AppError> {
@@ -221,10 +257,20 @@ pub async fn grant_membership(
         .await?;
 
     // Lock price if requested
-    if body.price_locked.unwrap_or(false) {
-        let amount = body.locked_price_amount.unwrap_or(300);
-        UserRepository::lock_price(pool.get_ref(), body.user_id, "price_admin_grant", amount).await?;
+    let price_locked = body.price_locked.unwrap_or(false);
+    let locked_amount = body.locked_price_amount.unwrap_or(300);
+    if price_locked {
+        UserRepository::lock_price(pool.get_ref(), body.user_id, "price_admin_grant", locked_amount).await?;
     }
+
+    let audit_log = CreateAuditLog::new(AuditAction::AdminMembershipGranted)
+        .with_actor(admin.0.sub, &admin.0.email, &admin.0.role)
+        .with_resource("user", body.user_id)
+        .with_metadata(serde_json::json!({
+            "price_locked": price_locked,
+            "locked_price_amount": locked_amount,
+        }));
+    AuditLogRepository::create(&pool, audit_log).await?;
 
     Ok(success_no_data(request_id))
 }
@@ -233,7 +279,7 @@ pub async fn grant_membership(
 /// Revoke a membership from a user
 pub async fn revoke_membership(
     req: HttpRequest,
-    _admin: AdminUser,
+    admin: AdminUser,
     pool: web::Data<PgPool>,
     body: web::Json<GrantMembershipRequest>,
 ) -> Result<HttpResponse, AppError> {
@@ -244,6 +290,11 @@ pub async fn revoke_membership(
 
     // Clear any grace period
     UserRepository::clear_grace_period(pool.get_ref(), body.user_id).await?;
+
+    let audit_log = CreateAuditLog::new(AuditAction::AdminMembershipRevoked)
+        .with_actor(admin.0.sub, &admin.0.email, &admin.0.role)
+        .with_resource("user", body.user_id);
+    AuditLogRepository::create(&pool, audit_log).await?;
 
     Ok(success_no_data(request_id))
 }
@@ -317,7 +368,7 @@ pub async fn swap_application_order(
 /// Update an application
 pub async fn update_application(
     req: HttpRequest,
-    _admin: AdminUser,
+    admin: AdminUser,
     pool: web::Data<PgPool>,
     path: web::Path<uuid::Uuid>,
     body: web::Json<UpdateApplication>,
@@ -346,6 +397,34 @@ pub async fn update_application(
                 ws.notify_active_change(&app_clone).await;
             }
         });
+    }
+
+    // Audit log for all application updates
+    let audit_log = CreateAuditLog::new(AuditAction::ApplicationUpdated)
+        .with_actor(admin.0.sub, &admin.0.email, &admin.0.role)
+        .with_resource("application", app_id)
+        .with_old_values(serde_json::json!({
+            "name": old_app.name,
+            "is_active": old_app.is_active,
+            "maintenance_mode": old_app.maintenance_mode,
+        }))
+        .with_new_values(serde_json::json!({
+            "name": app.name,
+            "is_active": app.is_active,
+            "maintenance_mode": app.maintenance_mode,
+        }));
+    AuditLogRepository::create(&pool, audit_log).await?;
+
+    // Additional specific log when maintenance mode changes
+    if maintenance_changed {
+        let maintenance_log = CreateAuditLog::new(AuditAction::ApplicationMaintenanceToggled)
+            .with_actor(admin.0.sub, &admin.0.email, &admin.0.role)
+            .with_resource("application", app_id)
+            .with_metadata(serde_json::json!({
+                "application_name": app.name,
+                "maintenance_mode": app.maintenance_mode,
+            }));
+        AuditLogRepository::create(&pool, maintenance_log).await?;
     }
 
     Ok(success(app, request_id))

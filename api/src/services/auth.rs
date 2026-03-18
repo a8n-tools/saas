@@ -313,6 +313,22 @@ impl AuthService {
         // Log the request (don't reveal if email exists)
         tracing::info!(email = %email, "Magic link requested");
 
+        // Audit log
+        let audit_log = if let Ok(Some(user)) = UserRepository::find_by_email(&self.pool, &email).await {
+            CreateAuditLog::new(AuditAction::MagicLinkRequested)
+                .with_actor(user.id, &user.email, &user.role)
+                .with_ip(ip)
+                .with_metadata(serde_json::json!({ "email_known": true }))
+        } else {
+            CreateAuditLog::new(AuditAction::MagicLinkRequested)
+                .with_ip(ip)
+                .with_metadata(serde_json::json!({ "email_known": false, "email": email }))
+        };
+        // Non-critical — don't fail the request if audit logging fails
+        if let Err(e) = AuditLogRepository::create(&self.pool, audit_log).await {
+            tracing::error!(error = %e, "Failed to create audit log for magic link request");
+        }
+
         Ok(token)
     }
 
