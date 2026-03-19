@@ -1,87 +1,108 @@
 [package]
 name = "a8n-api"
-version = "0.1.0"
+version = "0.3.0"
 edition = "2021"
 authors = ["a8n team"]
 description = "Backend API for SaaS platform"
 
 [dependencies]
-# Web framework
 actix-web = "4"
 actix-cors = "0.7"
 actix-rt = "2"
 actix-multipart = "0.7"
-
-# Async runtime
-tokio = { version = "1", features = ["full", "signal"] }
 futures-util = "0.3"
-
-# Database
-sqlx = { version = "0.7", features = ["runtime-tokio", "postgres", "uuid", "chrono", "ipnetwork", "migrate"] }
-
-# Serialization
-serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-
-# Date/Time
-chrono = { version = "0.4", features = ["serde"] }
-
-# UUID
-uuid = { version = "1", features = ["v4", "serde"] }
-
-# Environment
 dotenvy = "0.15"
-
-# Logging
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 tracing-actix-web = "0.7"
-
-# Error handling
 thiserror = "1"
 anyhow = "1"
-
-# Authentication
 jsonwebtoken = "9"
 argon2 = "0.5"
 password-hash = "0.5"
-
-# Cryptography
 rand = "0.8"
 sha2 = "0.10"
 base64 = "0.21"
-
-# Validation
-validator = { version = "0.18", features = ["derive"] }
-
-# HTTP client
-reqwest = { version = "0.11", features = ["json"] }
-
-# IP address handling
 ipnetwork = "0.20"
-
-# Stripe payments
-async-stripe = { version = "0.37", features = ["runtime-tokio-hyper", "checkout", "billing", "webhook-events"] }
-
-# HMAC for webhook verification
 hmac = "0.12"
 hex = "0.4"
-
-# TOTP two-factor authentication
-totp-rs = { version = "5", features = ["gen_secret", "otpauth"] }
 aes-gcm = "0.10"
 data-encoding = "2"
-
-# Email
-lettre = { version = "0.11", features = ["tokio1-native-tls", "builder"] }
 tera = "1"
-
-# Lazy static for compile-time statics
 lazy_static = "1.4"
-
-# URL parsing and encoding
 url = "2"
 urlencoding = "2"
+
+[dependencies.tokio]
+version = "1"
+features = [
+    "full",
+    "signal",
+]
+
+[dependencies.sqlx]
+version = "0.7"
+features = [
+    "runtime-tokio",
+    "postgres",
+    "uuid",
+    "chrono",
+    "ipnetwork",
+    "migrate",
+]
+
+[dependencies.serde]
+version = "1"
+features = ["derive"]
+
+[dependencies.chrono]
+version = "0.4"
+features = ["serde"]
+
+[dependencies.uuid]
+version = "1"
+features = [
+    "v4",
+    "serde",
+]
+
+[dependencies.tracing-subscriber]
+version = "0.3"
+features = [
+    "env-filter",
+    "json",
+]
+
+[dependencies.validator]
+version = "0.18"
+features = ["derive"]
+
+[dependencies.reqwest]
+version = "0.11"
+features = ["json"]
+
+[dependencies.async-stripe]
+version = "0.37"
+features = [
+    "runtime-tokio-hyper",
+    "checkout",
+    "billing",
+    "webhook-events",
+]
+
+[dependencies.totp-rs]
+version = "5"
+features = [
+    "gen_secret",
+    "otpauth",
+]
+
+[dependencies.lettre]
+version = "0.11"
+features = [
+    "tokio1-native-tls",
+    "builder",
+]
 
 [dev-dependencies]
 actix-rt = "2"

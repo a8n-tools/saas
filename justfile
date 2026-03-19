@@ -115,20 +115,41 @@ build-docker-frontend:
 create-release bump:
     #!/usr/bin/env nu
     let bump = "{{ bump }}"
-    let current = (open api/Cargo.toml | get package.version | split row "." | each { into int })
+    if $bump not-in ["major" "minor"] {
+        print $"(ansi red)Usage: just create-release <major|minor>(ansi reset)"
+        exit 1
+    }
+    let cargo_version = (open api/Cargo.toml | get package.version)
+    let frontend_version = (open frontend/package.json | get version)
+    let latest_tag = (git tag --list 'v*' | lines | sort --natural | last | str trim --left --char 'v')
+    # All three sources must agree before we proceed
+    if $cargo_version != $frontend_version or $cargo_version != $latest_tag {
+        print $"(ansi red)Error: version mismatch — all sources must agree before creating a release.(ansi reset)"
+        print ""
+        print $"  api/Cargo.toml:      v($cargo_version)"
+        print $"  frontend/package.json: v($frontend_version)"
+        print $"  latest git tag:        v($latest_tag)"
+        print ""
+        print "Fix the versions so all three match, then retry."
+        exit 1
+    }
+    let current = ($cargo_version | split row "." | each { into int })
     let next = match $bump {
         "major" => [$"($current.0 + 1)" "0" "0"],
         "minor" => [$"($current.0)" $"($current.1 + 1)" "0"],
-        _ => { print $"(ansi red)Usage: just create-release <major|minor>(ansi reset)"; exit 1 }
     }
     let bare = ($next | str join ".")
     let tag = $"v($bare)"
+    let branch = $"release-($tag)"
+    git checkout -b $branch
     open api/Cargo.toml | update package.version $bare | to toml | collect | save --force api/Cargo.toml
-    git add api/Cargo.toml
+    open frontend/package.json | update version $bare | save --force frontend/package.json
+    git add api/Cargo.toml frontend/package.json
     git commit --signoff --message $"Release ($tag)"
     git tag --annotate $tag --message $"Release ($tag)"
-    git push --follow-tags
-    print $"Released ($tag)"
+    git push --set-upstream origin $branch --follow-tags
+    git checkout main
+    print $"Released ($tag) on branch ($branch) — create a PR to merge into main."
 
 # Test the release flow: create major release, cancel CI, delete tag, and revert commit (requires FORGEJO_TOKEN)
 test-release:
