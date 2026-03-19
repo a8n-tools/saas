@@ -13,12 +13,12 @@ use crate::errors::AppError;
 use crate::middleware::{AdminUser, AuthenticatedUser};
 use crate::models::{
     AuditAction, CreateAuditLog, CreateApplication, CreatePasswordResetToken, CreateRefreshToken,
-    DeleteApplicationRequest, MembershipStatus, SwapApplicationOrderRequest, UpdateApplication,
-    UserResponse,
+    DeleteApplicationRequest, MembershipStatus, StripeConfigResponse, SwapApplicationOrderRequest,
+    UpdateApplication, UserResponse,
 };
 use crate::repositories::{
     ApplicationRepository, AuditLogRepository, InviteRepository, MembershipRepository,
-    NotificationRepository, TokenRepository, UserRepository,
+    NotificationRepository, StripeConfigRepository, TokenRepository, UserRepository,
 };
 use crate::responses::{get_request_id, created, paginated, success, success_no_data};
 use crate::services::{AuthService, EmailService, JwtService, PasswordService, TotpService, WebhookService};
@@ -1033,4 +1033,83 @@ pub async fn get_system_health(
     }
 
     Ok(success(response, request_id))
+}
+
+// =============================================================================
+// Stripe Config
+// =============================================================================
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateStripeConfigRequest {
+    pub secret_key: Option<String>,
+    pub webhook_secret: Option<String>,
+    pub price_id_personal: Option<String>,
+    pub price_id_business: Option<String>,
+}
+
+/// GET /v1/admin/stripe
+/// Returns the current Stripe config with secrets masked.
+/// Falls back to env vars if no DB config has been saved yet.
+pub async fn get_stripe_config(
+    req: HttpRequest,
+    _admin: AdminUser,
+    pool: web::Data<PgPool>,
+) -> Result<HttpResponse, AppError> {
+    let request_id = get_request_id(&req);
+
+    let config = StripeConfigRepository::get(&pool).await?;
+
+    let response = if config.secret_key.is_some()
+        || config.webhook_secret.is_some()
+        || config.price_id_personal.is_some()
+        || config.price_id_business.is_some()
+    {
+        StripeConfigResponse::from_db(&config)
+    } else {
+        StripeConfigResponse::from_env()
+    };
+
+    Ok(success(response, request_id))
+}
+
+/// PUT /v1/admin/stripe
+/// Updates Stripe config. Only fields with a non-empty value are written; omitted or
+/// empty-string fields leave the existing DB value unchanged.
+pub async fn update_stripe_config(
+    req: HttpRequest,
+    admin: AdminUser,
+    pool: web::Data<PgPool>,
+    body: web::Json<UpdateStripeConfigRequest>,
+) -> Result<HttpResponse, AppError> {
+    let request_id = get_request_id(&req);
+
+    // Treat empty strings the same as None — user left the field blank
+    let secret_key = body.secret_key.as_deref().filter(|s| !s.is_empty());
+    let webhook_secret = body.webhook_secret.as_deref().filter(|s| !s.is_empty());
+    let price_id_personal = body.price_id_personal.as_deref().filter(|s| !s.is_empty());
+    let price_id_business = body.price_id_business.as_deref().filter(|s| !s.is_empty());
+
+    let updated = StripeConfigRepository::update(
+        &pool,
+        secret_key,
+        webhook_secret,
+        price_id_personal,
+        price_id_business,
+        admin.0.sub,
+    )
+    .await?;
+
+    let audit_log = CreateAuditLog::new(AuditAction::AdminStripeConfigUpdated)
+        .with_actor(admin.0.sub, &admin.0.email, &admin.0.role)
+        .with_metadata(serde_json::json!({
+            "fields_updated": {
+                "secret_key": secret_key.is_some(),
+                "webhook_secret": webhook_secret.is_some(),
+                "price_id_personal": price_id_personal.is_some(),
+                "price_id_business": price_id_business.is_some(),
+            }
+        }));
+    AuditLogRepository::create(&pool, audit_log).await?;
+
+    Ok(success(StripeConfigResponse::from_db(&updated), request_id))
 }
