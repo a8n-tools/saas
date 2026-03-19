@@ -140,13 +140,16 @@ create-release bump:
     }
     let bare = ($next | str join ".")
     let tag = $"v($bare)"
+    let branch = $"release-($tag)"
+    git checkout -b $branch
     open api/Cargo.toml | update package.version $bare | to toml | collect | save --force api/Cargo.toml
     open frontend/package.json | update version $bare | save --force frontend/package.json
     git add api/Cargo.toml frontend/package.json
     git commit --signoff --message $"Release ($tag)"
     git tag --annotate $tag --message $"Release ($tag)"
-    git push --follow-tags
-    print $"Released ($tag)"
+    git push --set-upstream origin $branch --follow-tags
+    git checkout main
+    print $"Released ($tag) on branch ($branch) — create a PR to merge into main."
 
 # Test the release flow: create major release, cancel CI, delete tag, and revert commit (requires FORGEJO_TOKEN)
 test-release:
