@@ -15,10 +15,14 @@ impl StripeConfigRepository {
     }
 
     /// Updates only the fields that are `Some`. `None` leaves the existing DB value unchanged.
+    /// Secrets are passed as pre-encrypted (ciphertext, nonce) pairs.
+    #[allow(clippy::too_many_arguments)]
     pub async fn update(
         pool: &PgPool,
-        secret_key: Option<&str>,
-        webhook_secret: Option<&str>,
+        secret_key: Option<Vec<u8>>,
+        secret_key_nonce: Option<Vec<u8>>,
+        webhook_secret: Option<Vec<u8>>,
+        webhook_secret_nonce: Option<Vec<u8>>,
         price_id_personal: Option<&str>,
         price_id_business: Option<&str>,
         updated_by: Uuid,
@@ -27,18 +31,22 @@ impl StripeConfigRepository {
             r#"
             UPDATE stripe_config
             SET
-                secret_key        = CASE WHEN $1::TEXT IS NOT NULL THEN $1 ELSE secret_key END,
-                webhook_secret    = CASE WHEN $2::TEXT IS NOT NULL THEN $2 ELSE webhook_secret END,
-                price_id_personal = CASE WHEN $3::TEXT IS NOT NULL THEN $3 ELSE price_id_personal END,
-                price_id_business = CASE WHEN $4::TEXT IS NOT NULL THEN $4 ELSE price_id_business END,
-                updated_at        = NOW(),
-                updated_by        = $5
+                secret_key            = CASE WHEN $1::BYTEA IS NOT NULL THEN $1 ELSE secret_key END,
+                secret_key_nonce      = CASE WHEN $1::BYTEA IS NOT NULL THEN $2 ELSE secret_key_nonce END,
+                webhook_secret        = CASE WHEN $3::BYTEA IS NOT NULL THEN $3 ELSE webhook_secret END,
+                webhook_secret_nonce  = CASE WHEN $3::BYTEA IS NOT NULL THEN $4 ELSE webhook_secret_nonce END,
+                price_id_personal     = CASE WHEN $5::TEXT IS NOT NULL THEN $5 ELSE price_id_personal END,
+                price_id_business     = CASE WHEN $6::TEXT IS NOT NULL THEN $6 ELSE price_id_business END,
+                updated_at            = NOW(),
+                updated_by            = $7
             WHERE id = 1
             RETURNING *
             "#,
         )
         .bind(secret_key)
+        .bind(secret_key_nonce)
         .bind(webhook_secret)
+        .bind(webhook_secret_nonce)
         .bind(price_id_personal)
         .bind(price_id_business)
         .bind(updated_by)

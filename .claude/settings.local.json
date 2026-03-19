@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(grep -r \"react-hook-form\\\\|useForm\\\\|FormControl\\\\|Dialog\" /home/long/saas/frontend/src/pages/admin/*.tsx)",
-      "Bash(grep -r \"toast\\\\|useToast\\\\|sonner\" /home/long/saas/frontend/src --include=*.tsx --include=*.ts -l)"
+      "Bash(grep -r \"toast\\\\|useToast\\\\|sonner\" /home/long/saas/frontend/src --include=*.tsx --include=*.ts -l)",
+      "Bash(cargo check:*)"
     ]
   }
 }

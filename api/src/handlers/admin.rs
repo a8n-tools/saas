@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 use chrono::{Duration, Utc};
 
+use crate::config::Config;
 use crate::errors::AppError;
 use crate::middleware::{AdminUser, AuthenticatedUser};
 use crate::models::{
@@ -16,6 +17,7 @@ use crate::models::{
     DeleteApplicationRequest, MembershipStatus, StripeConfigResponse, SwapApplicationOrderRequest,
     UpdateApplication, UserResponse,
 };
+use crate::models::stripe::encrypt_secret;
 use crate::repositories::{
     ApplicationRepository, AuditLogRepository, InviteRepository, MembershipRepository,
     NotificationRepository, StripeConfigRepository, TokenRepository, UserRepository,
@@ -1054,17 +1056,18 @@ pub async fn get_stripe_config(
     req: HttpRequest,
     _admin: AdminUser,
     pool: web::Data<PgPool>,
+    config: web::Data<Config>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
 
-    let config = StripeConfigRepository::get(&pool).await?;
+    let db = StripeConfigRepository::get(&pool).await?;
 
-    let response = if config.secret_key.is_some()
-        || config.webhook_secret.is_some()
-        || config.price_id_personal.is_some()
-        || config.price_id_business.is_some()
+    let response = if db.secret_key.is_some()
+        || db.webhook_secret.is_some()
+        || db.price_id_personal.is_some()
+        || db.price_id_business.is_some()
     {
-        StripeConfigResponse::from_db(&config)
+        StripeConfigResponse::from_db(&db, &config.totp_encryption_key)?
     } else {
         StripeConfigResponse::from_env()
     };
@@ -1079,20 +1082,40 @@ pub async fn update_stripe_config(
     req: HttpRequest,
     admin: AdminUser,
     pool: web::Data<PgPool>,
+    config: web::Data<Config>,
     body: web::Json<UpdateStripeConfigRequest>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
+    let key = &config.totp_encryption_key;
 
     // Treat empty strings the same as None — user left the field blank
-    let secret_key = body.secret_key.as_deref().filter(|s| !s.is_empty());
-    let webhook_secret = body.webhook_secret.as_deref().filter(|s| !s.is_empty());
+    let secret_key_plain = body.secret_key.as_deref().filter(|s| !s.is_empty());
+    let webhook_secret_plain = body.webhook_secret.as_deref().filter(|s| !s.is_empty());
     let price_id_personal = body.price_id_personal.as_deref().filter(|s| !s.is_empty());
     let price_id_business = body.price_id_business.as_deref().filter(|s| !s.is_empty());
 
+    // Encrypt secrets before storing
+    let (secret_key_enc, secret_key_nonce) = match secret_key_plain {
+        Some(sk) => {
+            let (ct, nonce) = encrypt_secret(key, sk)?;
+            (Some(ct), Some(nonce))
+        }
+        None => (None, None),
+    };
+    let (webhook_secret_enc, webhook_secret_nonce) = match webhook_secret_plain {
+        Some(ws) => {
+            let (ct, nonce) = encrypt_secret(key, ws)?;
+            (Some(ct), Some(nonce))
+        }
+        None => (None, None),
+    };
+
     let updated = StripeConfigRepository::update(
         &pool,
-        secret_key,
-        webhook_secret,
+        secret_key_enc,
+        secret_key_nonce,
+        webhook_secret_enc,
+        webhook_secret_nonce,
         price_id_personal,
         price_id_business,
         admin.0.sub,
@@ -1103,13 +1126,13 @@ pub async fn update_stripe_config(
         .with_actor(admin.0.sub, &admin.0.email, &admin.0.role)
         .with_metadata(serde_json::json!({
             "fields_updated": {
-                "secret_key": secret_key.is_some(),
-                "webhook_secret": webhook_secret.is_some(),
+                "secret_key": secret_key_plain.is_some(),
+                "webhook_secret": webhook_secret_plain.is_some(),
                 "price_id_personal": price_id_personal.is_some(),
                 "price_id_business": price_id_business.is_some(),
             }
         }));
     AuditLogRepository::create(&pool, audit_log).await?;
 
-    Ok(success(StripeConfigResponse::from_db(&updated), request_id))
+    Ok(success(StripeConfigResponse::from_db(&updated, key)?, request_id))
 }

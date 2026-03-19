@@ -1,17 +1,51 @@
+use aes_gcm::{
+    aead::{Aead, KeyInit},
+    Aes256Gcm, Nonce,
+};
 use chrono::{DateTime, Utc};
+use rand::RngCore;
 use serde::Serialize;
 use sqlx::FromRow;
 use uuid::Uuid;
 
+use crate::errors::AppError;
+
 #[derive(Debug, Clone, FromRow)]
 pub struct StripeConfig {
     pub id: i32,
-    pub secret_key: Option<String>,
-    pub webhook_secret: Option<String>,
+    pub secret_key: Option<Vec<u8>>,
+    pub secret_key_nonce: Option<Vec<u8>>,
+    pub webhook_secret: Option<Vec<u8>>,
+    pub webhook_secret_nonce: Option<Vec<u8>>,
     pub price_id_personal: Option<String>,
     pub price_id_business: Option<String>,
     pub updated_at: DateTime<Utc>,
     pub updated_by: Option<Uuid>,
+}
+
+/// Encrypt plaintext with AES-256-GCM. Returns (ciphertext, nonce).
+pub fn encrypt_secret(key: &[u8; 32], plaintext: &str) -> Result<(Vec<u8>, Vec<u8>), AppError> {
+    let cipher = Aes256Gcm::new_from_slice(key)
+        .map_err(|e| AppError::internal(format!("Invalid encryption key: {}", e)))?;
+    let mut nonce_bytes = [0u8; 12];
+    rand::thread_rng().fill_bytes(&mut nonce_bytes);
+    let nonce = Nonce::from_slice(&nonce_bytes);
+    let encrypted = cipher
+        .encrypt(nonce, plaintext.as_bytes())
+        .map_err(|e| AppError::internal(format!("Encryption failed: {}", e)))?;
+    Ok((encrypted, nonce_bytes.to_vec()))
+}
+
+/// Decrypt AES-256-GCM ciphertext. Returns plaintext string.
+pub fn decrypt_secret(key: &[u8; 32], ciphertext: &[u8], nonce: &[u8]) -> Result<String, AppError> {
+    let cipher = Aes256Gcm::new_from_slice(key)
+        .map_err(|e| AppError::internal(format!("Invalid encryption key: {}", e)))?;
+    let nonce = Nonce::from_slice(nonce);
+    let decrypted = cipher
+        .decrypt(nonce, ciphertext)
+        .map_err(|e| AppError::internal(format!("Decryption failed: {}", e)))?;
+    String::from_utf8(decrypted)
+        .map_err(|e| AppError::internal(format!("Invalid UTF-8 in decrypted secret: {}", e)))
 }
 
 /// Returns `***<last 4 chars>` so admins can identify which key is stored.
@@ -36,17 +70,26 @@ pub struct StripeConfigResponse {
 }
 
 impl StripeConfigResponse {
-    pub fn from_db(config: &StripeConfig) -> Self {
-        Self {
-            secret_key_masked: config.secret_key.as_deref().map(mask_secret),
-            webhook_secret_masked: config.webhook_secret.as_deref().map(mask_secret),
+    pub fn from_db(config: &StripeConfig, key: &[u8; 32]) -> Result<Self, AppError> {
+        let secret_key_plain = match (&config.secret_key, &config.secret_key_nonce) {
+            (Some(ct), Some(nonce)) => Some(decrypt_secret(key, ct, nonce)?),
+            _ => None,
+        };
+        let webhook_secret_plain = match (&config.webhook_secret, &config.webhook_secret_nonce) {
+            (Some(ct), Some(nonce)) => Some(decrypt_secret(key, ct, nonce)?),
+            _ => None,
+        };
+
+        Ok(Self {
+            secret_key_masked: secret_key_plain.as_deref().map(mask_secret),
+            webhook_secret_masked: webhook_secret_plain.as_deref().map(mask_secret),
             price_id_personal: config.price_id_personal.clone(),
             price_id_business: config.price_id_business.clone(),
             has_secret_key: config.secret_key.is_some(),
             has_webhook_secret: config.webhook_secret.is_some(),
             updated_at: Some(config.updated_at),
             source: "database".to_string(),
-        }
+        })
     }
 
     /// Reads env vars and returns a response showing what's currently configured there.
