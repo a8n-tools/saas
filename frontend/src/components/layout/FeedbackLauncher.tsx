@@ -4,7 +4,7 @@ import { SmilePlus } from 'lucide-react'
 export function FeedbackLauncher() {
   const location = useLocation()
 
-  if (location.pathname === '/feedback') {
+  if (location.pathname === '/feedback' || location.pathname.startsWith('/admin')) {
     return null
   }
 
