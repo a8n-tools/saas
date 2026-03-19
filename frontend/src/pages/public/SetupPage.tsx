@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -38,7 +37,6 @@ const passwordRequirements = [
 ]
 
 export function SetupPage() {
-  const navigate = useNavigate()
   const { setUser } = useAuthStore()
   const [isLoading, setIsLoading] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
@@ -62,7 +60,7 @@ export function SetupPage() {
       const response = await authApi.setup({ email: data.email, password: data.password })
       setUser(response.user)
       setIsSuccess(true)
-      setTimeout(() => navigate('/dashboard'), 1500)
+      setTimeout(() => { window.location.href = '/dashboard' }, 1500)
     } catch (err) {
       const apiError = err as { error?: { message?: string } }
       setError(apiError.error?.message || 'Setup failed')
