@@ -25,7 +25,7 @@ services:
   api:
     build:
       context: ./api
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile
     container_name: saas-api-${USER}
     restart: unless-stopped
     environment:
@@ -48,8 +48,6 @@ services:
       EMAIL_ENABLED: ${EMAIL_ENABLED:-false}
       # BASE_URL: ${BASE_URL:-http://localhost:5173}
       BASE_URL: ${BASE_URL:-http://app.a8n.run}
-    ports:
-      - "4000:4000"
     volumes:
       - ./api/src:/app/src:ro
       - ./api/migrations:/app/migrations:ro
@@ -76,7 +74,7 @@ services:
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile
     container_name: saas-frontend-${USER}
     restart: unless-stopped
     environment:
@@ -84,8 +82,6 @@ services:
       # TODO: Once port 443 is working through Traefik, this is not needed.
       # VITE_API_URL: http://api.a8n.run:4000
       VITE_API_URL: https://api.a8n.run
-    ports:
-      - "5173:5173"
     networks:
       - network-traefik-public
     volumes:
@@ -94,6 +90,7 @@ services:
       - ./frontend/index.html:/app/index.html:ro
       - ./frontend/vite.config.ts:/app/vite.config.ts:ro
       - ./frontend/tsconfig.json:/app/tsconfig.json:ro
+      - ./frontend/tsconfig.node.json:/app/tsconfig.node.json:ro
       - ./frontend/tailwind.config.js:/app/tailwind.config.js:ro
       - ./frontend/postcss.config.js:/app/postcss.config.js:ro
     labels:

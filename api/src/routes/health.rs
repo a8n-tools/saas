@@ -22,7 +22,7 @@ pub async fn root_status() -> HttpResponse {
     HttpResponse::Ok().json(StatusResponse {
         service: "a8n-api",
         version: env!("CARGO_PKG_VERSION"),
-        commit: env!("GIT_COMMIT"),
+        commit: option_env!("GIT_COMMIT").unwrap_or("unknown"),
     })
 }
 
