@@ -4,6 +4,7 @@ import { useAuthStore } from '@/stores/authStore'
 import {
   LayoutDashboard,
   AppWindow,
+  Banknote,
   CreditCard,
   Settings,
   Users,
@@ -30,6 +31,7 @@ const adminItems: SidebarItem[] = [
   { title: 'Users', href: '/admin/users', icon: Users },
   { title: 'Memberships', href: '/admin/memberships', icon: CreditCard },
   { title: 'Applications', href: '/admin/applications', icon: AppWindow },
+  { title: 'Stripe', href: '/admin/stripe', icon: Banknote },
   { title: 'Feedback', href: '/admin/feedback', icon: MessageSquareQuote },
   { title: 'Audit Logs', href: '/admin/audit-logs', icon: FileText },
 ]

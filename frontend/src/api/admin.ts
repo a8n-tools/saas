@@ -186,6 +186,24 @@ export interface RespondToFeedbackRequest {
   status?: AdminFeedbackStatus
 }
 
+export interface StripeConfigResponse {
+  secret_key_masked: string | null
+  webhook_secret_masked: string | null
+  price_id_personal: string | null
+  price_id_business: string | null
+  has_secret_key: boolean
+  has_webhook_secret: boolean
+  updated_at: string | null
+  source: 'database' | 'environment'
+}
+
+export interface UpdateStripeConfigRequest {
+  secret_key?: string
+  webhook_secret?: string
+  price_id_personal?: string
+  price_id_business?: string
+}
+
 export interface GrantMembershipRequest {
   user_id: string
   tier: 'personal' | 'business'
@@ -343,6 +361,13 @@ export const adminApi = {
 
   revokeInvite: (inviteId: string): Promise<void> =>
     apiClient.delete(`/admin/invites/${inviteId}`),
+
+  // Stripe config
+  getStripeConfig: (): Promise<StripeConfigResponse> =>
+    apiClient.get('/admin/stripe'),
+
+  updateStripeConfig: (data: UpdateStripeConfigRequest): Promise<StripeConfigResponse> =>
+    apiClient.put('/admin/stripe', data),
 
   // Health
   getHealth: async (): Promise<{ status: string; database: string; uptime_seconds: number }> => {
