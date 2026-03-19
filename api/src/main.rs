@@ -71,6 +71,9 @@ async fn main() -> anyhow::Result<()> {
                 panic!("SETUP_DEFAULT_ADMIN must be in format 'email:password'");
             });
 
+            let email = email.trim();
+            let password = password.trim();
+
             let password_service = PasswordService::new();
             let password_hash = password_service.hash(password)?;
 

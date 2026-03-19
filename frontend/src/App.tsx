@@ -58,7 +58,7 @@ function SetupGuard({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     authApi.setupStatus()
       .then((res) => setStatus(res.setup_required ? 'setup' : 'ready'))
-      .catch(() => setStatus('ready')) // If the check fails, don't block the app
+      .catch(() => setStatus('ready'))
   }, [])
 
   if (status === 'loading') {
