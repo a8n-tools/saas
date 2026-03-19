@@ -206,8 +206,8 @@ export interface UpdateStripeConfigRequest {
 
 export interface GrantMembershipRequest {
   user_id: string
-  tier: 'personal' | 'business'
-  months?: number
+  price_locked?: boolean
+  locked_price_amount?: number
 }
 
 export interface RevokeMembershipRequest {
