@@ -6,6 +6,7 @@ import { useInView } from '@/hooks/useInView'
 import { useApplications } from '@/hooks/useApplications'
 import { useAuthStore } from '@/stores/authStore'
 import { config } from '@/config'
+import { getAppGradient } from '@/lib/utils'
 
 const heroLines = [
   { plain: 'All access.', gradient: 'No clock.' },
@@ -41,25 +42,6 @@ const features = [
   },
 ]
 
-const apps = [
-  {
-    icon: 'fa-solid fa-link',
-    name: 'RUS',
-    slug: 'rus',
-    description: 'URL shortener with QR generation. Self-hostable, API-first, zero bloat.',
-    gradient: 'from-indigo-500 to-primary',
-    borderColor: 'border-indigo-500/20 hover:border-indigo-500/40',
-  },
-  {
-    icon: 'fa-solid fa-bookmark',
-    name: 'Rusty Links',
-    slug: 'rustylinks',
-    description: 'Bookmark manager for people with too many tabs. Tag, search, organize.',
-    gradient: 'from-teal-500 to-indigo-500',
-    borderColor: 'border-teal-500/20 hover:border-teal-500/40',
-  },
-]
-
 export function LandingPage() {
   const hero = useMemo(() => heroLines[Math.floor(Math.random() * heroLines.length)], [])
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
@@ -68,9 +50,8 @@ export function LandingPage() {
   const apps$ = useInView(0.1)
   const cta$ = useInView(0.15)
 
-  const getAppUrl = (slug: string) => {
-    const app = applications.find((a) => a.slug === slug)
-    const subdomain = app?.subdomain || slug
+  const getAppUrl = (app: { subdomain: string | null; slug: string }) => {
+    const subdomain = app.subdomain || app.slug
     return config.appDomain ? `https://${subdomain}.${config.appDomain}` : '#'
   }
 
@@ -155,33 +136,40 @@ export function LandingPage() {
             All included. More shipping soon.
           </p>
           <div className={`mt-12 grid gap-8 md:grid-cols-2 max-w-3xl mx-auto scroll-fade-up-child ${apps$.inView ? 'in-view' : ''}`}>
-            {apps.map((app) => (
-              <Card key={app.name} className={`transition-all hover:shadow-lg hover:shadow-indigo-500/5 ${app.borderColor}`}>
-                <CardHeader>
-                  <div className="flex items-center gap-4">
-                    <div className={`flex h-12 w-12 items-center justify-center rounded-lg bg-gradient-to-br ${app.gradient}`}>
-                      <i className={`${app.icon} text-xl text-white`} />
+            {applications.map((app, index) => {
+              const gradient = getAppGradient(index)
+              return (
+                <Card key={app.id} className="transition-all hover:shadow-lg hover:shadow-indigo-500/5 border-border/50">
+                  <CardHeader>
+                    <div className="flex items-center gap-4">
+                      <div className={`flex h-12 w-12 items-center justify-center rounded-lg bg-gradient-to-br ${gradient}`}>
+                        {app.icon_url ? (
+                          <img src={app.icon_url} alt={app.display_name} className="h-6 w-6" />
+                        ) : (
+                          <i className="fa-solid fa-cube text-xl text-white" />
+                        )}
+                      </div>
+                      <div>
+                        <CardTitle>{app.display_name}</CardTitle>
+                      </div>
                     </div>
-                    <div>
-                      <CardTitle>{app.name}</CardTitle>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <CardDescription className="text-base">
-                    {app.description}
-                  </CardDescription>
-                  <a
-                    href={getAppUrl(app.slug)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={`mt-4 inline-flex items-center gap-1 text-sm text-gradient bg-gradient-to-r ${app.gradient} font-medium hover:underline`}
-                  >
-                    Learn more <i className="fa-solid fa-arrow-right text-xs text-indigo-500" />
-                  </a>
-                </CardContent>
-              </Card>
-            ))}
+                  </CardHeader>
+                  <CardContent>
+                    <CardDescription className="text-base">
+                      {app.description}
+                    </CardDescription>
+                    <a
+                      href={getAppUrl(app)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`mt-4 inline-flex items-center gap-1 text-sm text-gradient bg-gradient-to-r ${gradient} font-medium hover:underline`}
+                    >
+                      Learn more <i className="fa-solid fa-arrow-right text-xs text-indigo-500" />
+                    </a>
+                  </CardContent>
+                </Card>
+              )
+            })}
           </div>
         </div>
       </section>

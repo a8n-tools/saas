@@ -16,7 +16,7 @@ pub use application::{get_application, list_applications};
 pub use auth::{
     accept_admin_invite, auth_redirect, confirm_password_reset, login, logout, logout_all,
     logout_redirect, refresh_token, register, request_magic_link, request_password_reset,
-    verify_magic_link, verify_password_reset_token,
+    setup_admin, setup_status, verify_magic_link, verify_password_reset_token,
 };
 pub use feedback::{
     delete_feedback, export_feedback, get_attachment, get_feedback, list_feedback,

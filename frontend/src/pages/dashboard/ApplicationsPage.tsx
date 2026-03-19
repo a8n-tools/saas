@@ -4,18 +4,9 @@ import { useApplications } from '@/hooks/useApplications'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { ExternalLink, Loader2, Link2, Bookmark, ArrowRight } from 'lucide-react'
+import { ExternalLink, Loader2, Link2, ArrowRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
-
-const appIcons: Record<string, React.ComponentType<{ className?: string }>> = {
-  rus: Link2,
-  rustylinks: Bookmark,
-}
-
-const appGradients: Record<string, string> = {
-  rus: 'from-indigo-500 to-primary',
-  rustylinks: 'from-teal-500 to-indigo-500',
-}
+import { getAppGradient } from '@/lib/utils'
 
 export function ApplicationsPage() {
   const { user } = useAuthStore()
@@ -62,9 +53,8 @@ export function ApplicationsPage() {
       )}
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {applications.map((app) => {
-          const Icon = appIcons[app.slug] || Link2
-          const gradient = appGradients[app.slug] || 'from-primary to-indigo-500'
+        {applications.map((app, index) => {
+          const gradient = getAppGradient(index)
           const baseDomain = config.appDomain || 'localhost'
           const subdomain = app.subdomain || app.slug
           const appUrl = `${subdomain}.${baseDomain}`
@@ -77,7 +67,11 @@ export function ApplicationsPage() {
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className={`flex h-12 w-12 items-center justify-center rounded-lg bg-gradient-to-br ${gradient}`}>
-                    <Icon className="h-6 w-6 text-white" />
+                    {app.icon_url ? (
+                      <img src={app.icon_url} alt={app.display_name} className="h-6 w-6" />
+                    ) : (
+                      <Link2 className="h-6 w-6 text-white" />
+                    )}
                   </div>
                   <div className="flex gap-2">
                     {app.maintenance_mode && (

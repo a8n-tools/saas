@@ -18,9 +18,10 @@ use a8n_api::{
         request_id::RequestIdMiddleware,
         AutoBanMiddleware, SecurityHeaders,
     },
-    repositories::{FeedbackRepository, RateLimitRepository},
+    models::{CreateUser, UserRole},
+    repositories::{FeedbackRepository, RateLimitRepository, UserRepository},
     routes,
-    services::{AuthService, EmailService, JwtConfig, JwtService, StripeConfig, StripeService, TotpService, WebhookService},
+    services::{AuthService, EmailService, JwtConfig, JwtService, PasswordService, StripeConfig, StripeService, TotpService, WebhookService},
 };
 
 #[tokio::main]
@@ -61,6 +62,36 @@ async fn main() -> anyhow::Result<()> {
         })?;
 
     info!("Database migrations completed successfully");
+
+    // Seed default admin if SETUP_DEFAULT_ADMIN is set and no admin exists
+    if let Ok(setup_admin) = std::env::var("SETUP_DEFAULT_ADMIN") {
+        let admin_emails = UserRepository::find_admin_emails(&pool).await?;
+        if admin_emails.is_empty() {
+            let (email, password) = setup_admin.split_once(':').unwrap_or_else(|| {
+                panic!("SETUP_DEFAULT_ADMIN must be in format 'email:password'");
+            });
+
+            let email = email.trim();
+            let password = password.trim();
+
+            let password_service = PasswordService::new();
+            let password_hash = password_service.hash(password)?;
+
+            let user = UserRepository::create(
+                &pool,
+                CreateUser {
+                    email: email.to_string(),
+                    password_hash: Some(password_hash),
+                    role: UserRole::Admin,
+                },
+            )
+            .await?;
+
+            info!(email = %user.email, "Default admin user created from SETUP_DEFAULT_ADMIN");
+        } else {
+            info!("Admin user(s) already exist, skipping SETUP_DEFAULT_ADMIN");
+        }
+    }
 
     // Test database connection
     sqlx::query("SELECT 1")

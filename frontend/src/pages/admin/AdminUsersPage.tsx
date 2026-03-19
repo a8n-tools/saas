@@ -21,12 +21,12 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Search, MoreVertical, User, Loader2, KeyRound, Shield, ShieldOff, Trash2, AlertCircle, UserPlus, Mail, X, Clock, ChevronDown, ChevronRight } from 'lucide-react'
+import { Search, MoreVertical, User, Loader2, KeyRound, Shield, ShieldOff, Trash2, AlertCircle, UserPlus, Mail, X, Clock, ChevronDown, ChevronRight, BadgeCheck, BadgeMinus } from 'lucide-react'
 import { adminApi, type AdminUser, type AdminInvite } from '@/api/admin'
 import { formatRelativeTime } from '@/lib/utils'
 import type { ApiError } from '@/types'
 
-type DialogAction = 'deactivate' | 'activate' | 'reset' | 'delete' | 'makeAdmin' | 'removeAdmin' | 'invite' | null
+type DialogAction = 'deactivate' | 'activate' | 'reset' | 'delete' | 'makeAdmin' | 'removeAdmin' | 'grantMembership' | 'revokeMembership' | 'invite' | null
 
 export function AdminUsersPage() {
   const [searchQuery, setSearchQuery] = useState('')
@@ -109,6 +109,26 @@ export function AdminUsersPage() {
     },
   })
 
+  const grantMembershipMutation = useMutation({
+    mutationFn: (userId: string) => adminApi.grantMembership({ user_id: userId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
+      queryClient.invalidateQueries({ queryKey: ['admin', 'memberships'] })
+      setDialogType(null)
+      setSelectedUser(null)
+    },
+  })
+
+  const revokeMembershipMutation = useMutation({
+    mutationFn: (userId: string) => adminApi.revokeMembership({ user_id: userId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
+      queryClient.invalidateQueries({ queryKey: ['admin', 'memberships'] })
+      setDialogType(null)
+      setSelectedUser(null)
+    },
+  })
+
   const handleAction = (user: AdminUser, action: DialogAction) => {
     setSelectedUser(user)
     setDialogType(action)
@@ -137,6 +157,10 @@ export function AdminUsersPage() {
       updateRoleMutation.mutate({ userId: selectedUser.id, role: 'admin' })
     } else if (dialogType === 'removeAdmin') {
       updateRoleMutation.mutate({ userId: selectedUser.id, role: 'subscriber' })
+    } else if (dialogType === 'grantMembership') {
+      grantMembershipMutation.mutate(selectedUser.id)
+    } else if (dialogType === 'revokeMembership') {
+      revokeMembershipMutation.mutate(selectedUser.id)
     }
   }
 
@@ -144,6 +168,8 @@ export function AdminUsersPage() {
     resetPasswordMutation.isPending ||
     deleteUserMutation.isPending ||
     updateRoleMutation.isPending ||
+    grantMembershipMutation.isPending ||
+    revokeMembershipMutation.isPending ||
     createInviteMutation.isPending
 
   return (
@@ -249,6 +275,18 @@ export function AdminUsersPage() {
                                 <DropdownMenuItem onClick={() => handleAction(user, 'makeAdmin')}>
                                   <Shield className="h-4 w-4 mr-2" />
                                   Make Admin
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuSeparator />
+                              {user.membership_status === 'active' ? (
+                                <DropdownMenuItem onClick={() => handleAction(user, 'revokeMembership')}>
+                                  <BadgeMinus className="h-4 w-4 mr-2" />
+                                  Revoke Membership
+                                </DropdownMenuItem>
+                              ) : (
+                                <DropdownMenuItem onClick={() => handleAction(user, 'grantMembership')}>
+                                  <BadgeCheck className="h-4 w-4 mr-2" />
+                                  Grant Membership
                                 </DropdownMenuItem>
                               )}
                               {user.role !== 'admin' && (
@@ -378,6 +416,8 @@ export function AdminUsersPage() {
               {dialogType === 'delete' && 'Delete User'}
               {dialogType === 'makeAdmin' && 'Make Admin'}
               {dialogType === 'removeAdmin' && 'Remove Admin'}
+              {dialogType === 'grantMembership' && 'Grant Membership'}
+              {dialogType === 'revokeMembership' && 'Revoke Membership'}
               {dialogType === 'invite' && 'Invite Admin'}
             </DialogTitle>
             <DialogDescription>
@@ -391,6 +431,8 @@ export function AdminUsersPage() {
               {dialogType === 'delete' && `Are you sure you want to delete ${selectedUser?.email}? This action cannot be undone.`}
               {dialogType === 'makeAdmin' && `Are you sure you want to make ${selectedUser?.email} an admin? They will have full access to the admin panel.`}
               {dialogType === 'removeAdmin' && `Are you sure you want to remove admin privileges from ${selectedUser?.email}?`}
+              {dialogType === 'grantMembership' && `Are you sure you want to grant an active membership to ${selectedUser?.email}?`}
+              {dialogType === 'revokeMembership' && `Are you sure you want to revoke the membership for ${selectedUser?.email}? They will lose access to member features.`}
               {dialogType === 'invite' && !inviteSuccess && 'Send an invite link to grant admin access. If the user already has an account, they will be upgraded.'}
               {dialogType === 'invite' && inviteSuccess && `Invite sent to ${inviteEmail}. They will receive an email with a link to accept.`}
             </DialogDescription>
@@ -445,7 +487,7 @@ export function AdminUsersPage() {
                   Cancel
                 </Button>
                 <Button
-                  variant={dialogType === 'deactivate' || dialogType === 'delete' || dialogType === 'removeAdmin' ? 'destructive' : 'default'}
+                  variant={dialogType === 'deactivate' || dialogType === 'delete' || dialogType === 'removeAdmin' || dialogType === 'revokeMembership' ? 'destructive' : 'default'}
                   onClick={confirmAction}
                   disabled={isActionPending || (dialogType === 'invite' && !inviteEmail.trim())}
                 >

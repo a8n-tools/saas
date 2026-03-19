@@ -53,6 +53,7 @@ services:
       HOST_IP: 0.0.0.0
       APP_PORT: 4000
       JWT_SECRET: ${JWT_SECRET:-development-secret-key-min-32-chars-long!}
+      SETUP_DEFAULT_ADMIN: 'admin@a8n.run:admin1234'
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       STRIPE_PRICE_ID: ${STRIPE_PRICE_ID:-}
       STRIPE_BUSINESS_PRICE_ID: ${STRIPE_BUSINESS_PRICE_ID:-}

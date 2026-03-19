@@ -39,6 +39,16 @@ describe('FeedbackLauncher', () => {
     expect(screen.queryByRole('link', { name: /open feedback page/i })).not.toBeInTheDocument()
   })
 
+  it('returns null on admin routes', () => {
+    renderAtPath('/admin')
+    expect(screen.queryByRole('link', { name: /open feedback page/i })).not.toBeInTheDocument()
+  })
+
+  it('returns null on admin sub-routes', () => {
+    renderAtPath('/admin/users')
+    expect(screen.queryByRole('link', { name: /open feedback page/i })).not.toBeInTheDocument()
+  })
+
   it('link points to /feedback', () => {
     renderAtPath('/dashboard')
     const link = screen.getByRole('link', { name: /open feedback page/i })

@@ -197,7 +197,7 @@ describe('adminApi', () => {
 
   describe('grantMembership', () => {
     it('grants membership to a user', async () => {
-      const result = await adminApi.grantMembership({ user_id: 'user-1', tier: 'personal' })
+      const result = await adminApi.grantMembership({ user_id: 'user-1' })
       expect(result.status).toBe('active')
     })
   })

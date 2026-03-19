@@ -75,4 +75,10 @@ export const authApi = {
 
   acceptInvite: (data: { token: string; password?: string }): Promise<AuthResponse | { needs_password: true; email: string }> =>
     apiClient.post('/auth/invite/accept', data),
+
+  setupStatus: (): Promise<{ setup_required: boolean }> =>
+    apiClient.get('/auth/setup/status'),
+
+  setup: (data: { email: string; password: string }): Promise<AuthResponse> =>
+    apiClient.post('/auth/setup', data),
 }

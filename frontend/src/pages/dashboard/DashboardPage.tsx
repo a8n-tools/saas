@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { AppWindow, CreditCard, ExternalLink, Loader2, ArrowRight } from 'lucide-react'
+import { getAppGradient } from '@/lib/utils'
 
 const taglines = [
   'All access. No clock.',
@@ -101,12 +102,9 @@ export function DashboardPage() {
           <div className="grid gap-4 md:grid-cols-2">
             {applications.map((app, index) => {
               const baseDomain = config.appDomain || 'localhost'
-              const appUrl = `${app.slug}.${baseDomain}`
-              const gradients = [
-                'from-indigo-500 to-primary',
-                'from-teal-500 to-indigo-500',
-              ]
-              const gradient = gradients[index % gradients.length]
+              const subdomain = app.subdomain || app.slug
+              const appUrl = `${subdomain}.${baseDomain}`
+              const gradient = getAppGradient(index)
               return (
                 <Card key={app.id} className="border-border/50 transition-all hover:shadow-lg hover:shadow-indigo-500/5">
                   <CardHeader>
