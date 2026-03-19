@@ -14,10 +14,9 @@ describe('Footer', () => {
   it('renders product links', async () => {
     render(<Footer />)
 
+    expect(screen.getByText('Pricing')).toBeInTheDocument()
     await waitFor(() => {
-      expect(screen.getByText('Pricing')).toBeInTheDocument()
       expect(screen.getByText('RUS')).toBeInTheDocument()
-      expect(screen.getByText('Rusty Links')).toBeInTheDocument()
     })
   })
 

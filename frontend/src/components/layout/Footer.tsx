@@ -5,9 +5,8 @@ import { useApplications } from '@/hooks/useApplications'
 export function Footer() {
   const { applications } = useApplications()
 
-  const getAppUrl = (slug: string) => {
-    const app = applications.find((a) => a.slug === slug)
-    const subdomain = app?.subdomain || slug
+  const getAppUrl = (app: { subdomain: string | null; slug: string }) => {
+    const subdomain = app.subdomain || app.slug
     return config.appDomain ? `https://${subdomain}.${config.appDomain}` : '#'
   }
   return (
@@ -34,22 +33,16 @@ export function Footer() {
                   Pricing
                 </Link>
               </li>
-              <li>
-                <a
-                  href={getAppUrl('rus')}
-                  className="text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  RUS
-                </a>
-              </li>
-              <li>
-                <a
-                  href={getAppUrl('rustylinks')}
-                  className="text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  Rusty Links
-                </a>
-              </li>
+              {applications.map((app) => (
+                <li key={app.id}>
+                  <a
+                    href={getAppUrl(app)}
+                    className="text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {app.display_name}
+                  </a>
+                </li>
+              ))}
             </ul>
           </div>
           <div>

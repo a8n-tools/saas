@@ -28,12 +28,13 @@ describe('LandingPage', () => {
     expect(screen.getByText('$3/month. Forever.')).toBeInTheDocument()
   })
 
-  it('shows toolkit section', () => {
+  it('shows toolkit section', async () => {
     render(<LandingPage />)
 
     expect(screen.getByText('The toolkit')).toBeInTheDocument()
-    expect(screen.getByText('RUS')).toBeInTheDocument()
-    expect(screen.getByText('Rusty Links')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('RUS')).toBeInTheDocument()
+    })
   })
 
   it('shows Get Started button when not authenticated', () => {
