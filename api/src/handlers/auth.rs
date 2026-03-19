@@ -11,10 +11,10 @@ use crate::errors::AppError;
 use crate::middleware::{
     extract_client_ip, extract_device_info, AuthCookies, AuthenticatedUser, OptionalUser,
 };
-use crate::models::{RateLimitConfig, UserResponse};
-use crate::repositories::RateLimitRepository;
+use crate::models::{CreateUser, RateLimitConfig, UserResponse, UserRole};
+use crate::repositories::{RateLimitRepository, UserRepository};
 use crate::responses::{get_request_id, success};
-use crate::services::{AcceptInviteResult, AuthService, LoginResult};
+use crate::services::{AcceptInviteResult, AuthService, LoginResult, PasswordService};
 
 /// Check rate limit and return RateLimited error if exceeded
 async fn check_rate_limit(
@@ -69,6 +69,19 @@ pub struct PasswordResetRequest {
 pub struct PasswordResetConfirmRequest {
     pub token: String,
     pub new_password: String,
+}
+
+/// Request body for initial admin setup
+#[derive(Debug, Deserialize)]
+pub struct SetupRequest {
+    pub email: String,
+    pub password: String,
+}
+
+/// Response for setup status check
+#[derive(Debug, Serialize)]
+pub struct SetupStatusResponse {
+    pub setup_required: bool,
 }
 
 /// Response for successful authentication
@@ -803,4 +816,102 @@ pub async fn auth_redirect(
     Ok(HttpResponse::Found()
         .insert_header(("Location", login_url.as_str()))
         .finish())
+}
+
+/// GET /v1/auth/setup/status
+/// Check whether initial admin setup is required
+pub async fn setup_status(
+    req: HttpRequest,
+    pool: web::Data<PgPool>,
+) -> Result<HttpResponse, AppError> {
+    let request_id = get_request_id(&req);
+    let admin_emails = UserRepository::find_admin_emails(&pool).await?;
+
+    Ok(HttpResponse::Ok().json(crate::responses::ApiResponse {
+        success: true,
+        data: Some(SetupStatusResponse {
+            setup_required: admin_emails.is_empty(),
+        }),
+        meta: crate::responses::ResponseMeta::new(request_id),
+    }))
+}
+
+/// POST /v1/auth/setup
+/// Create the initial admin user (only works when no admins exist)
+pub async fn setup_admin(
+    req: HttpRequest,
+    pool: web::Data<PgPool>,
+    auth_service: web::Data<Arc<AuthService>>,
+    body: web::Json<SetupRequest>,
+    config: web::Data<crate::config::Config>,
+) -> Result<HttpResponse, AppError> {
+    let request_id = get_request_id(&req);
+    let ip_address = extract_client_ip(&req);
+    let device_info = extract_device_info(&req);
+
+    // Only allow setup when no admin users exist
+    let admin_emails = UserRepository::find_admin_emails(&pool).await?;
+    if !admin_emails.is_empty() {
+        return Err(AppError::Forbidden);
+    }
+
+    // Validate email format
+    crate::validation::validate_email(&body.email)?;
+
+    // Validate and hash password
+    let password_service = PasswordService::new();
+    password_service.validate_strength(&body.password)?;
+    password_service.validate_not_contains_email(&body.password, &body.email)?;
+    let password_hash = password_service.hash(&body.password)?;
+
+    // Create the admin user
+    let user = UserRepository::create(
+        &pool,
+        CreateUser {
+            email: body.email.clone(),
+            password_hash: Some(password_hash),
+            role: UserRole::Admin,
+        },
+    )
+    .await?;
+
+    tracing::info!(email = %user.email, "Initial admin user created via setup");
+
+    // Log them in immediately
+    let result = auth_service
+        .login(body.email.clone(), body.password.clone(), device_info, ip_address)
+        .await?;
+
+    let (tokens, user) = match result {
+        LoginResult::Success(tokens, user) => (tokens, user),
+        LoginResult::TwoFactorRequired { .. } => {
+            return Err(AppError::internal("Unexpected 2FA challenge during setup"));
+        }
+    };
+
+    let secure = config.is_production();
+    let cookie_domain = config.cookie_domain.as_deref();
+
+    let response = AuthResponse {
+        user,
+        expires_in: tokens.expires_in,
+    };
+
+    let mut resp = HttpResponse::Created();
+    for cookie in AuthCookies::clear_stale(secure) {
+        resp.cookie(cookie);
+    }
+    Ok(resp
+        .cookie(AuthCookies::access_token(&tokens.access_token, secure, cookie_domain))
+        .cookie(AuthCookies::refresh_token(
+            &tokens.refresh_token,
+            secure,
+            false,
+            cookie_domain,
+        ))
+        .json(crate::responses::ApiResponse {
+            success: true,
+            data: Some(response),
+            meta: crate::responses::ResponseMeta::new(request_id),
+        }))
 }

@@ -1,6 +1,7 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
+import { authApi } from '@/api'
 
 // Layouts
 import { PublicLayout } from '@/components/layout/PublicLayout'
@@ -22,6 +23,7 @@ import { TwoFactorVerifyPage } from '@/pages/public/TwoFactorVerifyPage'
 import { LogoutPage } from '@/pages/public/LogoutPage'
 import { FeedbackPage } from '@/pages/public/FeedbackPage'
 import { AcceptInvitePage } from '@/pages/public/AcceptInvitePage'
+import { SetupPage } from '@/pages/public/SetupPage'
 
 // Dashboard pages
 import { DashboardPage } from '@/pages/dashboard/DashboardPage'
@@ -47,6 +49,32 @@ import { VerifyEmailPage } from '@/pages/settings/VerifyEmailPage'
 // Error pages
 import { NotFoundPage } from '@/pages/errors/NotFoundPage'
 import { MembershipRequiredPage } from '@/pages/errors/MembershipRequiredPage'
+
+// Redirect to /setup if no admin exists
+function SetupGuard({ children }: { children: React.ReactNode }) {
+  const location = useLocation()
+  const [status, setStatus] = useState<'loading' | 'setup' | 'ready'>('loading')
+
+  useEffect(() => {
+    authApi.setupStatus()
+      .then((res) => setStatus(res.setup_required ? 'setup' : 'ready'))
+      .catch(() => setStatus('ready')) // If the check fails, don't block the app
+  }, [])
+
+  if (status === 'loading') {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    )
+  }
+
+  if (status === 'setup' && location.pathname !== '/setup') {
+    return <Navigate to="/setup" replace />
+  }
+
+  return <>{children}</>
+}
 
 // Protected route wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -125,65 +153,66 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <>
-    <FeedbackLauncher />
-    <Routes>
-      {/* Public routes */}
-      <Route element={<PublicLayout />}>
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/pricing" element={<PricingPage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
-        <Route path="/magic-link" element={<MagicLinkPage />} />
-        <Route path="/password-reset" element={<PasswordResetPage />} />
-        <Route path="/password-reset/confirm" element={<PasswordResetConfirmPage />} />
-        <Route path="/terms" element={<TermsOfServicePage />} />
-        <Route path="/privacy" element={<PrivacyPolicyPage />} />
-        <Route path="/settings/confirm-email" element={<ConfirmEmailPage />} />
-        <Route path="/settings/verify-email" element={<VerifyEmailPage />} />
-        <Route path="/login/2fa" element={<TwoFactorVerifyPage />} />
-        <Route path="/logout" element={<LogoutPage />} />
-        <Route path="/feedback" element={<FeedbackPage />} />
-        <Route path="/invite/accept" element={<AcceptInvitePage />} />
-      </Route>
+    <SetupGuard>
+      <FeedbackLauncher />
+      <Routes>
+        {/* Public routes */}
+        <Route element={<PublicLayout />}>
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/pricing" element={<PricingPage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/magic-link" element={<MagicLinkPage />} />
+          <Route path="/password-reset" element={<PasswordResetPage />} />
+          <Route path="/password-reset/confirm" element={<PasswordResetConfirmPage />} />
+          <Route path="/terms" element={<TermsOfServicePage />} />
+          <Route path="/privacy" element={<PrivacyPolicyPage />} />
+          <Route path="/settings/confirm-email" element={<ConfirmEmailPage />} />
+          <Route path="/settings/verify-email" element={<VerifyEmailPage />} />
+          <Route path="/login/2fa" element={<TwoFactorVerifyPage />} />
+          <Route path="/logout" element={<LogoutPage />} />
+          <Route path="/feedback" element={<FeedbackPage />} />
+          <Route path="/invite/accept" element={<AcceptInvitePage />} />
+          <Route path="/setup" element={<SetupPage />} />
+        </Route>
 
-      {/* Protected dashboard routes */}
-      <Route
-        element={
-          <ProtectedRoute>
-            <DashboardLayout />
-          </ProtectedRoute>
-        }
-      >
-        <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/applications" element={<ApplicationsPage />} />
-        <Route path="/membership" element={<MembershipPage />} />
-        <Route path="/checkout/success" element={<CheckoutSuccessPage />} />
-        <Route path="/settings" element={<SettingsPage />} />
-        <Route path="/settings/2fa/setup" element={<TwoFactorSetupPage />} />
-        <Route path="/membership-required" element={<MembershipRequiredPage />} />
-      </Route>
+        {/* Protected dashboard routes */}
+        <Route
+          element={
+            <ProtectedRoute>
+              <DashboardLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/applications" element={<ApplicationsPage />} />
+          <Route path="/membership" element={<MembershipPage />} />
+          <Route path="/checkout/success" element={<CheckoutSuccessPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/settings/2fa/setup" element={<TwoFactorSetupPage />} />
+          <Route path="/membership-required" element={<MembershipRequiredPage />} />
+        </Route>
 
-      {/* Admin routes */}
-      <Route
-        element={
-          <AdminRoute>
-            <AdminLayout />
-          </AdminRoute>
-        }
-      >
-        <Route path="/admin" element={<AdminDashboardPage />} />
-        <Route path="/admin/users" element={<AdminUsersPage />} />
-        <Route path="/admin/memberships" element={<AdminMembershipsPage />} />
-        <Route path="/admin/applications" element={<AdminApplicationsPage />} />
-        <Route path="/admin/stripe" element={<AdminStripePage />} />
-        <Route path="/admin/feedback" element={<AdminFeedbackPage />} />
-        <Route path="/admin/audit-logs" element={<AdminAuditLogsPage />} />
-      </Route>
+        {/* Admin routes */}
+        <Route
+          element={
+            <AdminRoute>
+              <AdminLayout />
+            </AdminRoute>
+          }
+        >
+          <Route path="/admin" element={<AdminDashboardPage />} />
+          <Route path="/admin/users" element={<AdminUsersPage />} />
+          <Route path="/admin/memberships" element={<AdminMembershipsPage />} />
+          <Route path="/admin/applications" element={<AdminApplicationsPage />} />
+          <Route path="/admin/stripe" element={<AdminStripePage />} />
+          <Route path="/admin/feedback" element={<AdminFeedbackPage />} />
+          <Route path="/admin/audit-logs" element={<AdminAuditLogsPage />} />
+        </Route>
 
-      {/* 404 */}
-      <Route path="*" element={<NotFoundPage />} />
-    </Routes>
-    </>
+        {/* 404 */}
+        <Route path="*" element={<NotFoundPage />} />
+      </Routes>
+    </SetupGuard>
   )
 }

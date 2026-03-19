@@ -26,6 +26,8 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route("/2fa/recovery-codes", web::post().to(handlers::regenerate_recovery_codes))
             .route("/2fa/status", web::get().to(handlers::get_2fa_status))
             .route("/invite/accept", web::post().to(handlers::accept_admin_invite))
-            .route("/redirect", web::get().to(handlers::auth_redirect)),
+            .route("/redirect", web::get().to(handlers::auth_redirect))
+            .route("/setup/status", web::get().to(handlers::setup_status))
+            .route("/setup", web::post().to(handlers::setup_admin)),
     );
 }
