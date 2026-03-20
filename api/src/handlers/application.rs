@@ -60,12 +60,14 @@ pub async fn list_applications(
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
 
-    // Check if user has active membership
+    // Check if user has active membership or is an admin
     let has_access = user
         .0
         .as_ref()
         .map(|claims| {
-            claims.membership_status == "active" || claims.membership_status == "grace_period"
+            claims.role == "admin"
+                || claims.membership_status == "active"
+                || claims.membership_status == "grace_period"
         })
         .unwrap_or(false);
 
@@ -94,12 +96,14 @@ pub async fn get_application(
     let request_id = get_request_id(&req);
     let slug = path.into_inner();
 
-    // Check if user has active membership
+    // Check if user has active membership or is an admin
     let has_access = user
         .0
         .as_ref()
         .map(|claims| {
-            claims.membership_status == "active" || claims.membership_status == "grace_period"
+            claims.role == "admin"
+                || claims.membership_status == "active"
+                || claims.membership_status == "grace_period"
         })
         .unwrap_or(false);
 

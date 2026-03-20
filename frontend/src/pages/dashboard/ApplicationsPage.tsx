@@ -13,8 +13,9 @@ export function ApplicationsPage() {
   const { applications, isLoading } = useApplications()
 
   const hasActiveMembership =
+    user?.role === 'admin' ||
     user?.membership_status === 'active' ||
-    user?.membership_status === 'past_due'
+    user?.membership_status === 'grace_period'
 
   if (isLoading) {
     return (

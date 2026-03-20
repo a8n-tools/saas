@@ -23,8 +23,9 @@ export function DashboardPage() {
   const tagline = useMemo(() => taglines[Math.floor(Math.random() * taglines.length)], [])
 
   const hasActiveMembership =
+    user?.role === 'admin' ||
     user?.membership_status === 'active' ||
-    user?.membership_status === 'past_due'
+    user?.membership_status === 'grace_period'
 
   return (
     <div className="space-y-8">
