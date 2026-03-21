@@ -43,6 +43,11 @@ pub struct AccessTokenClaims {
     pub price_locked: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub price_id: Option<String>,
+    /// True for lifetime members — access is never time-gated
+    pub lifetime_member: bool,
+    /// Unix timestamp when trial expires; None for lifetime members
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trial_ends_at: Option<i64>,
     pub iat: i64,
     pub exp: i64,
     pub jti: String,
@@ -98,6 +103,8 @@ impl JwtService {
             membership_tier,
             price_locked: user.price_locked,
             price_id: user.locked_price_id.clone(),
+            lifetime_member: user.lifetime_member,
+            trial_ends_at: user.trial_ends_at.map(|t| t.timestamp()),
             iat: now.timestamp(),
             exp: exp.timestamp(),
             jti: format!("at_{}", Uuid::new_v4().as_simple()),
@@ -251,6 +258,10 @@ mod tests {
             updated_at: Utc::now(),
             last_login_at: None,
             deleted_at: None,
+            subscription_tier: "trial_1m".to_string(),
+            trial_ends_at: None,
+            lifetime_member: false,
+            subscription_override_by: None,
         }
     }
 

@@ -3,7 +3,12 @@
     "allow": [
       "Bash(grep -r \"react-hook-form\\\\|useForm\\\\|FormControl\\\\|Dialog\" /home/long/saas/frontend/src/pages/admin/*.tsx)",
       "Bash(grep -r \"toast\\\\|useToast\\\\|sonner\" /home/long/saas/frontend/src --include=*.tsx --include=*.ts -l)",
-      "Bash(cargo check:*)"
+      "Bash(cargo check:*)",
+      "Bash(docker compose:*)",
+      "Bash(docker ps:*)",
+      "Bash(docker exec:*)",
+      "Bash(git stash:*)",
+      "Bash(bun run:*)"
     ]
   }
 }
