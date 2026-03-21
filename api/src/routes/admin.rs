@@ -20,6 +20,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route("/users/{user_id}/role", web::put().to(handlers::update_user_role))
             .route("/users/{user_id}/reset-password", web::post().to(handlers::admin_reset_password))
             .route("/users/{user_id}/impersonate", web::post().to(handlers::impersonate_user))
+            .route("/users/{user_id}/lifetime", web::post().to(handlers::grant_lifetime_membership))
             // Membership management
             .route("/memberships", web::get().to(handlers::list_memberships))
             .route("/memberships/grant", web::post().to(handlers::grant_membership))

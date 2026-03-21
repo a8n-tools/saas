@@ -14,6 +14,9 @@ export const mockUser = {
   locked_price_amount: null,
   created_at: '2024-01-01T00:00:00Z',
   updated_at: '2024-01-01T00:00:00Z',
+  subscription_tier: 'trial_1m' as const,
+  trial_ends_at: null,
+  lifetime_member: false,
 }
 
 export const mockAdminUser = {
@@ -319,6 +322,7 @@ export const handlers = [
         success: true,
         data: {
           message: 'Email verified successfully.',
+          subscription_tier: 'trial_1m',
         },
       })
     }
@@ -553,6 +557,10 @@ export const handlers = [
 
   http.put(`${API_BASE}/admin/applications/:appId/swap-order`, () => {
     return HttpResponse.json({ success: true, data: { applications: [mockAdminApplication] } })
+  }),
+
+  http.post(`${API_BASE}/admin/users/:userId/lifetime`, () => {
+    return HttpResponse.json({ success: true, data: { ...mockUser, lifetime_member: true, subscription_tier: 'lifetime' } })
   }),
 
   http.post(`${API_BASE}/admin/memberships/grant`, () => {

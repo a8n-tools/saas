@@ -127,6 +127,44 @@ impl From<&str> for MembershipTier {
     }
 }
 
+/// Subscription tier assigned at email verification
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SubscriptionTier {
+    /// Permanently free — first 20 verified users
+    Lifetime,
+    /// 3-month free trial — users 21-70
+    Trial3m,
+    /// 1-month free trial — all subsequent users
+    Trial1m,
+}
+
+impl SubscriptionTier {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            SubscriptionTier::Lifetime => "lifetime",
+            SubscriptionTier::Trial3m => "trial_3m",
+            SubscriptionTier::Trial1m => "trial_1m",
+        }
+    }
+}
+
+impl From<&str> for SubscriptionTier {
+    fn from(s: &str) -> Self {
+        match s {
+            "lifetime" => SubscriptionTier::Lifetime,
+            "trial_3m" => SubscriptionTier::Trial3m,
+            _ => SubscriptionTier::Trial1m,
+        }
+    }
+}
+
+impl From<String> for SubscriptionTier {
+    fn from(s: String) -> Self {
+        SubscriptionTier::from(s.as_str())
+    }
+}
+
 /// User database model
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct User {
@@ -151,6 +189,14 @@ pub struct User {
     pub two_factor_enabled: bool,
     pub last_login_at: Option<DateTime<Utc>>,
     pub deleted_at: Option<DateTime<Utc>>,
+    /// Tier assigned at email verification: 'lifetime', 'trial_3m', 'trial_1m'
+    pub subscription_tier: String,
+    /// Null for lifetime members; set for trial members
+    pub trial_ends_at: Option<DateTime<Utc>>,
+    /// True for the first 20 verified users and admin-granted lifetime members
+    pub lifetime_member: bool,
+    /// Set when an admin manually granted lifetime membership
+    pub subscription_override_by: Option<Uuid>,
 }
 
 impl User {
@@ -186,6 +232,33 @@ impl User {
     pub fn is_deleted(&self) -> bool {
         self.deleted_at.is_some()
     }
+
+    /// Get the user's subscription tier as enum
+    pub fn subscription_tier_enum(&self) -> SubscriptionTier {
+        SubscriptionTier::from(self.subscription_tier.as_str())
+    }
+
+    /// Check if the user is allowed to access protected features.
+    ///
+    /// Access is granted when ANY of the following are true:
+    /// - User is an admin (admins bypass all access checks)
+    /// - User is a lifetime member
+    /// - User's trial has not yet expired
+    /// - User has an active/grace-period Stripe subscription
+    pub fn is_access_allowed(&self) -> bool {
+        if self.is_admin() {
+            return true;
+        }
+        if self.lifetime_member {
+            return true;
+        }
+        if let Some(trial_ends_at) = self.trial_ends_at {
+            if trial_ends_at > chrono::Utc::now() {
+                return true;
+            }
+        }
+        self.membership_status_enum().has_access()
+    }
 }
 
 /// Data for creating a new user
@@ -211,6 +284,9 @@ pub struct UserResponse {
     pub grace_period_end: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub last_login_at: Option<DateTime<Utc>>,
+    pub subscription_tier: String,
+    pub trial_ends_at: Option<DateTime<Utc>>,
+    pub lifetime_member: bool,
 }
 
 impl From<User> for UserResponse {
@@ -228,6 +304,9 @@ impl From<User> for UserResponse {
             grace_period_end: user.grace_period_end,
             created_at: user.created_at,
             last_login_at: user.last_login_at,
+            subscription_tier: user.subscription_tier,
+            trial_ends_at: user.trial_ends_at,
+            lifetime_member: user.lifetime_member,
         }
     }
 }
@@ -257,6 +336,10 @@ mod tests {
             updated_at: Utc::now(),
             last_login_at: None,
             deleted_at: None,
+            subscription_tier: "trial_1m".to_string(),
+            trial_ends_at: None,
+            lifetime_member: false,
+            subscription_override_by: None,
         }
     }
 
@@ -399,5 +482,110 @@ mod tests {
         assert_eq!(response.id, id);
         assert_eq!(response.email, "test@example.com");
         assert_eq!(response.role, "subscriber");
+    }
+
+    // -- SubscriptionTier --
+
+    #[test]
+    fn subscription_tier_as_str() {
+        assert_eq!(SubscriptionTier::Lifetime.as_str(), "lifetime");
+        assert_eq!(SubscriptionTier::Trial3m.as_str(), "trial_3m");
+        assert_eq!(SubscriptionTier::Trial1m.as_str(), "trial_1m");
+    }
+
+    #[test]
+    fn subscription_tier_from_str() {
+        assert_eq!(SubscriptionTier::from("lifetime"), SubscriptionTier::Lifetime);
+        assert_eq!(SubscriptionTier::from("trial_3m"), SubscriptionTier::Trial3m);
+        assert_eq!(SubscriptionTier::from("trial_1m"), SubscriptionTier::Trial1m);
+        assert_eq!(SubscriptionTier::from("unknown"), SubscriptionTier::Trial1m);
+    }
+
+    fn user_with_tier(lifetime_member: bool, trial_ends_at: Option<DateTime<Utc>>, subscription_tier: &str) -> User {
+        let mut user = test_user();
+        user.membership_status = "none".to_string();
+        user.lifetime_member = lifetime_member;
+        user.trial_ends_at = trial_ends_at;
+        user.subscription_tier = subscription_tier.to_string();
+        user
+    }
+
+    // -- is_access_allowed --
+
+    #[test]
+    fn access_allowed_for_admin() {
+        let mut user = test_user();
+        user.role = "admin".to_string();
+        user.membership_status = "none".to_string();
+        user.lifetime_member = false;
+        user.trial_ends_at = None;
+        assert!(user.is_access_allowed());
+    }
+
+    #[test]
+    fn access_allowed_for_lifetime_member() {
+        let user = user_with_tier(true, None, "lifetime");
+        assert!(user.is_access_allowed());
+    }
+
+    #[test]
+    fn access_allowed_for_active_trial() {
+        let future = Utc::now() + chrono::Duration::days(10);
+        let user = user_with_tier(false, Some(future), "trial_1m");
+        assert!(user.is_access_allowed());
+    }
+
+    #[test]
+    fn access_denied_for_expired_trial() {
+        let past = Utc::now() - chrono::Duration::days(1);
+        let user = user_with_tier(false, Some(past), "trial_1m");
+        assert!(!user.is_access_allowed());
+    }
+
+    #[test]
+    fn access_allowed_for_active_stripe_subscription() {
+        let mut user = user_with_tier(false, None, "trial_1m");
+        user.membership_status = "active".to_string();
+        assert!(user.is_access_allowed());
+    }
+
+    #[test]
+    fn access_denied_for_no_membership_no_trial() {
+        let user = user_with_tier(false, None, "trial_1m");
+        assert!(!user.is_access_allowed());
+    }
+
+    // -- Tier boundary logic (mirrors assign logic in auth service) --
+
+    fn tier_for_count(verified_count: i64) -> SubscriptionTier {
+        match verified_count {
+            0..=19 => SubscriptionTier::Lifetime,
+            20..=69 => SubscriptionTier::Trial3m,
+            _ => SubscriptionTier::Trial1m,
+        }
+    }
+
+    #[test]
+    fn tier_boundary_20th_user_is_last_lifetime() {
+        // count = 19 means 19 already verified; this user is the 20th (index 19)
+        assert_eq!(tier_for_count(19), SubscriptionTier::Lifetime);
+    }
+
+    #[test]
+    fn tier_boundary_21st_user_is_first_trial_3m() {
+        // count = 20 means 20 already verified; this user is the 21st
+        assert_eq!(tier_for_count(20), SubscriptionTier::Trial3m);
+    }
+
+    #[test]
+    fn tier_boundary_70th_user_is_last_trial_3m() {
+        // count = 69 means 69 already verified; this user is the 70th
+        assert_eq!(tier_for_count(69), SubscriptionTier::Trial3m);
+    }
+
+    #[test]
+    fn tier_boundary_71st_user_is_first_trial_1m() {
+        // count = 70 means 70 already verified; this user is the 71st
+        assert_eq!(tier_for_count(70), SubscriptionTier::Trial1m);
     }
 }

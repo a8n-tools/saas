@@ -10,6 +10,8 @@ export type MembershipStatus =
 
 export type MembershipTier = 'personal' | 'business'
 
+export type SubscriptionTier = 'lifetime' | 'trial_3m' | 'trial_1m'
+
 export interface User {
   id: string
   email: string
@@ -23,6 +25,9 @@ export interface User {
   locked_price_amount: number | null
   created_at: string
   updated_at: string
+  subscription_tier: SubscriptionTier
+  trial_ends_at: string | null
+  lifetime_member: boolean
 }
 
 // Auth types

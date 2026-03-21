@@ -11,7 +11,7 @@ use crate::errors::AppError;
 use crate::models::{
     AuditAction, CreateAdminInvite, CreateAuditLog, CreateEmailChangeRequest,
     CreateEmailVerificationToken, CreateMagicLinkToken, CreatePasswordResetToken,
-    CreateRefreshToken, CreateUser, User, UserResponse, UserRole,
+    CreateRefreshToken, CreateUser, SubscriptionTier, User, UserResponse, UserRole,
 };
 use crate::repositories::{AuditLogRepository, InviteRepository, TokenRepository, UserRepository};
 use crate::services::{JwtService, PasswordService};
@@ -899,18 +899,20 @@ impl AuthService {
         Ok(token)
     }
 
-    /// Confirm email verification using token
+    /// Confirm email verification using token.
     ///
-    /// Returns the user's email so the caller can log it.
+    /// Returns `(email, subscription_tier)`. The tier is assigned atomically using
+    /// a transaction-level advisory lock so concurrent verifications cannot race
+    /// and land on the same slot count.
     pub async fn confirm_email_verification(
         &self,
         token: String,
         ip_address: Option<IpAddr>,
-    ) -> Result<String, AppError> {
+    ) -> Result<(String, SubscriptionTier), AppError> {
         let ip = ip_address.map(|ip| IpNetwork::from(ip));
         let token_hash = self.jwt.hash_token(&token);
 
-        // Find token
+        // Find and validate token before opening the transaction
         let verification_token =
             TokenRepository::find_email_verification_token_by_hash(&self.pool, &token_hash)
                 .await?
@@ -920,28 +922,56 @@ impl AuthService {
             return Err(AppError::TokenExpired);
         }
 
-        // Get user
         let user = UserRepository::find_by_id(&self.pool, verification_token.user_id)
             .await?
             .ok_or(AppError::not_found("User"))?;
 
-        // Mark token as used
-        TokenRepository::mark_email_verification_token_used(&self.pool, verification_token.id)
+        // Open a transaction to atomically assign the subscription tier.
+        // The advisory lock (arbitrary fixed ID) serialises all concurrent
+        // verifications so the slot count cannot be read twice for the same slot.
+        let mut tx = self.pool.begin().await?;
+
+        // Acquire transaction-level advisory lock (released on COMMIT/ROLLBACK)
+        sqlx::query("SELECT pg_advisory_xact_lock(9999999)")
+            .execute(&mut *tx)
             .await?;
 
-        // Set email as verified
-        UserRepository::set_email_verified(&self.pool, user.id).await?;
+        // Count currently verified users while holding the lock
+        let verified_count = UserRepository::count_verified_users(&mut *tx).await?;
 
-        // Audit log
+        let tier = match verified_count {
+            0..=19 => SubscriptionTier::Lifetime,
+            20..=69 => SubscriptionTier::Trial3m,
+            _ => SubscriptionTier::Trial1m,
+        };
+
+        // Mark token as used
+        TokenRepository::mark_email_verification_token_used(&mut *tx, verification_token.id)
+            .await?;
+
+        // Set email_verified and assign tier in the same transaction
+        sqlx::query(
+            "UPDATE users SET email_verified = TRUE, updated_at = NOW() WHERE id = $1",
+        )
+        .bind(user.id)
+        .execute(&mut *tx)
+        .await?;
+
+        UserRepository::assign_subscription_tier(&mut *tx, user.id, &tier).await?;
+
+        tx.commit().await?;
+
+        // Audit log (outside transaction — non-critical)
         AuditLogRepository::create(
             &self.pool,
             CreateAuditLog::new(AuditAction::EmailVerified)
                 .with_actor(user.id, &user.email, &user.role)
-                .with_ip(ip),
+                .with_ip(ip)
+                .with_metadata(serde_json::json!({ "subscription_tier": tier.as_str() })),
         )
         .await?;
 
-        Ok(user.email)
+        Ok((user.email, tier))
     }
 
     /// Create an admin invite

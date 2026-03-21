@@ -7,11 +7,18 @@ import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { AlertCircle, Check, Loader2 } from 'lucide-react'
 
+const TIER_MESSAGES: Record<string, string> = {
+  lifetime: "You're one of our founding members — free for life!",
+  trial_3m: 'You get 3 months free — no credit card needed.',
+  trial_1m: 'You get 1 month free — no credit card needed.',
+}
+
 export function VerifyEmailPage() {
   const [searchParams] = useSearchParams()
   const token = searchParams.get('token')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [subscriptionTier, setSubscriptionTier] = useState<string | null>(null)
 
   useEffect(() => {
     if (!token) return
@@ -20,7 +27,8 @@ export function VerifyEmailPage() {
       setIsLoading(true)
       setError(null)
       try {
-        await authApi.confirmEmailVerification({ token })
+        const result = await authApi.confirmEmailVerification({ token })
+        setSubscriptionTier(result.subscription_tier)
         // Refresh user data if logged in
         useAuthStore.getState().refreshUser()
       } catch (err) {
@@ -98,6 +106,8 @@ export function VerifyEmailPage() {
     )
   }
 
+  const tierMessage = subscriptionTier ? TIER_MESSAGES[subscriptionTier] : null
+
   return (
     <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center py-12">
       <Card className="w-full max-w-md">
@@ -107,7 +117,7 @@ export function VerifyEmailPage() {
           </div>
           <CardTitle className="text-2xl">Email Verified!</CardTitle>
           <CardDescription>
-            Your email address has been verified successfully.
+            {tierMessage ?? 'Your email address has been verified successfully.'}
           </CardDescription>
         </CardHeader>
         <CardContent>
