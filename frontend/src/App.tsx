@@ -22,6 +22,7 @@ import { PrivacyPolicyPage } from '@/pages/public/PrivacyPolicyPage'
 import { TwoFactorVerifyPage } from '@/pages/public/TwoFactorVerifyPage'
 import { LogoutPage } from '@/pages/public/LogoutPage'
 import { FeedbackPage } from '@/pages/public/FeedbackPage'
+import { OurStoryPage } from '@/pages/public/OurStoryPage'
 import { AcceptInvitePage } from '@/pages/public/AcceptInvitePage'
 import { SetupPage } from '@/pages/public/SetupPage'
 
@@ -171,6 +172,7 @@ export default function App() {
           <Route path="/settings/verify-email" element={<VerifyEmailPage />} />
           <Route path="/login/2fa" element={<TwoFactorVerifyPage />} />
           <Route path="/logout" element={<LogoutPage />} />
+          <Route path="/our-story" element={<OurStoryPage />} />
           <Route path="/feedback" element={<FeedbackPage />} />
           <Route path="/invite/accept" element={<AcceptInvitePage />} />
           <Route path="/setup" element={<SetupPage />} />

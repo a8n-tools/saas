@@ -31,6 +31,12 @@ export function Header() {
             >
               Pricing
             </Link>
+            <Link
+              to="/our-story"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Our Story
+            </Link>
           </nav>
         </div>
 

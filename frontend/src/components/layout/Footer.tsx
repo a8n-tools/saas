@@ -33,6 +33,14 @@ export function Footer() {
                   Pricing
                 </Link>
               </li>
+              <li>
+                <Link
+                  to="/our-story"
+                  className="text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Our Story
+                </Link>
+              </li>
               {applications.map((app) => (
                 <li key={app.id}>
                   <a
