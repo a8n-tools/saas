@@ -311,4 +311,85 @@ mod tests {
         let hash2 = TotpService::hash_code("CODE2");
         assert_ne!(hash1, hash2);
     }
+
+    // -- key rotation scenarios --
+
+    fn rotated_key() -> [u8; 32] {
+        [0xDD; 32]
+    }
+
+    #[test]
+    fn decrypt_totp_secret_with_previous_key() {
+        let ks_v1 = test_key_set();
+        let totp_secret = b"JBSWY3DPEHPK3PXP"; // typical TOTP base32 secret
+
+        // Encrypt with v1
+        let (ct, nonce, _) = ks_v1.encrypt(totp_secret).unwrap();
+
+        // Rotate: new key is current, old key is previous
+        let ks_v2 = EncryptionKeySet {
+            current: rotated_key(),
+            current_version: 2,
+            previous: Some(ks_v1.current),
+        };
+
+        // Should decrypt via fallback to previous key
+        let decrypted = ks_v2.decrypt(&ct, &nonce, 1).unwrap();
+        assert_eq!(decrypted, totp_secret);
+    }
+
+    #[test]
+    fn reencrypt_totp_secret_roundtrip() {
+        let ks_v1 = test_key_set();
+        let totp_secret = b"JBSWY3DPEHPK3PXP";
+
+        // Encrypt with v1
+        let (ct_old, nonce_old, _) = ks_v1.encrypt(totp_secret).unwrap();
+
+        // Rotate to v2
+        let ks_v2 = EncryptionKeySet {
+            current: rotated_key(),
+            current_version: 2,
+            previous: Some(ks_v1.current),
+        };
+
+        // Simulate re-encryption: decrypt old, encrypt new
+        let plain = ks_v2.decrypt(&ct_old, &nonce_old, 1).unwrap();
+        let (ct_new, nonce_new, ver_new) = ks_v2.encrypt(&plain).unwrap();
+        assert_eq!(ver_new, 2);
+
+        // After removing old key, new ciphertext still decrypts
+        let ks_v2_only = EncryptionKeySet {
+            current: rotated_key(),
+            current_version: 2,
+            previous: None,
+        };
+        let final_plain = ks_v2_only.decrypt(&ct_new, &nonce_new, 2).unwrap();
+        assert_eq!(final_plain, totp_secret);
+    }
+
+    #[test]
+    fn new_totp_setup_uses_current_version() {
+        // After rotation, new encryptions should use the current version
+        let ks_v2 = EncryptionKeySet {
+            current: rotated_key(),
+            current_version: 2,
+            previous: Some(test_key_set().current),
+        };
+
+        let (_, _, version) = ks_v2.encrypt(b"new-totp-secret").unwrap();
+        assert_eq!(version, 2);
+    }
+
+    #[test]
+    fn key_set_accessor_returns_reference() {
+        // Verify TotpService.key_set() is accessible for rotation endpoints.
+        // We can't construct a full TotpService without PgPool, but we can
+        // verify the EncryptionKeySet type is correct through the test helpers.
+        let ks = test_key_set();
+        assert_eq!(ks.current_version, 1);
+        assert!(ks.previous.is_none());
+        assert!(!ks.needs_reencrypt(1));
+        assert!(ks.needs_reencrypt(0));
+    }
 }

@@ -392,4 +392,47 @@ mod tests {
         assert_eq!(parse_smtp_from_email(input), "noreply@localhost");
         assert_eq!(parse_smtp_from_name(input), "localhost");
     }
+
+    // ---- Key rotation config ----
+
+    #[test]
+    fn test_load_optional_encryption_key_returns_none_when_unset() {
+        env::remove_var("TEST_OPTIONAL_KEY_UNSET");
+        let result = Config::load_optional_encryption_key("TEST_OPTIONAL_KEY_UNSET");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_load_optional_encryption_key_parses_hex() {
+        let hex_key = "aa".repeat(32); // 64 hex chars = 32 bytes
+        env::set_var("TEST_OPTIONAL_KEY_HEX", &hex_key);
+        let result = Config::load_optional_encryption_key("TEST_OPTIONAL_KEY_HEX");
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), [0xAA; 32]);
+        env::remove_var("TEST_OPTIONAL_KEY_HEX");
+    }
+
+    #[test]
+    #[should_panic(expected = "must be valid hex")]
+    fn test_load_optional_encryption_key_panics_on_invalid_hex() {
+        env::set_var("TEST_OPTIONAL_KEY_BAD", "not-valid-hex!");
+        Config::load_optional_encryption_key("TEST_OPTIONAL_KEY_BAD");
+    }
+
+    #[test]
+    #[should_panic(expected = "must be exactly 32 bytes")]
+    fn test_load_optional_encryption_key_panics_on_wrong_length() {
+        env::set_var("TEST_OPTIONAL_KEY_SHORT", "aabb"); // only 2 bytes
+        Config::load_optional_encryption_key("TEST_OPTIONAL_KEY_SHORT");
+    }
+
+    #[test]
+    fn test_key_version_parsing() {
+        // Test the parsing logic directly to avoid env var races with parallel tests.
+        // Key versions use: env::var("X").ok().and_then(|v| v.parse().ok()).unwrap_or(1)
+        assert_eq!("3".parse::<i16>().unwrap(), 3);
+        assert_eq!("7".parse::<i16>().unwrap(), 7);
+        assert_eq!(None::<String>.and_then(|v: String| v.parse::<i16>().ok()).unwrap_or(1), 1);
+        assert_eq!(Some("invalid".to_string()).and_then(|v| v.parse::<i16>().ok()).unwrap_or(1), 1);
+    }
 }

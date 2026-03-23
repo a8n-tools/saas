@@ -228,4 +228,108 @@ mod tests {
         assert!(!resp.has_secret_key);
         assert!(!resp.has_webhook_secret);
     }
+
+    // ---- Key rotation scenarios ----
+
+    #[test]
+    fn decrypt_with_previous_key_fallback() {
+        // Encrypt with key v1
+        let ks_v1 = test_key_set();
+        let (ct, nonce, _) = encrypt_secret(&ks_v1, "sk_live_old").unwrap();
+
+        // Rotate: new key is current, old key is previous
+        let ks_v2 = EncryptionKeySet {
+            current: [0xBB; 32],
+            current_version: 2,
+            previous: Some([0xAA; 32]),
+        };
+        let decrypted = decrypt_secret(&ks_v2, &ct, &nonce, 1).unwrap();
+        assert_eq!(decrypted, "sk_live_old");
+    }
+
+    #[test]
+    fn reencrypt_stripe_secret_roundtrip() {
+        // Encrypt with v1
+        let ks_v1 = test_key_set();
+        let (ct_old, nonce_old, _) = encrypt_secret(&ks_v1, "whsec_original").unwrap();
+
+        // Rotate to v2
+        let ks_v2 = EncryptionKeySet {
+            current: [0xBB; 32],
+            current_version: 2,
+            previous: Some([0xAA; 32]),
+        };
+
+        // Decrypt old, re-encrypt with new
+        let plain = decrypt_secret(&ks_v2, &ct_old, &nonce_old, 1).unwrap();
+        let (ct_new, nonce_new, ver_new) = encrypt_secret(&ks_v2, &plain).unwrap();
+        assert_eq!(ver_new, 2);
+
+        // New ciphertext decryptable with v2 key only
+        let ks_v2_only = EncryptionKeySet {
+            current: [0xBB; 32],
+            current_version: 2,
+            previous: None,
+        };
+        let final_plain = decrypt_secret(&ks_v2_only, &ct_new, &nonce_new, 2).unwrap();
+        assert_eq!(final_plain, "whsec_original");
+    }
+
+    #[test]
+    fn from_db_decrypts_with_rotated_key() {
+        // Encrypt secrets with v1 key
+        let ks_v1 = test_key_set();
+        let (sk_ct, sk_nonce, _) = encrypt_secret(&ks_v1, "sk_live_rotated").unwrap();
+
+        let config = StripeConfig {
+            id: 1,
+            secret_key: Some(sk_ct),
+            secret_key_nonce: Some(sk_nonce),
+            webhook_secret: None,
+            webhook_secret_nonce: None,
+            price_id_personal: None,
+            price_id_business: None,
+            key_version: 1,
+            updated_at: Utc::now(),
+            updated_by: None,
+        };
+
+        // Decrypt with v2 key set (v1 as previous)
+        let ks_v2 = EncryptionKeySet {
+            current: [0xBB; 32],
+            current_version: 2,
+            previous: Some([0xAA; 32]),
+        };
+        let resp = StripeConfigResponse::from_db(&config, &ks_v2).unwrap();
+        assert_eq!(resp.secret_key_masked.as_deref(), Some("***ated"));
+        assert!(resp.has_secret_key);
+    }
+
+    #[test]
+    fn from_db_fails_without_previous_key_after_rotation() {
+        // Encrypt with v1 key
+        let ks_v1 = test_key_set();
+        let (sk_ct, sk_nonce, _) = encrypt_secret(&ks_v1, "sk_live_lost").unwrap();
+
+        let config = StripeConfig {
+            id: 1,
+            secret_key: Some(sk_ct),
+            secret_key_nonce: Some(sk_nonce),
+            webhook_secret: None,
+            webhook_secret_nonce: None,
+            price_id_personal: None,
+            price_id_business: None,
+            key_version: 1,
+            updated_at: Utc::now(),
+            updated_by: None,
+        };
+
+        // v2 key only, no previous — cannot decrypt v1 data
+        let ks_v2_no_prev = EncryptionKeySet {
+            current: [0xBB; 32],
+            current_version: 2,
+            previous: None,
+        };
+        assert!(StripeConfigResponse::from_db(&config, &ks_v2_no_prev).is_err());
+    }
 }

@@ -181,4 +181,132 @@ mod tests {
         let (_, nonce2, _) = ks.encrypt(b"a").unwrap();
         assert_ne!(nonce1, nonce2);
     }
+
+    // ---- decrypt_with_key standalone ----
+
+    #[test]
+    fn decrypt_with_key_roundtrip() {
+        let ks = make_key_set(key_a(), 1, None);
+        let (ct, nonce, _) = ks.encrypt(b"standalone").unwrap();
+        let decrypted = decrypt_with_key(&key_a(), &ct, &nonce).unwrap();
+        assert_eq!(decrypted, b"standalone");
+    }
+
+    #[test]
+    fn decrypt_with_key_wrong_key_fails() {
+        let ks = make_key_set(key_a(), 1, None);
+        let (ct, nonce, _) = ks.encrypt(b"standalone").unwrap();
+        assert!(decrypt_with_key(&key_b(), &ct, &nonce).is_err());
+    }
+
+    // ---- Re-encryption simulation ----
+
+    #[test]
+    fn reencrypt_simulates_full_rotation() {
+        // Phase 1: encrypt with v1
+        let ks_v1 = make_key_set(key_a(), 1, None);
+        let (ct_old, nonce_old, v) = ks_v1.encrypt(b"my-secret").unwrap();
+        assert_eq!(v, 1);
+
+        // Phase 2: rotate to v2, old key becomes previous
+        let ks_v2 = make_key_set(key_b(), 2, Some(key_a()));
+
+        // Decrypt old data with fallback
+        let plain = ks_v2.decrypt(&ct_old, &nonce_old, 1).unwrap();
+        assert_eq!(plain, b"my-secret");
+
+        // Re-encrypt with current key
+        let (ct_new, nonce_new, v_new) = ks_v2.encrypt(&plain).unwrap();
+        assert_eq!(v_new, 2);
+
+        // Verify new ciphertext decrypts with current key only
+        let ks_v2_no_prev = make_key_set(key_b(), 2, None);
+        let decrypted = ks_v2_no_prev.decrypt(&ct_new, &nonce_new, 2).unwrap();
+        assert_eq!(decrypted, b"my-secret");
+
+        // Old ciphertext should NOT decrypt without previous key
+        assert!(ks_v2_no_prev.decrypt(&ct_old, &nonce_old, 1).is_err());
+    }
+
+    #[test]
+    fn multi_hop_rotation_v1_to_v2_to_v3() {
+        // v1: encrypt
+        let ks_v1 = make_key_set(key_a(), 1, None);
+        let (ct1, nonce1, _) = ks_v1.encrypt(b"data").unwrap();
+
+        // v2: rotate, re-encrypt
+        let ks_v2 = make_key_set(key_b(), 2, Some(key_a()));
+        let plain = ks_v2.decrypt(&ct1, &nonce1, 1).unwrap();
+        let (ct2, nonce2, _) = ks_v2.encrypt(&plain).unwrap();
+
+        // v3: rotate again, re-encrypt
+        let key_c = [0xCC; 32];
+        let ks_v3 = make_key_set(key_c, 3, Some(key_b()));
+        let plain2 = ks_v3.decrypt(&ct2, &nonce2, 2).unwrap();
+        let (ct3, nonce3, v3) = ks_v3.encrypt(&plain2).unwrap();
+        assert_eq!(v3, 3);
+
+        // Final ciphertext decrypts with v3 key
+        let decrypted = ks_v3.decrypt(&ct3, &nonce3, 3).unwrap();
+        assert_eq!(decrypted, b"data");
+    }
+
+    // ---- Edge cases ----
+
+    #[test]
+    fn encrypt_empty_plaintext() {
+        let ks = make_key_set(key_a(), 1, None);
+        let (ct, nonce, _) = ks.encrypt(b"").unwrap();
+        let decrypted = ks.decrypt(&ct, &nonce, 1).unwrap();
+        assert_eq!(decrypted, b"");
+    }
+
+    #[test]
+    fn encrypt_large_plaintext() {
+        let ks = make_key_set(key_a(), 1, None);
+        let large = vec![0x42u8; 10_000];
+        let (ct, nonce, _) = ks.encrypt(&large).unwrap();
+        let decrypted = ks.decrypt(&ct, &nonce, 1).unwrap();
+        assert_eq!(decrypted, large);
+    }
+
+    #[test]
+    fn decrypt_current_key_fallback_when_version_matches_but_wrong_key() {
+        // Encrypt with key_a
+        let ks_a = make_key_set(key_a(), 1, None);
+        let (ct, nonce, _) = ks_a.encrypt(b"secret").unwrap();
+
+        // key_b is current at version 1, key_a is previous
+        // Version matches current (1==1), but current key (key_b) can't decrypt.
+        // Should fall back to previous key (key_a).
+        let ks_fallback = EncryptionKeySet {
+            current: key_b(),
+            current_version: 1,
+            previous: Some(key_a()),
+        };
+        let decrypted = ks_fallback.decrypt(&ct, &nonce, 1).unwrap();
+        assert_eq!(decrypted, b"secret");
+    }
+
+    #[test]
+    fn needs_reencrypt_same_version_is_false() {
+        let ks = make_key_set(key_a(), 5, None);
+        assert!(!ks.needs_reencrypt(5));
+    }
+
+    #[test]
+    fn encrypt_always_uses_current_version() {
+        let ks = make_key_set(key_b(), 42, Some(key_a()));
+        let (_, _, version) = ks.encrypt(b"test").unwrap();
+        assert_eq!(version, 42);
+    }
+
+    #[test]
+    fn clone_produces_independent_key_set() {
+        let ks = make_key_set(key_a(), 1, Some(key_b()));
+        let ks2 = ks.clone();
+        assert_eq!(ks.current, ks2.current);
+        assert_eq!(ks.current_version, ks2.current_version);
+        assert_eq!(ks.previous, ks2.previous);
+    }
 }
