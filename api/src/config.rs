@@ -26,6 +26,8 @@ pub struct Config {
     pub auto_ban: AutoBanConfig,
     /// TOTP encryption key (32 bytes) for encrypting TOTP secrets at rest
     pub totp_encryption_key: [u8; 32],
+    /// Stripe encryption key (32 bytes) for encrypting Stripe secrets at rest
+    pub stripe_encryption_key: [u8; 32],
 }
 
 /// SMTP TLS mode
@@ -213,6 +215,7 @@ impl Config {
         let auto_ban = AutoBanConfig::from_env();
 
         let totp_encryption_key = Self::load_totp_encryption_key(&environment);
+        let stripe_encryption_key = Self::load_stripe_encryption_key(&environment);
 
         let config = Self {
             database_url,
@@ -226,6 +229,7 @@ impl Config {
             cookie_domain,
             auto_ban,
             totp_encryption_key,
+            stripe_encryption_key,
         };
 
         info!(
@@ -258,6 +262,27 @@ impl Config {
             Err(_) => {
                 if environment == "production" {
                     panic!("TOTP_ENCRYPTION_KEY must be set in production");
+                }
+                [0u8; 32]
+            }
+        }
+    }
+
+    /// Load Stripe encryption key from STRIPE_ENCRYPTION_KEY env var (hex-encoded 32 bytes).
+    /// In development, defaults to 32 zero bytes.
+    fn load_stripe_encryption_key(environment: &str) -> [u8; 32] {
+        match env::var("STRIPE_ENCRYPTION_KEY") {
+            Ok(hex_str) => {
+                let bytes = hex::decode(hex_str.trim())
+                    .expect("STRIPE_ENCRYPTION_KEY must be valid hex");
+                let key: [u8; 32] = bytes
+                    .try_into()
+                    .expect("STRIPE_ENCRYPTION_KEY must be exactly 32 bytes (64 hex chars)");
+                key
+            }
+            Err(_) => {
+                if environment == "production" {
+                    panic!("STRIPE_ENCRYPTION_KEY must be set in production");
                 }
                 [0u8; 32]
             }

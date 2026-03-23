@@ -230,6 +230,7 @@ pub async fn get_item(
 | `COOKIE_DOMAIN`         | Cookie domain for cross-subdomain auth (e.g. `.example.com`) | None (exact hostname)                                     | Yes (prod) |
 | `JWT_SECRET`            | Shared JWT signing secret                                    | -                                                         | Yes (prod) |
 | `TOTP_ENCRYPTION_KEY`   | Hex-encoded 32-byte key for encrypting TOTP secrets          | Zero bytes (dev only)                                     | Yes (prod) |
+| `STRIPE_ENCRYPTION_KEY` | Hex-encoded 32-byte key for encrypting Stripe secrets        | Zero bytes (dev only)                                     | Yes (prod) |
 | `STRIPE_SECRET_KEY`     | Stripe API secret key                                        | -                                                         | Yes (prod) |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret                                | -                                                         | Yes (prod) |
 | `STRIPE_PRICE_ID`       | Stripe price ID for subscription                             | -                                                         | Yes (prod) |
