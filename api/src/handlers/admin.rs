@@ -1192,10 +1192,14 @@ pub struct KeyHealthCheck {
     pub message: Option<String>,
 }
 
-async fn check_stripe_key(pool: &PgPool, key: &[u8; 32]) -> Result<KeyHealthCheck, AppError> {
-    let db = StripeConfigRepository::get(pool).await?;
-    Ok(match (&db.secret_key, &db.secret_key_nonce) {
-        (Some(ct), Some(nonce)) => match decrypt_secret(key, ct, nonce) {
+/// Evaluate decryptability of an optional (ciphertext, nonce) pair.
+fn evaluate_key_health(
+    key: &[u8; 32],
+    ciphertext: Option<&[u8]>,
+    nonce: Option<&[u8]>,
+) -> KeyHealthCheck {
+    match (ciphertext, nonce) {
+        (Some(ct), Some(n)) => match decrypt_secret(key, ct, n) {
             Ok(_) => KeyHealthCheck {
                 status: "healthy".to_string(),
                 has_data: true,
@@ -1212,7 +1216,16 @@ async fn check_stripe_key(pool: &PgPool, key: &[u8; 32]) -> Result<KeyHealthChec
             has_data: false,
             message: None,
         },
-    })
+    }
+}
+
+async fn check_stripe_key(pool: &PgPool, key: &[u8; 32]) -> Result<KeyHealthCheck, AppError> {
+    let db = StripeConfigRepository::get(pool).await?;
+    Ok(evaluate_key_health(
+        key,
+        db.secret_key.as_deref(),
+        db.secret_key_nonce.as_deref(),
+    ))
 }
 
 async fn check_totp_key(pool: &PgPool, key: &[u8; 32]) -> Result<KeyHealthCheck, AppError> {
@@ -1222,23 +1235,8 @@ async fn check_totp_key(pool: &PgPool, key: &[u8; 32]) -> Result<KeyHealthCheck,
             .await?;
 
     Ok(match row {
-        Some((ct, nonce)) => match decrypt_secret(key, &ct, &nonce) {
-            Ok(_) => KeyHealthCheck {
-                status: "healthy".to_string(),
-                has_data: true,
-                message: None,
-            },
-            Err(e) => KeyHealthCheck {
-                status: "unhealthy".to_string(),
-                has_data: true,
-                message: Some(e.to_string()),
-            },
-        },
-        None => KeyHealthCheck {
-            status: "no_data".to_string(),
-            has_data: false,
-            message: None,
-        },
+        Some((ct, nonce)) => evaluate_key_health(key, Some(&ct), Some(&nonce)),
+        None => evaluate_key_health(key, None, None),
     })
 }
 
@@ -1299,4 +1297,125 @@ pub async fn get_key_health_by_id(
     let key_id = path.into_inner();
     let check = run_key_check(&key_id, &pool, &config).await?;
     Ok(success(check, request_id))
+}
+
+#[cfg(test)]
+mod key_health_tests {
+    use super::*;
+    use crate::models::stripe::encrypt_secret;
+
+    fn test_key() -> [u8; 32] {
+        [0xAA; 32]
+    }
+
+    // ---- evaluate_key_health ----
+
+    #[test]
+    fn healthy_when_decrypt_succeeds() {
+        let key = test_key();
+        let (ct, nonce) = encrypt_secret(&key, "test-secret").unwrap();
+
+        let result = evaluate_key_health(&key, Some(&ct), Some(&nonce));
+
+        assert_eq!(result.status, "healthy");
+        assert!(result.has_data);
+        assert!(result.message.is_none());
+    }
+
+    #[test]
+    fn unhealthy_when_wrong_key() {
+        let key = test_key();
+        let wrong_key = [0xBB; 32];
+        let (ct, nonce) = encrypt_secret(&key, "test-secret").unwrap();
+
+        let result = evaluate_key_health(&wrong_key, Some(&ct), Some(&nonce));
+
+        assert_eq!(result.status, "unhealthy");
+        assert!(result.has_data);
+        assert!(result.message.is_some());
+    }
+
+    #[test]
+    fn unhealthy_when_tampered_ciphertext() {
+        let key = test_key();
+        let (mut ct, nonce) = encrypt_secret(&key, "test-secret").unwrap();
+        ct[0] ^= 0xFF;
+
+        let result = evaluate_key_health(&key, Some(&ct), Some(&nonce));
+
+        assert_eq!(result.status, "unhealthy");
+        assert!(result.has_data);
+        assert!(result.message.is_some());
+    }
+
+    #[test]
+    fn no_data_when_both_none() {
+        let key = test_key();
+
+        let result = evaluate_key_health(&key, None, None);
+
+        assert_eq!(result.status, "no_data");
+        assert!(!result.has_data);
+        assert!(result.message.is_none());
+    }
+
+    #[test]
+    fn no_data_when_ciphertext_without_nonce() {
+        let key = test_key();
+        let (ct, _nonce) = encrypt_secret(&key, "test-secret").unwrap();
+
+        let result = evaluate_key_health(&key, Some(&ct), None);
+
+        assert_eq!(result.status, "no_data");
+        assert!(!result.has_data);
+    }
+
+    #[test]
+    fn no_data_when_nonce_without_ciphertext() {
+        let key = test_key();
+        let (_ct, nonce) = encrypt_secret(&key, "test-secret").unwrap();
+
+        let result = evaluate_key_health(&key, None, Some(&nonce));
+
+        assert_eq!(result.status, "no_data");
+        assert!(!result.has_data);
+    }
+
+    // ---- KEY_IDS registry ----
+
+    #[test]
+    fn key_ids_contains_stripe_and_totp() {
+        assert!(KEY_IDS.contains(&"stripe"));
+        assert!(KEY_IDS.contains(&"totp"));
+    }
+
+    // ---- KeyHealthCheck serialization ----
+
+    #[test]
+    fn serialization_omits_message_when_none() {
+        let check = KeyHealthCheck {
+            status: "healthy".to_string(),
+            has_data: true,
+            message: None,
+        };
+        let json = serde_json::to_value(&check).unwrap();
+
+        assert_eq!(json["status"], "healthy");
+        assert_eq!(json["has_data"], true);
+        assert!(json.get("message").is_none());
+    }
+
+    #[test]
+    fn serialization_includes_message_when_present() {
+        let check = KeyHealthCheck {
+            status: "unhealthy".to_string(),
+            has_data: true,
+            message: Some("Decryption failed".to_string()),
+        };
+        let json = serde_json::to_value(&check).unwrap();
+
+        assert_eq!(json["status"], "unhealthy");
+        assert_eq!(json["has_data"], true);
+        assert_eq!(json["message"], "Decryption failed");
+    }
 }
