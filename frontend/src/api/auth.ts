@@ -51,7 +51,7 @@ export const authApi = {
   requestEmailVerification: (): Promise<{ message: string }> =>
     apiClient.post('/users/me/email/verify'),
 
-  confirmEmailVerification: (data: { token: string }): Promise<{ message: string }> =>
+  confirmEmailVerification: (data: { token: string }): Promise<{ message: string; subscription_tier: string }> =>
     apiClient.post('/users/me/email/verify/confirm', data),
 
   // 2FA endpoints

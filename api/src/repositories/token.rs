@@ -2,6 +2,7 @@
 
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
+use sqlx::postgres::Postgres;
 use uuid::Uuid;
 
 use crate::errors::AppError;
@@ -491,17 +492,20 @@ impl TokenRepository {
     }
 
     /// Mark email verification token as used
-    pub async fn mark_email_verification_token_used(
-        pool: &PgPool,
+    pub async fn mark_email_verification_token_used<'e, E>(
+        executor: E,
         token_id: Uuid,
-    ) -> Result<(), AppError> {
+    ) -> Result<(), AppError>
+    where
+        E: sqlx::Executor<'e, Database = Postgres>,
+    {
         sqlx::query(
             r#"
             UPDATE email_verification_tokens SET used_at = NOW() WHERE id = $1
             "#,
         )
         .bind(token_id)
-        .execute(pool)
+        .execute(executor)
         .await?;
 
         Ok(())

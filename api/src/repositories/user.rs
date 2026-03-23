@@ -1,12 +1,12 @@
 //! User repository
 
-use chrono::{DateTime, Utc};
+use chrono::{self, DateTime, Utc};
 use sqlx::PgPool;
 use sqlx::postgres::Postgres;
 use uuid::Uuid;
 
 use crate::errors::AppError;
-use crate::models::{CreateUser, MembershipStatus, User};
+use crate::models::{CreateUser, MembershipStatus, SubscriptionTier, User};
 
 pub struct UserRepository;
 
@@ -428,6 +428,92 @@ impl UserRepository {
         };
 
         Ok((users, total))
+    }
+
+    /// Atomically assign a subscription tier to a user.
+    ///
+    /// Must be called inside a transaction that holds a `pg_advisory_xact_lock`
+    /// to prevent concurrent verifications from racing on the same slot count.
+    /// Returns the tier that was assigned.
+    pub async fn assign_subscription_tier<'e, E>(
+        executor: E,
+        user_id: Uuid,
+        tier: &SubscriptionTier,
+    ) -> Result<(), AppError>
+    where
+        E: sqlx::Executor<'e, Database = Postgres>,
+    {
+        let (lifetime_member, trial_ends_at) = match tier {
+            SubscriptionTier::Lifetime => (true, None),
+            SubscriptionTier::Trial3m => {
+                let ends = chrono::Utc::now() + chrono::Duration::days(90);
+                (false, Some(ends))
+            }
+            SubscriptionTier::Trial1m => {
+                let ends = chrono::Utc::now() + chrono::Duration::days(30);
+                (false, Some(ends))
+            }
+        };
+
+        sqlx::query(
+            r#"
+            UPDATE users
+            SET subscription_tier = $1,
+                lifetime_member = $2,
+                trial_ends_at = $3,
+                updated_at = NOW()
+            WHERE id = $4
+            "#,
+        )
+        .bind(tier.as_str())
+        .bind(lifetime_member)
+        .bind(trial_ends_at)
+        .bind(user_id)
+        .execute(executor)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Count verified users — used inside a transaction with an advisory lock
+    /// to atomically determine which tier the next verified user should receive.
+    pub async fn count_verified_users<'e, E>(executor: E) -> Result<i64, AppError>
+    where
+        E: sqlx::Executor<'e, Database = Postgres>,
+    {
+        let row: (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM users WHERE email_verified = true AND deleted_at IS NULL",
+        )
+        .fetch_one(executor)
+        .await?;
+        Ok(row.0)
+    }
+
+    /// Grant lifetime membership to a user (admin override).
+    pub async fn grant_lifetime_membership(
+        pool: &PgPool,
+        user_id: Uuid,
+        granted_by: Uuid,
+    ) -> Result<User, AppError> {
+        let user = sqlx::query_as::<_, User>(
+            r#"
+            UPDATE users
+            SET subscription_tier = 'lifetime',
+                lifetime_member = TRUE,
+                trial_ends_at = NULL,
+                subscription_override_by = $2,
+                updated_at = NOW()
+            WHERE id = $1 AND deleted_at IS NULL
+            RETURNING *
+            "#,
+        )
+        .bind(user_id)
+        .bind(granted_by)
+        .fetch_optional(pool)
+        .await?
+        .ok_or_else(|| AppError::not_found("User"))?;
+
+        Ok(user)
     }
 
     /// Get email addresses of all active admin users for system notifications

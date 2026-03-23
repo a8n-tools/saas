@@ -1136,3 +1136,35 @@ pub async fn update_stripe_config(
 
     Ok(success(StripeConfigResponse::from_db(&updated, key)?, request_id))
 }
+
+// =============================================================================
+// Subscription Management
+// =============================================================================
+
+/// POST /v1/admin/users/{user_id}/lifetime
+/// Grant lifetime membership to a user
+pub async fn grant_lifetime_membership(
+    req: HttpRequest,
+    admin: AdminUser,
+    pool: web::Data<PgPool>,
+    path: web::Path<uuid::Uuid>,
+) -> Result<HttpResponse, AppError> {
+    let request_id = get_request_id(&req);
+    let user_id = path.into_inner();
+
+    let user = UserRepository::grant_lifetime_membership(&pool, user_id, admin.0.sub).await?;
+
+    AuditLogRepository::create(
+        &pool,
+        CreateAuditLog::new(AuditAction::AdminMembershipGranted)
+            .with_actor(admin.0.sub, &admin.0.email, &admin.0.role)
+            .with_resource("user", user_id)
+            .with_metadata(serde_json::json!({
+                "tier": "lifetime",
+                "target_email": user.email,
+            })),
+    )
+    .await?;
+
+    Ok(success(UserResponse::from(user), request_id))
+}

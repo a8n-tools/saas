@@ -24,8 +24,11 @@ export function DashboardPage() {
 
   const hasActiveMembership =
     user?.role === 'admin' ||
+    user?.lifetime_member ||
     user?.membership_status === 'active' ||
-    user?.membership_status === 'grace_period'
+    user?.membership_status === 'past_due' ||
+    user?.membership_status === 'grace_period' ||
+    (user?.trial_ends_at != null && new Date(user.trial_ends_at) > new Date())
 
   return (
     <div className="space-y-8">
@@ -49,21 +52,14 @@ export function DashboardPage() {
               </div>
               <CardTitle className="text-lg">Membership</CardTitle>
             </div>
-            <MembershipBadge status={user?.membership_status} />
+            <MembershipBadge user={user} />
           </div>
         </CardHeader>
         <CardContent>
           {hasActiveMembership ? (
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">
-                  You have access to all applications.
-                  {user?.price_locked && (
-                    <span className="ml-2 text-teal-600 dark:text-teal-400 font-medium">
-                      Price locked at $3/month
-                    </span>
-                  )}
-                </p>
+                <SubscriptionStatusText user={user} />
               </div>
               <Link to="/membership">
                 <Button variant="outline" size="sm" className="border-indigo-300/30 text-indigo-600 hover:bg-indigo-500/10 dark:border-indigo-500/30 dark:text-indigo-400">
@@ -74,7 +70,7 @@ export function DashboardPage() {
           ) : (
             <div className="flex items-center justify-between">
               <p className="text-sm text-muted-foreground">
-                Subscribe to access all applications.
+                Your trial has ended — subscribe to continue.
               </p>
               <Link to="/membership">
                 <Button size="sm" className="gap-2 bg-gradient-to-r from-primary to-indigo-500 text-white border-0 shadow-md shadow-primary/20">
@@ -153,8 +149,12 @@ export function DashboardPage() {
   )
 }
 
-function MembershipBadge({ status }: { status?: string }) {
-  switch (status) {
+function MembershipBadge({ user }: { user?: import('@/types').User | null }) {
+  if (user?.lifetime_member) return <Badge variant="success">Lifetime</Badge>
+  if (user?.trial_ends_at && new Date(user.trial_ends_at) > new Date()) {
+    return <Badge variant="secondary">Trial</Badge>
+  }
+  switch (user?.membership_status) {
     case 'active':
       return <Badge variant="success">Active</Badge>
     case 'past_due':
@@ -166,4 +166,31 @@ function MembershipBadge({ status }: { status?: string }) {
     default:
       return <Badge variant="outline">No Membership</Badge>
   }
+}
+
+function SubscriptionStatusText({ user }: { user?: import('@/types').User | null }) {
+  if (user?.lifetime_member) {
+    return <p className="text-sm font-medium text-teal-600 dark:text-teal-400">Lifetime member 🎉</p>
+  }
+  if (user?.trial_ends_at) {
+    const trialEnd = new Date(user.trial_ends_at)
+    const now = new Date()
+    if (trialEnd > now) {
+      const daysLeft = Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+      return <p className="text-sm text-muted-foreground">Trial ends in {daysLeft} day{daysLeft !== 1 ? 's' : ''}</p>
+    }
+  }
+  if (user?.membership_status === 'active') {
+    return (
+      <p className="text-sm text-muted-foreground">
+        You have access to all applications.
+        {user.price_locked && (
+          <span className="ml-2 text-teal-600 dark:text-teal-400 font-medium">
+            Price locked at $3/month
+          </span>
+        )}
+      </p>
+    )
+  }
+  return <p className="text-sm text-muted-foreground">You have access to all applications.</p>
 }
