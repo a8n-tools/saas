@@ -7,6 +7,9 @@ default:
 export UID := `id -u`
 export GID := `id -g`
 
+# Use the per-user dev compose file
+compose := "docker compose -f compose.dev.yml "
+
 # Create .env files from dev/example defaults if they don't exist
 [private]
 ensure-env:
@@ -17,11 +20,11 @@ ensure-env:
 # Development
 # Start development environment (foreground)
 dev: ensure-env
-    docker compose up --build
+    {{ compose }}up --build
 
 # Start development environment (detached)
 dev-detach: ensure-env
-    docker compose up --build --detach
+    {{ compose }}up --build --detach
     @echo ""
     @echo "Services started!"
     @echo "  Frontend:  http://localhost:5173"
@@ -29,41 +32,41 @@ dev-detach: ensure-env
 
 # Stop all services
 down:
-    docker compose down
+    {{ compose }}down
 
 # Tail all service logs
 logs:
-    docker compose logs --follow
+    {{ compose }}logs --follow
 
 # Tail API logs only
 logs-api:
-    docker compose logs --follow api
+    {{ compose }}logs --follow api
 
 # Tail frontend logs only
 logs-frontend:
-    docker compose logs --follow frontend
+    {{ compose }}logs --follow frontend
 
 # Database
 # Connect to PostgreSQL shell
 db-shell:
-    docker compose exec postgres psql --username a8n --dbname a8n_platform
+    {{ compose }}exec postgres psql --username a8n --dbname a8n_platform
 
 # Run database migrations
 migrate:
-    docker compose exec api cargo sqlx migrate run
+    {{ compose }}exec api cargo sqlx migrate run
 
 # Create a new migration
 migrate-create name:
-    docker compose exec api cargo sqlx migrate add {{ name }}
+    {{ compose }}exec api cargo sqlx migrate add {{ name }}
 
 # Testing
 # Run API unit tests (no database required)
 test-api:
-    docker compose exec -e GIT_COMMIT=dev api cargo test --lib
+    {{ compose }}exec -e GIT_COMMIT=dev api cargo test --lib
 
 # Run frontend tests (single run, no watch)
 test-frontend:
-    docker compose exec frontend bun run test:run
+    {{ compose }}exec frontend bun run test:run
 
 # Run all tests
 test: test-api test-frontend
@@ -71,28 +74,28 @@ test: test-api test-frontend
 # Linting
 # Run API clippy
 lint-api:
-    docker compose exec api cargo clippy
+    {{ compose }}exec api cargo clippy
 
 # Run API formatter
 fmt-api:
-    docker compose exec api cargo fmt
+    {{ compose }}exec api cargo fmt
 
 # Run frontend linter
 lint-frontend:
-    docker compose exec frontend bun run lint
+    {{ compose }}exec frontend bun run lint
 
 # Build
 # Build all Docker images (dev)
 build:
-    docker compose build
+    {{ compose }}build
 
 # Build API Docker image (dev)
 build-api:
-    docker compose build api
+    {{ compose }}build api
 
 # Build frontend Docker image (dev)
 build-frontend:
-    docker compose build frontend
+    {{ compose }}build frontend
 
 # Build API Docker image for validation (builder stage only)
 check-docker-api:
@@ -185,5 +188,5 @@ test-release:
 # Cleanup
 # Stop services and remove volumes
 clean:
-    docker compose down --volumes --remove-orphans
+    {{ compose }}down --volumes --remove-orphans
     @echo "Volumes removed. Data has been cleared."
