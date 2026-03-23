@@ -63,7 +63,7 @@ export function AdminAuditLogsPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Admin actions only</span>
+              <span className="text-sm text-muted-foreground">Admin Actions Only</span>
               <Switch
                 checked={adminOnly}
                 onCheckedChange={(checked) => {
