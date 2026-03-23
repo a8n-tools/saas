@@ -17,7 +17,7 @@ use crate::models::{
     DeleteApplicationRequest, MembershipStatus, StripeConfigResponse, SwapApplicationOrderRequest,
     UpdateApplication, UserResponse,
 };
-use crate::models::stripe::encrypt_secret;
+use crate::models::stripe::{decrypt_secret, encrypt_secret};
 use crate::repositories::{
     ApplicationRepository, AuditLogRepository, InviteRepository, MembershipRepository,
     NotificationRepository, StripeConfigRepository, TokenRepository, UserRepository,
@@ -1178,4 +1178,101 @@ pub async fn grant_lifetime_membership(
     .await?;
 
     Ok(success(UserResponse::from(user), request_id))
+}
+
+// =============================================================================
+// Encryption Health Check
+// =============================================================================
+
+#[derive(Debug, Serialize)]
+pub struct EncryptionCheckStatus {
+    pub status: String,
+    pub has_data: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+}
+
+/// GET /v1/admin/encryption-health
+/// Verifies that stored encrypted secrets can still be decrypted with the current keys.
+pub async fn get_encryption_health(
+    req: HttpRequest,
+    _admin: AdminUser,
+    pool: web::Data<PgPool>,
+    config: web::Data<Config>,
+) -> Result<HttpResponse, AppError> {
+    let request_id = get_request_id(&req);
+
+    // Check Stripe encryption key
+    let stripe_check = {
+        let db = StripeConfigRepository::get(&pool).await?;
+        match (&db.secret_key, &db.secret_key_nonce) {
+            (Some(ct), Some(nonce)) => {
+                match decrypt_secret(&config.stripe_encryption_key, ct, nonce) {
+                    Ok(_) => EncryptionCheckStatus {
+                        status: "healthy".to_string(),
+                        has_data: true,
+                        message: None,
+                    },
+                    Err(e) => EncryptionCheckStatus {
+                        status: "unhealthy".to_string(),
+                        has_data: true,
+                        message: Some(e.to_string()),
+                    },
+                }
+            }
+            _ => EncryptionCheckStatus {
+                status: "no_data".to_string(),
+                has_data: false,
+                message: None,
+            },
+        }
+    };
+
+    // Check TOTP encryption key
+    let totp_check = {
+        let row: Option<(Vec<u8>, Vec<u8>)> = sqlx::query_as(
+            "SELECT encrypted_secret, nonce FROM user_totp LIMIT 1",
+        )
+        .fetch_optional(pool.get_ref())
+        .await?;
+
+        match row {
+            Some((ct, nonce)) => {
+                match decrypt_secret(&config.totp_encryption_key, &ct, &nonce) {
+                    Ok(_) => EncryptionCheckStatus {
+                        status: "healthy".to_string(),
+                        has_data: true,
+                        message: None,
+                    },
+                    Err(e) => EncryptionCheckStatus {
+                        status: "unhealthy".to_string(),
+                        has_data: true,
+                        message: Some(e.to_string()),
+                    },
+                }
+            }
+            None => EncryptionCheckStatus {
+                status: "no_data".to_string(),
+                has_data: false,
+                message: None,
+            },
+        }
+    };
+
+    let overall_status = if stripe_check.status == "unhealthy" || totp_check.status == "unhealthy" {
+        "degraded"
+    } else {
+        "healthy"
+    };
+
+    Ok(success(
+        serde_json::json!({
+            "status": overall_status,
+            "checks": {
+                "stripe": stripe_check,
+                "totp": totp_check,
+            }
+        }),
+        request_id,
+    ))
 }
