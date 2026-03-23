@@ -1067,7 +1067,17 @@ pub async fn get_stripe_config(
         || db.price_id_personal.is_some()
         || db.price_id_business.is_some()
     {
-        StripeConfigResponse::from_db(&db, &config.stripe_encryption_key)?
+        match StripeConfigResponse::from_db(&db, &config.stripe_encryption_key) {
+            Ok(resp) => resp,
+            Err(_) => {
+                tracing::warn!(
+                    "Stripe secrets could not be decrypted (encryption key may have changed). \
+                     Clearing stale encrypted secrets from database."
+                );
+                StripeConfigRepository::clear_secrets(&pool).await?;
+                StripeConfigResponse::from_env()
+            }
+        }
     } else {
         StripeConfigResponse::from_env()
     };
