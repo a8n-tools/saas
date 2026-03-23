@@ -761,9 +761,19 @@ Routes: src/routes/admin.rs
 37. POST /v1/admin/notifications/{notification_id}/read — Mark read
 38. POST /v1/admin/notifications/read-all — Mark all read
 
+### Key Rotation
+
+39. GET /v1/admin/key-rotation/{key_id}/status — Rotation status for a key
+    - Valid key_ids: "totp", "stripe"
+    - Returns total records, current/old version counts, rotation_complete flag
+40. POST /v1/admin/key-rotation/{key_id}/reencrypt — Re-encrypt all old-version rows
+    - Decrypts with fallback key, re-encrypts with current key
+    - Creates audit log (admin_key_rotation action)
+    - Returns count of re-encrypted records
+
 ### Utilities
 
-39. POST /v1/admin/test-email — Send test email
+41. POST /v1/admin/test-email — Send test email
 
 All admin endpoints:
 - Require admin role (AdminUser extractor)
@@ -790,6 +800,7 @@ After completing all prompts in this section, verify:
 - [ ] Admin invite create, list, revoke work
 - [ ] Stripe config view (masked) and update work
 - [ ] Encryption key health check returns correct status
+- [ ] Key rotation status and re-encrypt endpoints work
 - [ ] Application create, update, swap-order, delete work
 - [ ] Audit logs display correctly
 - [ ] Audit log filters work

@@ -871,6 +871,14 @@ ALTER TABLE users
 ```
 Subscription tiers: `lifetime`, `trial_3m`, `trial_1m`. Assigned at
 email verification time based on verified user count.
+
+Migration 20260323000027 — add_key_version:
+```sql
+ALTER TABLE user_totp ADD COLUMN key_version SMALLINT NOT NULL DEFAULT 1;
+ALTER TABLE stripe_config ADD COLUMN key_version SMALLINT NOT NULL DEFAULT 1;
+```
+Tracks which encryption key version was used to encrypt each row's secrets.
+Used during key rotation to identify rows that need re-encryption.
 ```
 
 ---

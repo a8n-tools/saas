@@ -628,6 +628,8 @@ migrations/
 | GET | /v1/admin/notifications | Get notifications |
 | POST | /v1/admin/notifications/{notification_id}/read | Mark notification read |
 | POST | /v1/admin/notifications/read-all | Mark all notifications read |
+| GET | /v1/admin/key-rotation/{key_id}/status | Key rotation status (totp, stripe) |
+| POST | /v1/admin/key-rotation/{key_id}/reencrypt | Re-encrypt old-version rows |
 
 ---
 
