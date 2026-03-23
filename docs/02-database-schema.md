@@ -671,6 +671,210 @@ Export all from src/repositories/mod.rs
 
 ---
 
+## Prompt 2.9: Membership Tier, IP Bans, Email Change, TOTP Support
+
+```text
+Additional migrations added to support membership tiers, IP banning,
+email change workflow, TOTP two-factor authentication, and email verification.
+
+Migration 20241230000012 — add_membership_tier:
+```sql
+ALTER TABLE users ADD COLUMN membership_tier VARCHAR(50) DEFAULT 'personal';
+CREATE INDEX idx_users_membership_tier ON users(membership_tier);
+```
+
+Migration 20241230000013 — create_ip_bans:
+```sql
+CREATE TABLE ip_bans (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    ip_address INET NOT NULL,
+    reason VARCHAR(255) NOT NULL,
+    strikes INTEGER NOT NULL DEFAULT 1,
+    banned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMPTZ NOT NULL,
+    CONSTRAINT unique_ip_ban UNIQUE (ip_address)
+);
+CREATE INDEX idx_ip_bans_expires ON ip_bans (expires_at);
+```
+
+Migration 20241230000014 — create_email_change_requests:
+```sql
+CREATE TABLE email_change_requests (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    new_email VARCHAR(255) NOT NULL,
+    token_hash VARCHAR(255) NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    confirmed_at TIMESTAMPTZ,
+    canceled_at TIMESTAMPTZ,
+    ip_address INET,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_email_change_requests_user_id ON email_change_requests(user_id);
+CREATE INDEX idx_email_change_requests_token_hash ON email_change_requests(token_hash);
+```
+
+Migration 20241230000015 — add_totp_support:
+```sql
+ALTER TABLE users ADD COLUMN two_factor_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+
+CREATE TABLE user_totp (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    encrypted_secret BYTEA NOT NULL,  -- AES-256-GCM encrypted
+    nonce BYTEA NOT NULL,
+    verified BOOLEAN NOT NULL DEFAULT FALSE,
+    enabled_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE recovery_codes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    code_hash TEXT NOT NULL,
+    used_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+Migration 20241230000016 — create_email_verification_tokens:
+```sql
+CREATE TABLE email_verification_tokens (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash VARCHAR(255) NOT NULL UNIQUE,
+    expires_at TIMESTAMPTZ NOT NULL,
+    used_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    ip_address INET
+);
+```
+
+Migration 20241230000017 — add_application_subdomain:
+```sql
+ALTER TABLE applications ADD COLUMN subdomain VARCHAR(100);
+```
+```
+
+---
+
+## Prompt 2.10: Feedback, Application Enhancements, Admin Invites
+
+```text
+Migrations for the feedback/ticketing system, application management
+enhancements, and admin invite system.
+
+Migration 20260311000018 — create_feedback:
+```sql
+CREATE TABLE feedback (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(100),
+    email VARCHAR(255),
+    subject VARCHAR(200),
+    message TEXT NOT NULL,
+    page_path VARCHAR(255),
+    status VARCHAR(20) NOT NULL DEFAULT 'new',
+    tags TEXT[] NOT NULL DEFAULT '{}',
+    admin_response TEXT,
+    responded_by UUID REFERENCES users(id),
+    responded_at TIMESTAMPTZ,
+    is_spam BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_feedback_status ON feedback(status);
+CREATE INDEX idx_feedback_tags ON feedback USING GIN(tags);
+```
+
+Migration 20260313000020 — add_feedback_archive:
+```sql
+CREATE TABLE feedback_archive (
+    id UUID PRIMARY KEY,
+    archived_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    data JSONB NOT NULL
+);
+```
+
+Migration 20260313000021 — add_feedback_attachments:
+```sql
+CREATE TABLE feedback_attachments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    feedback_id UUID NOT NULL REFERENCES feedback(id) ON DELETE CASCADE,
+    filename TEXT NOT NULL,
+    mime_type TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    data BYTEA NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+Migration 20260312000020 — add_application_webhook_url:
+```sql
+ALTER TABLE applications ADD COLUMN webhook_url VARCHAR(500);
+```
+
+Migration 20260316000022 — add_application_sort_order:
+```sql
+ALTER TABLE applications ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0;
+```
+
+Migration 20260318000023 — create_admin_invites:
+```sql
+CREATE TABLE admin_invites (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email TEXT NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    invited_by UUID NOT NULL REFERENCES users(id),
+    role TEXT NOT NULL DEFAULT 'admin',
+    expires_at TIMESTAMPTZ NOT NULL,
+    accepted_at TIMESTAMPTZ,
+    revoked_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+```
+
+---
+
+## Prompt 2.11: Stripe Config Encryption, Subscription Tiers
+
+```text
+Migrations for encrypted Stripe configuration storage and tiered
+subscription model (lifetime, trial).
+
+Migration 20260319000024 — create_stripe_config:
+```sql
+CREATE TABLE stripe_config (
+    id INTEGER PRIMARY KEY CHECK (id = 1),  -- singleton row
+    secret_key BYTEA,
+    secret_key_nonce BYTEA,
+    webhook_secret BYTEA,
+    webhook_secret_nonce BYTEA,
+    price_id_personal TEXT,
+    price_id_business TEXT,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_by UUID REFERENCES users(id)
+);
+INSERT INTO stripe_config (id) VALUES (1);
+```
+Stripe secrets are encrypted at rest with AES-256-GCM. The ciphertext
+and nonce are stored separately as BYTEA columns.
+
+Migration 20260321000026 — add_subscription_tiers:
+```sql
+ALTER TABLE users
+    ADD COLUMN subscription_tier VARCHAR(50) NOT NULL DEFAULT 'trial_1m',
+    ADD COLUMN trial_ends_at TIMESTAMPTZ,
+    ADD COLUMN lifetime_member BOOLEAN NOT NULL DEFAULT FALSE,
+    ADD COLUMN subscription_override_by UUID REFERENCES users(id);
+```
+Subscription tiers: `lifetime`, `trial_3m`, `trial_1m`. Assigned at
+email verification time based on verified user count.
+```
+
+---
+
 ## Validation Checklist
 
 After completing all prompts in this section, verify:

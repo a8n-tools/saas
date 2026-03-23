@@ -437,10 +437,26 @@ migrations/
 ├── 20250101000005_create_subscriptions.sql
 ├── 20250101000006_create_payment_history.sql
 ├── 20250101000007_create_applications.sql
-├── 20250101000008_create_audit_logs.sql
-├── 20250101000009_create_admin_notifications.sql
-├── 20250101000010_create_rate_limits.sql
-└── 20250101000011_seed_applications.sql
+├── 20241230000008_seed_applications.sql
+├── 20241230000009_create_audit_logs.sql
+├── 20241230000010_create_admin_notifications.sql
+├── 20241230000011_create_rate_limits.sql
+├── 20241230000012_add_membership_tier.sql
+├── 20241230000013_create_ip_bans.sql
+├── 20241230000014_create_email_change_requests.sql
+├── 20241230000015_add_totp_support.sql
+├── 20241230000016_create_email_verification_tokens.sql
+├── 20241230000017_add_application_subdomain.sql
+├── 20260311000018_create_feedback.sql
+├── 20260311000019_add_feedback_tags.sql
+├── 20260312000020_add_application_webhook_url.sql
+├── 20260313000020_add_feedback_archive.sql
+├── 20260313000021_add_feedback_attachments.sql
+├── 20260316000022_add_application_sort_order.sql
+├── 20260318000023_create_admin_invites.sql
+├── 20260319000024_create_stripe_config.sql
+├── 20260319000025_encrypt_stripe_secrets.sql
+└── 20260321000026_add_subscription_tiers.sql
 ```
 
 ---
@@ -496,12 +512,25 @@ migrations/
 |--------|----------|-------------|
 | POST | /v1/auth/register | Register new user |
 | POST | /v1/auth/login | Login with email/password |
+| POST | /v1/auth/logout | Logout (clears cookies) |
+| GET | /v1/auth/logout | Logout with redirect |
+| POST | /v1/auth/logout-all | Logout all sessions |
+| POST | /v1/auth/refresh | Refresh access token |
 | POST | /v1/auth/magic-link | Request magic link |
 | POST | /v1/auth/magic-link/verify | Verify magic link |
-| POST | /v1/auth/refresh | Refresh access token |
-| POST | /v1/auth/logout | Logout |
 | POST | /v1/auth/password-reset | Request password reset |
+| GET | /v1/auth/password-reset/verify | Verify reset token |
 | POST | /v1/auth/password-reset/confirm | Complete reset |
+| POST | /v1/auth/2fa/setup | Begin TOTP 2FA setup |
+| POST | /v1/auth/2fa/confirm | Confirm 2FA setup with code |
+| POST | /v1/auth/2fa/verify | Verify 2FA code during login |
+| POST | /v1/auth/2fa/disable | Disable 2FA |
+| POST | /v1/auth/2fa/recovery-codes | Regenerate recovery codes |
+| GET | /v1/auth/2fa/status | Get 2FA status |
+| POST | /v1/auth/invite/accept | Accept admin invite |
+| GET | /v1/auth/redirect | Auth redirect (post-login) |
+| GET | /v1/auth/setup/status | Check initial setup status |
+| POST | /v1/auth/setup | Initial admin setup |
 
 ### 6.5 User Endpoints
 
@@ -509,49 +538,96 @@ migrations/
 |--------|----------|-------------|
 | GET | /v1/users/me | Get current user |
 | PUT | /v1/users/me/password | Update password |
+| POST | /v1/users/me/email | Request email change |
+| POST | /v1/users/me/email/confirm | Confirm email change |
+| POST | /v1/users/me/email/verify | Request email verification |
+| POST | /v1/users/me/email/verify/confirm | Confirm email verification |
+| GET | /v1/users/me/sessions | List active sessions |
+| DELETE | /v1/users/me/sessions/:id | Revoke session |
 
-### 6.6 Subscription Endpoints
+### 6.6 Membership Endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | /v1/subscriptions/me | Get subscription |
-| POST | /v1/subscriptions/checkout | Create checkout session |
-| POST | /v1/subscriptions/cancel | Cancel subscription |
-| POST | /v1/subscriptions/reactivate | Reactivate |
-| POST | /v1/subscriptions/billing-portal | Get billing portal URL |
+| GET | /v1/memberships/me | Get membership |
+| POST | /v1/memberships/checkout | Create Stripe checkout session |
+| POST | /v1/memberships/subscribe | Subscribe directly |
+| POST | /v1/memberships/cancel | Cancel membership (end of period) |
+| POST | /v1/memberships/cancel-now | Cancel membership immediately |
+| POST | /v1/memberships/reactivate | Reactivate canceled membership |
+| POST | /v1/memberships/billing-portal | Get Stripe billing portal URL |
+| GET | /v1/memberships/payments | Get payment history |
 
 ### 6.7 Application Endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | /v1/applications | List applications |
+| GET | /v1/applications/:slug | Get application by slug |
 
-### 6.8 Webhook Endpoints
+### 6.8 Feedback Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | /v1/feedback | Submit feedback |
+
+### 6.9 Webhook Endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | /v1/webhooks/stripe | Handle Stripe webhooks |
 
-### 6.9 Admin Endpoints
+### 6.10 Health Endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
+| GET | / | Root status (service, version, commit) |
+| GET | /health | Basic health check |
+| GET | /v1/health | V1 health check |
+
+### 6.11 Admin Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | /v1/admin/stats | Dashboard statistics |
+| GET | /v1/admin/health | System health (DB latency, stats) |
+| GET | /v1/admin/key-health | Aggregated encryption key health |
+| GET | /v1/admin/key-health/{key_id} | Single key health (stripe, totp) |
 | GET | /v1/admin/users | List users |
-| GET | /v1/admin/users/:id | Get user details |
-| POST | /v1/admin/users/:id/activate | Activate user |
-| POST | /v1/admin/users/:id/deactivate | Deactivate user |
-| POST | /v1/admin/users/:id/reset-password | Trigger reset email |
-| POST | /v1/admin/users/:id/impersonate | Impersonate user |
-| POST | /v1/admin/users/:id/subscription/grant | Grant subscription |
-| POST | /v1/admin/users/:id/subscription/revoke | Revoke subscription |
-| POST | /v1/admin/users/:id/grace-period/extend | Extend grace period |
+| GET | /v1/admin/users/{user_id} | Get user details |
+| DELETE | /v1/admin/users/{user_id} | Delete user |
+| PUT | /v1/admin/users/{user_id}/status | Activate/deactivate user |
+| PUT | /v1/admin/users/{user_id}/role | Update user role |
+| POST | /v1/admin/users/{user_id}/reset-password | Trigger reset email |
+| POST | /v1/admin/users/{user_id}/impersonate | Impersonate user |
+| POST | /v1/admin/users/{user_id}/lifetime | Grant lifetime membership |
+| GET | /v1/admin/memberships | List memberships |
+| POST | /v1/admin/memberships/grant | Grant membership |
+| POST | /v1/admin/memberships/revoke | Revoke membership |
 | GET | /v1/admin/applications | List applications |
-| PUT | /v1/admin/applications/:id | Update application |
-| POST | /v1/admin/applications/:id/maintenance | Toggle maintenance |
+| POST | /v1/admin/applications | Create application |
+| PUT | /v1/admin/applications/{app_id} | Update application |
+| PUT | /v1/admin/applications/{app_id}/swap-order | Swap application order |
+| DELETE | /v1/admin/applications/{app_id} | Delete application |
 | GET | /v1/admin/audit-logs | Get audit logs |
+| GET | /v1/admin/feedback | List feedback |
+| GET | /v1/admin/feedback/export | Export feedback |
+| GET | /v1/admin/feedback/archive | List archived feedback |
+| POST | /v1/admin/feedback/archive/{archive_id}/restore | Restore feedback |
+| GET | /v1/admin/feedback/{feedback_id} | Get feedback details |
+| GET | /v1/admin/feedback/{feedback_id}/attachments/{attachment_id} | Get attachment |
+| POST | /v1/admin/feedback/{feedback_id}/respond | Respond to feedback |
+| PUT | /v1/admin/feedback/{feedback_id}/status | Update feedback status |
+| DELETE | /v1/admin/feedback/{feedback_id} | Delete feedback |
+| POST | /v1/admin/test-email | Send test email |
+| POST | /v1/admin/invites | Create admin invite |
+| GET | /v1/admin/invites | List admin invites |
+| DELETE | /v1/admin/invites/{invite_id} | Revoke admin invite |
+| GET | /v1/admin/stripe | Get Stripe configuration |
+| PUT | /v1/admin/stripe | Update Stripe configuration |
 | GET | /v1/admin/notifications | Get notifications |
-| POST | /v1/admin/notifications/:id/read | Mark read |
-| GET | /v1/admin/health | System health |
+| POST | /v1/admin/notifications/{notification_id}/read | Mark notification read |
+| POST | /v1/admin/notifications/read-all | Mark all notifications read |
 
 ---
 
@@ -1026,9 +1102,9 @@ Sections: Definition, Cookies Used (auth only), Third-Party (Stripe), Managing C
 
 ### Phase 2: Enhanced Authentication
 - OAuth login (Google, GitHub)
-- 2FA (TOTP)
-- Session management (view/revoke)
-- Email change
+- ~~2FA (TOTP)~~ — **Implemented** (see 6.4 Authentication Endpoints)
+- ~~Session management (view/revoke)~~ — **Implemented** (see 6.5 User Endpoints)
+- ~~Email change~~ — **Implemented** (see 6.5 User Endpoints)
 - Self-service account deletion
 
 ### Phase 3: Teams & Organizations

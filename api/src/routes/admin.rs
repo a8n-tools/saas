@@ -12,6 +12,8 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route("/stats", web::get().to(handlers::get_dashboard_stats))
             // System health
             .route("/health", web::get().to(handlers::get_system_health))
+            .route("/key-health", web::get().to(handlers::get_key_health))
+            .route("/key-health/{key_id}", web::get().to(handlers::get_key_health_by_id))
             // User management
             .route("/users", web::get().to(handlers::list_users))
             .route("/users/{user_id}", web::get().to(handlers::get_user))

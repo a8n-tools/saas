@@ -132,7 +132,7 @@ React 18 + TypeScript + Vite + Tailwind CSS + shadcn/ui.
 
 ### Auth & SSO
 
-- JWT tokens stored in HTTP-only cookies on `.example.com` domain (`.a8n.run` in dev)
+- JWT tokens stored in HTTP-only cookies, domain set via `COOKIE_DOMAIN` env var (e.g. `.example.com`)
 - Access token: 15 min, Refresh token: 30 days
 - Cookie set/cleared via `AuthCookies` helper in `middleware/auth.rs`
 - Token extracted from `access_token` cookie first, then `Authorization: Bearer` header
@@ -150,7 +150,7 @@ Forgejo Actions (`.forgejo/workflows/`). On push to `main`, builds OCI images us
 3. **Log all auth events** — audit_logs table for security tracking
 4. **Test Stripe webhooks locally** — use Stripe CLI: `stripe listen --forward-to localhost:4000/v1/webhooks/stripe`
 5. **JWT public key shared with apps** — mount as read-only volume
-6. **Cookie domain is `.a8n.tools`** — enables SSO across subdomains
+6. **Cookie domain is set via `COOKIE_DOMAIN` env var** — enables SSO across subdomains
 7. **Validate membership status on every app request** — check JWT claims
 8. **Admin actions require extra logging** — set `is_admin_action = true` in audit logs
 

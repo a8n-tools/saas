@@ -677,71 +677,96 @@ export function AuditLogsPage() {
 ```text
 Implement the admin API endpoints on the backend.
 
-Create src/handlers/admin.rs:
+All admin endpoints use the `AdminUser` extractor (checks JWT role == "admin")
+and return responses via `responses::success()` / `responses::paginated()`.
 
-1. GET /v1/admin/stats:
-   ```rust
-   pub async fn get_stats(
-       _user: AuthenticatedUser,  // Require admin via guard
-       pool: web::Data<PgPool>,
-   ) -> Result<HttpResponse, AppError> {
-       // Query counts from database
-       let total_users = sqlx::query_scalar!("SELECT COUNT(*) FROM users WHERE deleted_at IS NULL")
-           .fetch_one(&**pool)
-           .await?;
+Handlers: src/handlers/admin.rs
+Routes: src/routes/admin.rs
 
-       let active_subscriptions = sqlx::query_scalar!(
-           "SELECT COUNT(*) FROM users WHERE subscription_status = 'active'"
-       ).fetch_one(&**pool).await?;
+### Dashboard & Health
 
-       // Calculate MRR from active subscriptions
-       let mrr = sqlx::query_scalar!(
-           "SELECT COALESCE(SUM(locked_price_amount), 0) FROM users WHERE subscription_status = 'active'"
-       ).fetch_one(&**pool).await?;
+1. GET /v1/admin/stats — Dashboard statistics (user counts, MRR, etc.)
 
-       // Return stats
-   }
-   ```
+2. GET /v1/admin/health — System health (DB latency, user/subscription counts)
 
-2. GET /v1/admin/users with pagination and filters
+3. GET /v1/admin/key-health — Aggregated encryption key health check
+   - Attempts to decrypt one stored secret per key (Stripe, TOTP)
+   - Returns per-key status: "healthy", "unhealthy", or "no_data"
+   - Overall status: "healthy" or "degraded"
 
-3. GET /v1/admin/users/:id with full user details
+4. GET /v1/admin/key-health/{key_id} — Single key health check
+   - Valid key_ids: "stripe", "totp"
+   - Returns 404 for unknown key_id
+   - Modular: add a `check_*` helper, a match arm in `run_key_check`,
+     and an entry in `KEY_IDS` (handlers/admin.rs)
 
-4. POST /v1/admin/users/:id/activate
-5. POST /v1/admin/users/:id/deactivate
-6. POST /v1/admin/users/:id/reset-password
-7. POST /v1/admin/users/:id/impersonate:
-   - Create audit log with admin action
-   - Generate tokens for target user
-   - Mark tokens as impersonation tokens
-   - Return tokens
+### User Management
 
-8. POST /v1/admin/users/:id/subscription/grant:
-   - Grant free subscription
-   - Create audit log
+5. GET /v1/admin/users — List users with pagination and search
+6. GET /v1/admin/users/{user_id} — Get user details
+7. DELETE /v1/admin/users/{user_id} — Soft-delete user
+8. PUT /v1/admin/users/{user_id}/status — Activate/deactivate user
+9. PUT /v1/admin/users/{user_id}/role — Update user role
+10. POST /v1/admin/users/{user_id}/reset-password — Trigger password reset email
+11. POST /v1/admin/users/{user_id}/impersonate — Impersonate user
+    - Creates audit log with admin action
+    - Generates tokens for target user
+12. POST /v1/admin/users/{user_id}/lifetime — Grant lifetime membership
 
-9. POST /v1/admin/users/:id/subscription/revoke
+### Membership Management
 
-10. GET /v1/admin/audit-logs with filters:
-    - action
-    - actor_id
-    - admin_only
-    - date_from
-    - date_to
-    - severity
+13. GET /v1/admin/memberships — List memberships
+14. POST /v1/admin/memberships/grant — Grant membership to user
+15. POST /v1/admin/memberships/revoke — Revoke membership
 
-11. GET /v1/admin/notifications
-12. POST /v1/admin/notifications/:id/read
+### Application Management
 
-13. GET /v1/admin/health:
-    - Database status
-    - Redis status
-    - App container health checks
-    - Memory usage
-    - Active connections
+16. GET /v1/admin/applications — List all applications
+17. POST /v1/admin/applications — Create application
+18. PUT /v1/admin/applications/{app_id} — Update application
+19. PUT /v1/admin/applications/{app_id}/swap-order — Swap display order
+20. DELETE /v1/admin/applications/{app_id} — Delete application
 
-All admin endpoints should:
-- Require admin role
+### Audit Logs
+
+21. GET /v1/admin/audit-logs — List audit logs with filters:
+    - action, actor_id, admin_only, date_from, date_to, severity
+
+### Feedback Management
+
+22. GET /v1/admin/feedback — List feedback
+23. GET /v1/admin/feedback/export — Export feedback
+24. GET /v1/admin/feedback/archive — List archived feedback
+25. POST /v1/admin/feedback/archive/{archive_id}/restore — Restore from archive
+26. GET /v1/admin/feedback/{feedback_id} — Get feedback details
+27. GET /v1/admin/feedback/{feedback_id}/attachments/{attachment_id} — Get attachment
+28. POST /v1/admin/feedback/{feedback_id}/respond — Respond to feedback
+29. PUT /v1/admin/feedback/{feedback_id}/status — Update feedback status
+30. DELETE /v1/admin/feedback/{feedback_id} — Delete feedback (archives it)
+
+### Admin Invites
+
+31. POST /v1/admin/invites — Create admin invite (sends email)
+32. GET /v1/admin/invites — List admin invites
+33. DELETE /v1/admin/invites/{invite_id} — Revoke invite
+
+### Stripe Configuration
+
+34. GET /v1/admin/stripe — Get Stripe config (secrets masked)
+35. PUT /v1/admin/stripe — Update Stripe config (encrypts secrets at rest)
+
+### Notifications
+
+36. GET /v1/admin/notifications — List notifications
+37. POST /v1/admin/notifications/{notification_id}/read — Mark read
+38. POST /v1/admin/notifications/read-all — Mark all read
+
+### Utilities
+
+39. POST /v1/admin/test-email — Send test email
+
+All admin endpoints:
+- Require admin role (AdminUser extractor)
 - Create audit logs for mutations
 - Use proper pagination
 - Return consistent response format
@@ -757,9 +782,15 @@ After completing all prompts in this section, verify:
 - [ ] Admin dashboard shows stats
 - [ ] User list loads with pagination
 - [ ] User search works
-- [ ] User actions work (deactivate, activate)
+- [ ] User actions work (status toggle, role change, delete)
 - [ ] Password reset email sent
 - [ ] Impersonation works
+- [ ] Lifetime membership grant works
+- [ ] Feedback list, respond, archive, restore work
+- [ ] Admin invite create, list, revoke work
+- [ ] Stripe config view (masked) and update work
+- [ ] Encryption key health check returns correct status
+- [ ] Application create, update, swap-order, delete work
 - [ ] Audit logs display correctly
 - [ ] Audit log filters work
 - [ ] Admin-only routes block non-admins

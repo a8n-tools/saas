@@ -17,7 +17,7 @@ use crate::models::{
     DeleteApplicationRequest, MembershipStatus, StripeConfigResponse, SwapApplicationOrderRequest,
     UpdateApplication, UserResponse,
 };
-use crate::models::stripe::encrypt_secret;
+use crate::models::stripe::{decrypt_secret, encrypt_secret};
 use crate::repositories::{
     ApplicationRepository, AuditLogRepository, InviteRepository, MembershipRepository,
     NotificationRepository, StripeConfigRepository, TokenRepository, UserRepository,
@@ -1178,4 +1178,125 @@ pub async fn grant_lifetime_membership(
     .await?;
 
     Ok(success(UserResponse::from(user), request_id))
+}
+
+// =============================================================================
+// Key Health Checks
+// =============================================================================
+
+#[derive(Debug, Serialize)]
+pub struct KeyHealthCheck {
+    pub status: String,
+    pub has_data: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+}
+
+async fn check_stripe_key(pool: &PgPool, key: &[u8; 32]) -> Result<KeyHealthCheck, AppError> {
+    let db = StripeConfigRepository::get(pool).await?;
+    Ok(match (&db.secret_key, &db.secret_key_nonce) {
+        (Some(ct), Some(nonce)) => match decrypt_secret(key, ct, nonce) {
+            Ok(_) => KeyHealthCheck {
+                status: "healthy".to_string(),
+                has_data: true,
+                message: None,
+            },
+            Err(e) => KeyHealthCheck {
+                status: "unhealthy".to_string(),
+                has_data: true,
+                message: Some(e.to_string()),
+            },
+        },
+        _ => KeyHealthCheck {
+            status: "no_data".to_string(),
+            has_data: false,
+            message: None,
+        },
+    })
+}
+
+async fn check_totp_key(pool: &PgPool, key: &[u8; 32]) -> Result<KeyHealthCheck, AppError> {
+    let row: Option<(Vec<u8>, Vec<u8>)> =
+        sqlx::query_as("SELECT encrypted_secret, nonce FROM user_totp LIMIT 1")
+            .fetch_optional(pool)
+            .await?;
+
+    Ok(match row {
+        Some((ct, nonce)) => match decrypt_secret(key, &ct, &nonce) {
+            Ok(_) => KeyHealthCheck {
+                status: "healthy".to_string(),
+                has_data: true,
+                message: None,
+            },
+            Err(e) => KeyHealthCheck {
+                status: "unhealthy".to_string(),
+                has_data: true,
+                message: Some(e.to_string()),
+            },
+        },
+        None => KeyHealthCheck {
+            status: "no_data".to_string(),
+            has_data: false,
+            message: None,
+        },
+    })
+}
+
+/// Dispatch a key health check by key_id. To add a new key, add a match arm here
+/// and a corresponding `check_*` helper above.
+async fn run_key_check(key_id: &str, pool: &PgPool, config: &Config) -> Result<KeyHealthCheck, AppError> {
+    match key_id {
+        "stripe" => check_stripe_key(pool, &config.stripe_encryption_key).await,
+        "totp" => check_totp_key(pool, &config.totp_encryption_key).await,
+        _ => Err(AppError::not_found(format!("Unknown key: {key_id}"))),
+    }
+}
+
+/// All registered key IDs. Update this when adding a new key.
+const KEY_IDS: &[&str] = &["stripe", "totp"];
+
+/// GET /v1/admin/key-health
+/// Aggregated health check for all encryption keys.
+pub async fn get_key_health(
+    req: HttpRequest,
+    _admin: AdminUser,
+    pool: web::Data<PgPool>,
+    config: web::Data<Config>,
+) -> Result<HttpResponse, AppError> {
+    let request_id = get_request_id(&req);
+
+    let mut checks = serde_json::Map::new();
+    let mut any_unhealthy = false;
+
+    for &key_id in KEY_IDS {
+        let check = run_key_check(key_id, &pool, &config).await?;
+        if check.status == "unhealthy" {
+            any_unhealthy = true;
+        }
+        checks.insert(key_id.to_string(), serde_json::to_value(&check).unwrap());
+    }
+
+    let overall_status = if any_unhealthy { "degraded" } else { "healthy" };
+
+    Ok(success(
+        serde_json::json!({
+            "status": overall_status,
+            "checks": checks,
+        }),
+        request_id,
+    ))
+}
+
+/// GET /v1/admin/key-health/{key_id}
+pub async fn get_key_health_by_id(
+    req: HttpRequest,
+    _admin: AdminUser,
+    pool: web::Data<PgPool>,
+    config: web::Data<Config>,
+    path: web::Path<String>,
+) -> Result<HttpResponse, AppError> {
+    let request_id = get_request_id(&req);
+    let key_id = path.into_inner();
+    let check = run_key_check(&key_id, &pool, &config).await?;
+    Ok(success(check, request_id))
 }

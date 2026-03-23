@@ -39,7 +39,7 @@ pub use webhook::stripe_webhook;
 // Admin handlers
 pub use admin::{
     admin_reset_password, create_admin_invite, create_application, delete_application, delete_user,
-    get_dashboard_stats, get_stripe_config, get_system_health, get_user, grant_lifetime_membership,
+    get_dashboard_stats, get_key_health, get_key_health_by_id, get_stripe_config, get_system_health, get_user, grant_lifetime_membership,
     grant_membership, impersonate_user, list_admin_invites, list_all_applications, list_audit_logs,
     list_notifications, list_memberships, list_users, revoke_admin_invite, swap_application_order,
     mark_all_notifications_read, mark_notification_read, revoke_membership, send_test_email,
