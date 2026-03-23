@@ -21,7 +21,7 @@ use a8n_api::{
     models::{CreateUser, UserRole},
     repositories::{FeedbackRepository, RateLimitRepository, UserRepository},
     routes,
-    services::{AuthService, EmailService, JwtConfig, JwtService, PasswordService, StripeConfig, StripeService, TotpService, WebhookService},
+    services::{AuthService, EmailService, EncryptionKeySet, JwtConfig, JwtService, PasswordService, StripeConfig, StripeService, TotpService, WebhookService},
 };
 
 #[tokio::main]
@@ -138,9 +138,21 @@ async fn main() -> anyhow::Result<()> {
 
     info!("Stripe service initialized");
 
+    // Build encryption key sets for key rotation support
+    let totp_key_set = EncryptionKeySet {
+        current: config.totp_encryption_key,
+        current_version: config.totp_key_version,
+        previous: config.totp_encryption_key_prev,
+    };
+    let stripe_key_set = EncryptionKeySet {
+        current: config.stripe_encryption_key,
+        current_version: config.stripe_key_version,
+        previous: config.stripe_encryption_key_prev,
+    };
+
     // Initialize TOTP service
     let totp_service = Arc::new(TotpService::new(
-        config.totp_encryption_key,
+        totp_key_set,
         config.app_name.clone(),
         pool.clone(),
     ));
@@ -308,6 +320,7 @@ async fn main() -> anyhow::Result<()> {
             .app_data(web::Data::new(stripe_service.clone()))
             .app_data(web::Data::new(totp_service.clone()))
             .app_data(web::Data::new(webhook_service.clone()))
+            .app_data(web::Data::new(stripe_key_set.clone()))
             .app_data(web::Data::new(config_data.clone()))
             // Configure routes
             .configure(routes::configure)

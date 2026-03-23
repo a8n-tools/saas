@@ -57,6 +57,9 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             // Notifications
             .route("/notifications", web::get().to(handlers::list_notifications))
             .route("/notifications/{notification_id}/read", web::post().to(handlers::mark_notification_read))
-            .route("/notifications/read-all", web::post().to(handlers::mark_all_notifications_read)),
+            .route("/notifications/read-all", web::post().to(handlers::mark_all_notifications_read))
+            // Key rotation
+            .route("/key-rotation/{key_id}/status", web::get().to(handlers::key_rotation_status))
+            .route("/key-rotation/{key_id}/reencrypt", web::post().to(handlers::reencrypt_key)),
     );
 }

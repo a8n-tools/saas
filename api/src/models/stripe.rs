@@ -1,14 +1,10 @@
-use aes_gcm::{
-    aead::{Aead, KeyInit},
-    Aes256Gcm, Nonce,
-};
 use chrono::{DateTime, Utc};
-use rand::RngCore;
 use serde::Serialize;
 use sqlx::FromRow;
 use uuid::Uuid;
 
 use crate::errors::AppError;
+use crate::services::encryption::EncryptionKeySet;
 
 #[derive(Debug, Clone, FromRow)]
 pub struct StripeConfig {
@@ -19,33 +15,29 @@ pub struct StripeConfig {
     pub webhook_secret_nonce: Option<Vec<u8>>,
     pub price_id_personal: Option<String>,
     pub price_id_business: Option<String>,
+    pub key_version: i16,
     pub updated_at: DateTime<Utc>,
     pub updated_by: Option<Uuid>,
 }
 
-/// Encrypt plaintext with AES-256-GCM. Returns (ciphertext, nonce).
-pub fn encrypt_secret(key: &[u8; 32], plaintext: &str) -> Result<(Vec<u8>, Vec<u8>), AppError> {
-    let cipher = Aes256Gcm::new_from_slice(key)
-        .map_err(|e| AppError::internal(format!("Invalid encryption key: {}", e)))?;
-    let mut nonce_bytes = [0u8; 12];
-    rand::thread_rng().fill_bytes(&mut nonce_bytes);
-    let nonce = Nonce::from_slice(&nonce_bytes);
-    let encrypted = cipher
-        .encrypt(nonce, plaintext.as_bytes())
-        .map_err(|e| AppError::internal(format!("Encryption failed: {}", e)))?;
-    Ok((encrypted, nonce_bytes.to_vec()))
+/// Encrypt plaintext with the current key. Returns (ciphertext, nonce, key_version).
+pub fn encrypt_secret(
+    key_set: &EncryptionKeySet,
+    plaintext: &str,
+) -> Result<(Vec<u8>, Vec<u8>, i16), AppError> {
+    key_set.encrypt(plaintext.as_bytes())
 }
 
-/// Decrypt AES-256-GCM ciphertext. Returns plaintext string.
-pub fn decrypt_secret(key: &[u8; 32], ciphertext: &[u8], nonce: &[u8]) -> Result<String, AppError> {
-    let cipher = Aes256Gcm::new_from_slice(key)
-        .map_err(|e| AppError::internal(format!("Invalid encryption key: {}", e)))?;
-    let nonce = Nonce::from_slice(nonce);
-    let decrypted = cipher
-        .decrypt(nonce, ciphertext)
-        .map_err(|e| AppError::internal(format!("Decryption failed: {}", e)))?;
+/// Decrypt ciphertext using the key set (with fallback). Returns plaintext string.
+pub fn decrypt_secret(
+    key_set: &EncryptionKeySet,
+    ciphertext: &[u8],
+    nonce: &[u8],
+    key_version: i16,
+) -> Result<String, AppError> {
+    let decrypted = key_set.decrypt(ciphertext, nonce, key_version)?;
     String::from_utf8(decrypted)
-        .map_err(|e| AppError::internal(format!("Invalid UTF-8 in decrypted secret: {}", e)))
+        .map_err(|e| AppError::internal(format!("Invalid UTF-8 in decrypted secret: {e}")))
 }
 
 /// Returns `***<last 4 chars>` so admins can identify which key is stored.
@@ -70,13 +62,17 @@ pub struct StripeConfigResponse {
 }
 
 impl StripeConfigResponse {
-    pub fn from_db(config: &StripeConfig, key: &[u8; 32]) -> Result<Self, AppError> {
+    pub fn from_db(config: &StripeConfig, key_set: &EncryptionKeySet) -> Result<Self, AppError> {
         let secret_key_plain = match (&config.secret_key, &config.secret_key_nonce) {
-            (Some(ct), Some(nonce)) => Some(decrypt_secret(key, ct, nonce)?),
+            (Some(ct), Some(nonce)) => {
+                Some(decrypt_secret(key_set, ct, nonce, config.key_version)?)
+            }
             _ => None,
         };
         let webhook_secret_plain = match (&config.webhook_secret, &config.webhook_secret_nonce) {
-            (Some(ct), Some(nonce)) => Some(decrypt_secret(key, ct, nonce)?),
+            (Some(ct), Some(nonce)) => {
+                Some(decrypt_secret(key_set, ct, nonce, config.key_version)?)
+            }
             _ => None,
         };
 
@@ -118,41 +114,50 @@ impl StripeConfigResponse {
 mod tests {
     use super::*;
 
-    fn test_key() -> [u8; 32] {
-        [0xAA; 32]
+    fn test_key_set() -> EncryptionKeySet {
+        EncryptionKeySet {
+            current: [0xAA; 32],
+            current_version: 1,
+            previous: None,
+        }
     }
 
     #[test]
     fn encrypt_decrypt_round_trip() {
-        let key = test_key();
+        let ks = test_key_set();
         let plaintext = "sk_live_abc123xyz";
-        let (ciphertext, nonce) = encrypt_secret(&key, plaintext).unwrap();
-        let decrypted = decrypt_secret(&key, &ciphertext, &nonce).unwrap();
+        let (ciphertext, nonce, version) = encrypt_secret(&ks, plaintext).unwrap();
+        assert_eq!(version, 1);
+        let decrypted = decrypt_secret(&ks, &ciphertext, &nonce, 1).unwrap();
         assert_eq!(decrypted, plaintext);
     }
 
     #[test]
     fn encrypt_produces_unique_nonces() {
-        let key = test_key();
-        let (_, nonce1) = encrypt_secret(&key, "secret").unwrap();
-        let (_, nonce2) = encrypt_secret(&key, "secret").unwrap();
+        let ks = test_key_set();
+        let (_, nonce1, _) = encrypt_secret(&ks, "secret").unwrap();
+        let (_, nonce2, _) = encrypt_secret(&ks, "secret").unwrap();
         assert_ne!(nonce1, nonce2);
     }
 
     #[test]
     fn decrypt_with_wrong_key_fails() {
-        let key = test_key();
-        let wrong_key = [0xBB; 32];
-        let (ciphertext, nonce) = encrypt_secret(&key, "secret").unwrap();
-        assert!(decrypt_secret(&wrong_key, &ciphertext, &nonce).is_err());
+        let ks = test_key_set();
+        let (ciphertext, nonce, _) = encrypt_secret(&ks, "secret").unwrap();
+        let wrong_ks = EncryptionKeySet {
+            current: [0xBB; 32],
+            current_version: 1,
+            previous: None,
+        };
+        assert!(decrypt_secret(&wrong_ks, &ciphertext, &nonce, 1).is_err());
     }
 
     #[test]
     fn decrypt_tampered_ciphertext_fails() {
-        let key = test_key();
-        let (mut ciphertext, nonce) = encrypt_secret(&key, "secret").unwrap();
+        let ks = test_key_set();
+        let (mut ciphertext, nonce, _) = encrypt_secret(&ks, "secret").unwrap();
         ciphertext[0] ^= 0xFF;
-        assert!(decrypt_secret(&key, &ciphertext, &nonce).is_err());
+        assert!(decrypt_secret(&ks, &ciphertext, &nonce, 1).is_err());
     }
 
     #[test]
@@ -174,9 +179,9 @@ mod tests {
 
     #[test]
     fn from_db_decrypts_and_masks() {
-        let key = test_key();
-        let (sk_ct, sk_nonce) = encrypt_secret(&key, "sk_live_test1234").unwrap();
-        let (wh_ct, wh_nonce) = encrypt_secret(&key, "whsec_abcdef5678").unwrap();
+        let ks = test_key_set();
+        let (sk_ct, sk_nonce, _) = encrypt_secret(&ks, "sk_live_test1234").unwrap();
+        let (wh_ct, wh_nonce, _) = encrypt_secret(&ks, "whsec_abcdef5678").unwrap();
 
         let config = StripeConfig {
             id: 1,
@@ -186,11 +191,12 @@ mod tests {
             webhook_secret_nonce: Some(wh_nonce),
             price_id_personal: Some("price_123".to_string()),
             price_id_business: None,
+            key_version: 1,
             updated_at: Utc::now(),
             updated_by: None,
         };
 
-        let resp = StripeConfigResponse::from_db(&config, &key).unwrap();
+        let resp = StripeConfigResponse::from_db(&config, &ks).unwrap();
         assert_eq!(resp.secret_key_masked.as_deref(), Some("***1234"));
         assert_eq!(resp.webhook_secret_masked.as_deref(), Some("***5678"));
         assert_eq!(resp.price_id_personal.as_deref(), Some("price_123"));
@@ -202,7 +208,7 @@ mod tests {
 
     #[test]
     fn from_db_handles_missing_secrets() {
-        let key = test_key();
+        let ks = test_key_set();
         let config = StripeConfig {
             id: 1,
             secret_key: None,
@@ -211,11 +217,12 @@ mod tests {
             webhook_secret_nonce: None,
             price_id_personal: None,
             price_id_business: None,
+            key_version: 1,
             updated_at: Utc::now(),
             updated_by: None,
         };
 
-        let resp = StripeConfigResponse::from_db(&config, &key).unwrap();
+        let resp = StripeConfigResponse::from_db(&config, &ks).unwrap();
         assert!(resp.secret_key_masked.is_none());
         assert!(resp.webhook_secret_masked.is_none());
         assert!(!resp.has_secret_key);

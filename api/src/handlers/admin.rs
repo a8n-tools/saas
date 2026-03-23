@@ -17,13 +17,13 @@ use crate::models::{
     DeleteApplicationRequest, MembershipStatus, StripeConfigResponse, SwapApplicationOrderRequest,
     UpdateApplication, UserResponse,
 };
-use crate::models::stripe::{decrypt_secret, encrypt_secret};
+use crate::models::stripe::encrypt_secret;
 use crate::repositories::{
     ApplicationRepository, AuditLogRepository, InviteRepository, MembershipRepository,
-    NotificationRepository, StripeConfigRepository, TokenRepository, UserRepository,
+    NotificationRepository, StripeConfigRepository, TokenRepository, TotpRepository, UserRepository,
 };
 use crate::responses::{get_request_id, created, paginated, success, success_no_data};
-use crate::services::{AuthService, EmailService, JwtService, PasswordService, TotpService, WebhookService};
+use crate::services::{AuthService, EmailService, EncryptionKeySet, JwtService, PasswordService, TotpService, WebhookService};
 use crate::validation;
 
 // =============================================================================
@@ -1057,7 +1057,7 @@ pub async fn get_stripe_config(
     req: HttpRequest,
     _admin: AdminUser,
     pool: web::Data<PgPool>,
-    config: web::Data<Config>,
+    stripe_key_set: web::Data<EncryptionKeySet>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
 
@@ -1068,7 +1068,7 @@ pub async fn get_stripe_config(
         || db.price_id_personal.is_some()
         || db.price_id_business.is_some()
     {
-        match StripeConfigResponse::from_db(&db, &config.stripe_encryption_key) {
+        match StripeConfigResponse::from_db(&db, &stripe_key_set) {
             Ok(resp) => resp,
             Err(_) => {
                 tracing::warn!(
@@ -1093,11 +1093,10 @@ pub async fn update_stripe_config(
     req: HttpRequest,
     admin: AdminUser,
     pool: web::Data<PgPool>,
-    config: web::Data<Config>,
+    stripe_key_set: web::Data<EncryptionKeySet>,
     body: web::Json<UpdateStripeConfigRequest>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
-    let key = &config.stripe_encryption_key;
 
     // Treat empty strings the same as None — user left the field blank
     let secret_key_plain = body.secret_key.as_deref().filter(|s| !s.is_empty());
@@ -1106,16 +1105,16 @@ pub async fn update_stripe_config(
     let price_id_business = body.price_id_business.as_deref().filter(|s| !s.is_empty());
 
     // Encrypt secrets before storing
-    let (secret_key_enc, secret_key_nonce) = match secret_key_plain {
+    let (secret_key_enc, secret_key_nonce, key_version) = match secret_key_plain {
         Some(sk) => {
-            let (ct, nonce) = encrypt_secret(key, sk)?;
-            (Some(ct), Some(nonce))
+            let (ct, nonce, ver) = encrypt_secret(&stripe_key_set, sk)?;
+            (Some(ct), Some(nonce), ver)
         }
-        None => (None, None),
+        None => (None, None, stripe_key_set.current_version),
     };
     let (webhook_secret_enc, webhook_secret_nonce) = match webhook_secret_plain {
         Some(ws) => {
-            let (ct, nonce) = encrypt_secret(key, ws)?;
+            let (ct, nonce, _) = encrypt_secret(&stripe_key_set, ws)?;
             (Some(ct), Some(nonce))
         }
         None => (None, None),
@@ -1130,6 +1129,7 @@ pub async fn update_stripe_config(
         price_id_personal,
         price_id_business,
         admin.0.sub,
+        key_version,
     )
     .await?;
 
@@ -1145,7 +1145,7 @@ pub async fn update_stripe_config(
         }));
     AuditLogRepository::create(&pool, audit_log).await?;
 
-    Ok(success(StripeConfigResponse::from_db(&updated, key)?, request_id))
+    Ok(success(StripeConfigResponse::from_db(&updated, &stripe_key_set)?, request_id))
 }
 
 // =============================================================================
@@ -1184,10 +1184,14 @@ pub async fn grant_lifetime_membership(
 // Key Health Checks
 // =============================================================================
 
+use crate::services::encryption::decrypt_with_key;
+
 #[derive(Debug, Serialize)]
 pub struct KeyHealthCheck {
     pub status: String,
     pub has_data: bool,
+    pub key_version: Option<i16>,
+    pub needs_reencrypt: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
 }
@@ -1197,46 +1201,68 @@ fn evaluate_key_health(
     key: &[u8; 32],
     ciphertext: Option<&[u8]>,
     nonce: Option<&[u8]>,
+    key_version: Option<i16>,
+    current_version: i16,
 ) -> KeyHealthCheck {
     match (ciphertext, nonce) {
-        (Some(ct), Some(n)) => match decrypt_secret(key, ct, n) {
+        (Some(ct), Some(n)) => match decrypt_with_key(key, ct, n) {
             Ok(_) => KeyHealthCheck {
                 status: "healthy".to_string(),
                 has_data: true,
+                key_version,
+                needs_reencrypt: key_version.map(|v| v != current_version),
                 message: None,
             },
             Err(e) => KeyHealthCheck {
                 status: "unhealthy".to_string(),
                 has_data: true,
+                key_version,
+                needs_reencrypt: key_version.map(|v| v != current_version),
                 message: Some(e.to_string()),
             },
         },
         _ => KeyHealthCheck {
             status: "no_data".to_string(),
             has_data: false,
+            key_version: None,
+            needs_reencrypt: None,
             message: None,
         },
     }
 }
 
-async fn check_stripe_key(pool: &PgPool, key: &[u8; 32]) -> Result<KeyHealthCheck, AppError> {
+async fn check_stripe_key(pool: &PgPool, config: &Config) -> Result<KeyHealthCheck, AppError> {
     let db = StripeConfigRepository::get(pool).await?;
     Ok(evaluate_key_health(
-        key,
+        &config.stripe_encryption_key,
         db.secret_key.as_deref(),
         db.secret_key_nonce.as_deref(),
+        Some(db.key_version),
+        config.stripe_key_version,
     ))
 }
 
-async fn check_totp_key(pool: &PgPool, key: &[u8; 32]) -> Result<KeyHealthCheck, AppError> {
-    let row: Option<(Vec<u8>, Vec<u8>)> =
-        sqlx::query_as("SELECT encrypted_secret, nonce FROM user_totp LIMIT 1")
+async fn check_totp_key(pool: &PgPool, config: &Config) -> Result<KeyHealthCheck, AppError> {
+    let row: Option<(Vec<u8>, Vec<u8>, i16)> =
+        sqlx::query_as("SELECT encrypted_secret, nonce, key_version FROM user_totp LIMIT 1")
             .fetch_optional(pool)
             .await?;
 
     Ok(match row {
-        Some((ct, nonce)) => evaluate_key_health(key, Some(&ct), Some(&nonce)),
-        None => evaluate_key_health(key, None, None),
+        Some((ct, nonce, kv)) => evaluate_key_health(
+            &config.totp_encryption_key,
+            Some(&ct),
+            Some(&nonce),
+            Some(kv),
+            config.totp_key_version,
+        ),
+        None => evaluate_key_health(
+            &config.totp_encryption_key,
+            None,
+            None,
+            None,
+            config.totp_key_version,
+        ),
     })
 }
 
@@ -1244,8 +1270,8 @@ async fn check_totp_key(pool: &PgPool, key: &[u8; 32]) -> Result<KeyHealthCheck,
 /// and a corresponding `check_*` helper above.
 async fn run_key_check(key_id: &str, pool: &PgPool, config: &Config) -> Result<KeyHealthCheck, AppError> {
     match key_id {
-        "stripe" => check_stripe_key(pool, &config.stripe_encryption_key).await,
-        "totp" => check_totp_key(pool, &config.totp_encryption_key).await,
+        "stripe" => check_stripe_key(pool, config).await,
+        "totp" => check_totp_key(pool, config).await,
         _ => Err(AppError::not_found(format!("Unknown key: {key_id}"))),
     }
 }
@@ -1299,13 +1325,219 @@ pub async fn get_key_health_by_id(
     Ok(success(check, request_id))
 }
 
+// =============================================================================
+// Key Rotation
+// =============================================================================
+
+/// GET /v1/admin/key-rotation/{key_id}/status
+/// Returns the rotation status for a specific key: how many records are on the
+/// current version vs old versions.
+pub async fn key_rotation_status(
+    req: HttpRequest,
+    _admin: AdminUser,
+    pool: web::Data<PgPool>,
+    config: web::Data<Config>,
+    path: web::Path<String>,
+) -> Result<HttpResponse, AppError> {
+    let request_id = get_request_id(&req);
+    let key_id = path.into_inner();
+
+    match key_id.as_str() {
+        "totp" => {
+            let current_version = config.totp_key_version;
+            let total: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM user_totp")
+                .fetch_one(pool.as_ref())
+                .await?;
+            let on_current: (i64,) =
+                sqlx::query_as("SELECT COUNT(*) FROM user_totp WHERE key_version = $1")
+                    .bind(current_version)
+                    .fetch_one(pool.as_ref())
+                    .await?;
+
+            Ok(success(
+                serde_json::json!({
+                    "key_id": "totp",
+                    "current_version": current_version,
+                    "total": total.0,
+                    "on_current_version": on_current.0,
+                    "on_old_versions": total.0 - on_current.0,
+                    "rotation_complete": total.0 == on_current.0,
+                }),
+                request_id,
+            ))
+        }
+        "stripe" => {
+            let current_version = config.stripe_key_version;
+            let db = StripeConfigRepository::get(&pool).await?;
+            let has_secrets = db.secret_key.is_some() || db.webhook_secret.is_some();
+            let on_current = db.key_version == current_version;
+
+            Ok(success(
+                serde_json::json!({
+                    "key_id": "stripe",
+                    "current_version": current_version,
+                    "total": if has_secrets { 1 } else { 0 },
+                    "on_current_version": if has_secrets && on_current { 1 } else { 0 },
+                    "on_old_versions": if has_secrets && !on_current { 1 } else { 0 },
+                    "rotation_complete": !has_secrets || on_current,
+                }),
+                request_id,
+            ))
+        }
+        _ => Err(AppError::not_found(format!("Unknown key: {key_id}"))),
+    }
+}
+
+/// POST /v1/admin/key-rotation/{key_id}/reencrypt
+/// Re-encrypts all records that are still on an old key version.
+pub async fn reencrypt_key(
+    req: HttpRequest,
+    admin: AdminUser,
+    pool: web::Data<PgPool>,
+    totp_service: web::Data<Arc<TotpService>>,
+    stripe_key_set: web::Data<EncryptionKeySet>,
+    path: web::Path<String>,
+) -> Result<HttpResponse, AppError> {
+    let request_id = get_request_id(&req);
+    let key_id = path.into_inner();
+
+    match key_id.as_str() {
+        "totp" => {
+            let key_set = totp_service.key_set();
+            let current_version = key_set.current_version;
+
+            // Fetch all TOTP records on old key versions
+            let rows: Vec<(uuid::Uuid, Vec<u8>, Vec<u8>, i16)> = sqlx::query_as(
+                "SELECT id, encrypted_secret, nonce, key_version FROM user_totp WHERE key_version != $1",
+            )
+            .bind(current_version)
+            .fetch_all(pool.as_ref())
+            .await?;
+
+            let total = rows.len();
+            let mut reencrypted = 0u64;
+
+            for (id, ciphertext, nonce, old_version) in &rows {
+                // Decrypt with fallback
+                let plaintext = key_set.decrypt(ciphertext, nonce, *old_version)?;
+                // Re-encrypt with current key
+                let (new_ct, new_nonce, new_version) = key_set.encrypt(&plaintext)?;
+                // Update the row
+                TotpRepository::update_encryption(
+                    &pool,
+                    *id,
+                    &new_ct,
+                    &new_nonce,
+                    new_version,
+                )
+                .await?;
+                reencrypted += 1;
+            }
+
+            // Audit log
+            let audit_log = CreateAuditLog::new(AuditAction::AdminKeyRotation)
+                .with_actor(admin.0.sub, &admin.0.email, &admin.0.role)
+                .with_metadata(serde_json::json!({
+                    "key_id": "totp",
+                    "reencrypted": reencrypted,
+                    "total": total,
+                    "new_version": current_version,
+                }));
+            AuditLogRepository::create(&pool, audit_log).await?;
+
+            Ok(success(
+                serde_json::json!({
+                    "key_id": "totp",
+                    "reencrypted": reencrypted,
+                    "total": total,
+                    "key_version": current_version,
+                }),
+                request_id,
+            ))
+        }
+        "stripe" => {
+            let current_version = stripe_key_set.current_version;
+            let db = StripeConfigRepository::get(&pool).await?;
+
+            if db.key_version == current_version {
+                return Ok(success(
+                    serde_json::json!({
+                        "key_id": "stripe",
+                        "reencrypted": 0,
+                        "total": 0,
+                        "key_version": current_version,
+                    }),
+                    request_id,
+                ));
+            }
+
+            // Decrypt existing secrets with fallback, re-encrypt with current key
+            let new_sk = match (&db.secret_key, &db.secret_key_nonce) {
+                (Some(ct), Some(nonce)) => {
+                    let plain = stripe_key_set.decrypt(ct, nonce, db.key_version)?;
+                    let (new_ct, new_nonce, _) = stripe_key_set.encrypt(&plain)?;
+                    Some((new_ct, new_nonce))
+                }
+                _ => None,
+            };
+            let new_wh = match (&db.webhook_secret, &db.webhook_secret_nonce) {
+                (Some(ct), Some(nonce)) => {
+                    let plain = stripe_key_set.decrypt(ct, nonce, db.key_version)?;
+                    let (new_ct, new_nonce, _) = stripe_key_set.encrypt(&plain)?;
+                    Some((new_ct, new_nonce))
+                }
+                _ => None,
+            };
+
+            StripeConfigRepository::update_encryption(
+                &pool,
+                new_sk.as_ref().map(|(ct, _)| ct.clone()),
+                new_sk.as_ref().map(|(_, n)| n.clone()),
+                new_wh.as_ref().map(|(ct, _)| ct.clone()),
+                new_wh.as_ref().map(|(_, n)| n.clone()),
+                current_version,
+            )
+            .await?;
+
+            // Audit log
+            let audit_log = CreateAuditLog::new(AuditAction::AdminKeyRotation)
+                .with_actor(admin.0.sub, &admin.0.email, &admin.0.role)
+                .with_metadata(serde_json::json!({
+                    "key_id": "stripe",
+                    "reencrypted": 1,
+                    "new_version": current_version,
+                }));
+            AuditLogRepository::create(&pool, audit_log).await?;
+
+            Ok(success(
+                serde_json::json!({
+                    "key_id": "stripe",
+                    "reencrypted": 1,
+                    "total": 1,
+                    "key_version": current_version,
+                }),
+                request_id,
+            ))
+        }
+        _ => Err(AppError::not_found(format!("Unknown key: {key_id}"))),
+    }
+}
+
 #[cfg(test)]
 mod key_health_tests {
     use super::*;
-    use crate::models::stripe::encrypt_secret;
+    use crate::services::encryption::EncryptionKeySet;
 
     fn test_key() -> [u8; 32] {
         [0xAA; 32]
+    }
+
+    fn test_key_set() -> EncryptionKeySet {
+        EncryptionKeySet {
+            current: test_key(),
+            current_version: 1,
+            previous: None,
+        }
     }
 
     // ---- evaluate_key_health ----
@@ -1313,22 +1545,25 @@ mod key_health_tests {
     #[test]
     fn healthy_when_decrypt_succeeds() {
         let key = test_key();
-        let (ct, nonce) = encrypt_secret(&key, "test-secret").unwrap();
+        let ks = test_key_set();
+        let (ct, nonce, _) = ks.encrypt(b"test-secret").unwrap();
 
-        let result = evaluate_key_health(&key, Some(&ct), Some(&nonce));
+        let result = evaluate_key_health(&key, Some(&ct), Some(&nonce), Some(1), 1);
 
         assert_eq!(result.status, "healthy");
         assert!(result.has_data);
+        assert_eq!(result.key_version, Some(1));
+        assert_eq!(result.needs_reencrypt, Some(false));
         assert!(result.message.is_none());
     }
 
     #[test]
     fn unhealthy_when_wrong_key() {
-        let key = test_key();
         let wrong_key = [0xBB; 32];
-        let (ct, nonce) = encrypt_secret(&key, "test-secret").unwrap();
+        let ks = test_key_set();
+        let (ct, nonce, _) = ks.encrypt(b"test-secret").unwrap();
 
-        let result = evaluate_key_health(&wrong_key, Some(&ct), Some(&nonce));
+        let result = evaluate_key_health(&wrong_key, Some(&ct), Some(&nonce), Some(1), 1);
 
         assert_eq!(result.status, "unhealthy");
         assert!(result.has_data);
@@ -1338,10 +1573,11 @@ mod key_health_tests {
     #[test]
     fn unhealthy_when_tampered_ciphertext() {
         let key = test_key();
-        let (mut ct, nonce) = encrypt_secret(&key, "test-secret").unwrap();
+        let ks = test_key_set();
+        let (mut ct, nonce, _) = ks.encrypt(b"test-secret").unwrap();
         ct[0] ^= 0xFF;
 
-        let result = evaluate_key_health(&key, Some(&ct), Some(&nonce));
+        let result = evaluate_key_health(&key, Some(&ct), Some(&nonce), Some(1), 1);
 
         assert_eq!(result.status, "unhealthy");
         assert!(result.has_data);
@@ -1352,19 +1588,22 @@ mod key_health_tests {
     fn no_data_when_both_none() {
         let key = test_key();
 
-        let result = evaluate_key_health(&key, None, None);
+        let result = evaluate_key_health(&key, None, None, None, 1);
 
         assert_eq!(result.status, "no_data");
         assert!(!result.has_data);
+        assert!(result.key_version.is_none());
+        assert!(result.needs_reencrypt.is_none());
         assert!(result.message.is_none());
     }
 
     #[test]
     fn no_data_when_ciphertext_without_nonce() {
         let key = test_key();
-        let (ct, _nonce) = encrypt_secret(&key, "test-secret").unwrap();
+        let ks = test_key_set();
+        let (ct, _nonce, _) = ks.encrypt(b"test-secret").unwrap();
 
-        let result = evaluate_key_health(&key, Some(&ct), None);
+        let result = evaluate_key_health(&key, Some(&ct), None, Some(1), 1);
 
         assert_eq!(result.status, "no_data");
         assert!(!result.has_data);
@@ -1373,12 +1612,26 @@ mod key_health_tests {
     #[test]
     fn no_data_when_nonce_without_ciphertext() {
         let key = test_key();
-        let (_ct, nonce) = encrypt_secret(&key, "test-secret").unwrap();
+        let ks = test_key_set();
+        let (_ct, nonce, _) = ks.encrypt(b"test-secret").unwrap();
 
-        let result = evaluate_key_health(&key, None, Some(&nonce));
+        let result = evaluate_key_health(&key, None, Some(&nonce), Some(1), 1);
 
         assert_eq!(result.status, "no_data");
         assert!(!result.has_data);
+    }
+
+    #[test]
+    fn needs_reencrypt_when_version_mismatch() {
+        let key = test_key();
+        let ks = test_key_set();
+        let (ct, nonce, _) = ks.encrypt(b"test-secret").unwrap();
+
+        // Record is version 1, current version is 2
+        let result = evaluate_key_health(&key, Some(&ct), Some(&nonce), Some(1), 2);
+
+        assert_eq!(result.status, "healthy");
+        assert_eq!(result.needs_reencrypt, Some(true));
     }
 
     // ---- KEY_IDS registry ----
@@ -1396,12 +1649,15 @@ mod key_health_tests {
         let check = KeyHealthCheck {
             status: "healthy".to_string(),
             has_data: true,
+            key_version: Some(1),
+            needs_reencrypt: Some(false),
             message: None,
         };
         let json = serde_json::to_value(&check).unwrap();
 
         assert_eq!(json["status"], "healthy");
         assert_eq!(json["has_data"], true);
+        assert_eq!(json["key_version"], 1);
         assert!(json.get("message").is_none());
     }
 
@@ -1410,6 +1666,8 @@ mod key_health_tests {
         let check = KeyHealthCheck {
             status: "unhealthy".to_string(),
             has_data: true,
+            key_version: Some(1),
+            needs_reencrypt: Some(false),
             message: Some("Decryption failed".to_string()),
         };
         let json = serde_json::to_value(&check).unwrap();

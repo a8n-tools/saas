@@ -14,22 +14,48 @@ impl TotpRepository {
         user_id: Uuid,
         encrypted_secret: &[u8],
         nonce: &[u8],
+        key_version: i16,
     ) -> Result<UserTotp, sqlx::Error> {
         sqlx::query_as::<_, UserTotp>(
             r#"
-            INSERT INTO user_totp (user_id, encrypted_secret, nonce)
-            VALUES ($1, $2, $3)
+            INSERT INTO user_totp (user_id, encrypted_secret, nonce, key_version)
+            VALUES ($1, $2, $3, $4)
             ON CONFLICT (user_id) DO UPDATE
-            SET encrypted_secret = $2, nonce = $3, verified = FALSE,
-                enabled_at = NULL, updated_at = NOW()
+            SET encrypted_secret = $2, nonce = $3, key_version = $4,
+                verified = FALSE, enabled_at = NULL, updated_at = NOW()
             RETURNING *
             "#,
         )
         .bind(user_id)
         .bind(encrypted_secret)
         .bind(nonce)
+        .bind(key_version)
         .fetch_one(pool)
         .await
+    }
+
+    /// Update encryption data for a specific TOTP record (used during key rotation).
+    pub async fn update_encryption(
+        pool: &PgPool,
+        id: Uuid,
+        encrypted_secret: &[u8],
+        nonce: &[u8],
+        key_version: i16,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            r#"
+            UPDATE user_totp
+            SET encrypted_secret = $2, nonce = $3, key_version = $4, updated_at = NOW()
+            WHERE id = $1
+            "#,
+        )
+        .bind(id)
+        .bind(encrypted_secret)
+        .bind(nonce)
+        .bind(key_version)
+        .execute(pool)
+        .await?;
+        Ok(())
     }
 
     /// Find TOTP configuration by user ID

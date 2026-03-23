@@ -13,6 +13,7 @@ pub struct UserTotp {
     pub nonce: Vec<u8>,
     pub verified: bool,
     pub enabled_at: Option<DateTime<Utc>>,
+    pub key_version: i16,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
