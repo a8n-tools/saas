@@ -679,6 +679,108 @@ curl -b cookies http://localhost:18080/v1/admin/key-health/unknown
 
 ---
 
+## Prompt 13.8: Encryption Key Rotation
+
+```text
+Implement zero-downtime encryption key rotation for secrets encrypted at rest.
+
+TOTP and Stripe secrets are encrypted with AES-256-GCM using per-purpose keys
+loaded from env vars (TOTP_ENCRYPTION_KEY, STRIPE_ENCRYPTION_KEY). Key rotation
+allows replacing these keys without losing access to encrypted data.
+
+### Design
+
+- Key versioning: `key_version SMALLINT` column on `user_totp` and `stripe_config`
+  tracks which key version encrypted each row.
+- Env var pairs: current key in `*_ENCRYPTION_KEY`, old key in `*_ENCRYPTION_KEY_PREV`,
+  version in `*_KEY_VERSION` (defaults to 1).
+- Fallback decryption: during rotation, tries current key first; on version mismatch
+  or failure, falls back to previous key. Zero downtime.
+- Shared `EncryptionKeySet` struct (api/src/services/encryption.rs) centralizes
+  encrypt/decrypt/fallback logic for all encrypted fields.
+
+### Admin Endpoints
+
+1. GET /v1/admin/key-rotation/{key_id}/status
+   - Returns counts: total records, records on current version, records needing
+     re-encryption, and whether rotation is complete.
+   - Valid key_ids: "totp", "stripe"
+
+   Response:
+   ```json
+   {
+     "success": true,
+     "data": {
+       "key_id": "totp",
+       "current_version": 2,
+       "total_records": 15,
+       "current_version_count": 12,
+       "old_version_count": 3,
+       "rotation_complete": false
+     }
+   }
+   ```
+
+2. POST /v1/admin/key-rotation/{key_id}/reencrypt
+   - Re-encrypts all rows still on old key versions using the current key.
+   - For `totp`: iterates `user_totp` rows where `key_version != current_version`.
+   - For `stripe`: re-encrypts the singleton `stripe_config` row.
+   - Creates an audit log entry (`admin_key_rotation` action).
+
+   Response:
+   ```json
+   {
+     "success": true,
+     "data": {
+       "key_id": "totp",
+       "reencrypted": 3,
+       "total": 15,
+       "key_version": 2
+     }
+   }
+   ```
+
+### Key Health Enhancements
+
+The existing key health endpoints now include rotation info:
+- `key_version`: which version encrypted the checked record
+- `needs_reencrypt`: whether the record is on an old key version
+
+### Operator Rotation Workflow
+
+1. Generate new key: `openssl rand -hex 32`
+2. Set env vars:
+   ```
+   TOTP_ENCRYPTION_KEY=<new key>
+   TOTP_ENCRYPTION_KEY_PREV=<old key>
+   TOTP_KEY_VERSION=2
+   ```
+3. Deploy — reads use fallback decryption, new writes use new key
+4. POST /v1/admin/key-rotation/totp/reencrypt — re-encrypts all old rows
+5. GET /v1/admin/key-rotation/totp/status — confirm `rotation_complete: true`
+6. Remove `TOTP_ENCRYPTION_KEY_PREV` from env, redeploy
+
+Testing:
+```bash
+# Check rotation status
+curl -b cookies http://localhost:18080/v1/admin/key-rotation/totp/status
+curl -b cookies http://localhost:18080/v1/admin/key-rotation/stripe/status
+
+# Trigger re-encryption
+curl -b cookies -X POST http://localhost:18080/v1/admin/key-rotation/totp/reencrypt
+curl -b cookies -X POST http://localhost:18080/v1/admin/key-rotation/stripe/reencrypt
+```
+
+Implementation files:
+- api/src/services/encryption.rs — EncryptionKeySet with encrypt/decrypt/fallback
+- api/src/config.rs — loads *_PREV keys and *_KEY_VERSION
+- api/src/handlers/admin.rs — rotation endpoints and enhanced health checks
+- api/src/routes/admin.rs — route registration
+- api/migrations/20260323000027_add_key_version.sql — adds key_version columns
+```
+
+---
+
 ## Validation Checklist
 
 After completing all prompts in this section, verify:
@@ -694,6 +796,9 @@ After completing all prompts in this section, verify:
 - [ ] Audit logs capture all security events
 - [ ] HTTPS enforced everywhere
 - [ ] Encryption key health check reports correct status
+- [ ] Key rotation status endpoint shows version counts
+- [ ] Key rotation re-encrypt endpoint re-encrypts old rows
+- [ ] Fallback decryption works during rotation window
 
 ---
 

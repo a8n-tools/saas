@@ -540,6 +540,10 @@ GRAFANA_PASSWORD=change_me
 GLITCHTIP_SECRET_KEY=change_me
 GLITCHTIP_DSN=https://...@glitchtip.example.com/1
 
+# Encryption Keys (generate with: openssl rand -hex 32)
+TOTP_ENCRYPTION_KEY=<64-hex-chars>
+STRIPE_ENCRYPTION_KEY=<64-hex-chars>
+
 # App Databases
 RUS_DB_PASSWORD=change_me
 RUSTYLINKS_DB_PASSWORD=change_me
@@ -566,6 +570,10 @@ openssl pkey -in keys/jwt_private.pem -pubout -out keys/jwt_public.pem
 chmod 600 keys/jwt_private.pem
 chmod 644 keys/jwt_public.pem
 
+# Generate encryption keys
+TOTP_ENCRYPTION_KEY=$(openssl rand -hex 32)
+STRIPE_ENCRYPTION_KEY=$(openssl rand -hex 32)
+
 echo "Secrets generated. Add to .env file:"
 echo ""
 echo "DB_PASSWORD=$DB_PASSWORD"
@@ -574,6 +582,8 @@ echo "RUSTYLINKS_DB_PASSWORD=$RUSTYLINKS_DB_PASSWORD"
 echo "GRAFANA_PASSWORD=$GRAFANA_PASSWORD"
 echo "GLITCHTIP_SECRET_KEY=$GLITCHTIP_SECRET_KEY"
 echo "STALWART_ADMIN_PASSWORD=$STALWART_ADMIN_PASSWORD"
+echo "TOTP_ENCRYPTION_KEY=$TOTP_ENCRYPTION_KEY"
+echo "STRIPE_ENCRYPTION_KEY=$STRIPE_ENCRYPTION_KEY"
 ```
 ```
 
