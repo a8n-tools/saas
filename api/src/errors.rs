@@ -144,10 +144,27 @@ impl ResponseError for AppError {
 
         let client_message = match self {
             AppError::ValidationError { message, .. } => message.clone(),
-            AppError::InternalError { .. } | AppError::DatabaseError { .. } => {
-                "An unexpected error occurred".to_string()
+            AppError::InvalidCredentials => {
+                "The email or password you entered is incorrect.".to_string()
             }
-            _ => self.to_string(),
+            AppError::TokenExpired => {
+                "Your session has expired. Please log in again.".to_string()
+            }
+            AppError::Unauthorized => "You need to log in to access this.".to_string(),
+            AppError::Forbidden => "You don't have permission to do this.".to_string(),
+            AppError::NotFound { .. } => {
+                "The requested resource could not be found.".to_string()
+            }
+            AppError::Conflict { message } => message.clone(),
+            AppError::RateLimited { retry_after } => {
+                format!(
+                    "Too many requests. Please wait {} seconds and try again.",
+                    retry_after
+                )
+            }
+            AppError::InternalError { .. } | AppError::DatabaseError { .. } => {
+                "An unexpected error occurred. Please try again later.".to_string()
+            }
         };
 
         let error_response = ErrorResponse {

@@ -73,7 +73,15 @@ pub fn validate_password_strength(password: &str) -> Result<(), ValidationError>
     }
 
     if password.len() > ValidationRules::PASSWORD_MAX_LENGTH {
-        return Err(ValidationError::new("password_too_long"));
+        let mut err = ValidationError::new("password_too_long");
+        err.message = Some(
+            format!(
+                "Password must be no longer than {} characters",
+                ValidationRules::PASSWORD_MAX_LENGTH
+            )
+            .into(),
+        );
+        return Err(err);
     }
 
     // Check for uppercase
