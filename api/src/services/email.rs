@@ -566,3 +566,44 @@ impl Default for EmailService {
         Self::new_dev()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn feedback_excerpt_short_message() {
+        let msg = "This is a short message.";
+        assert_eq!(EmailService::feedback_excerpt(msg), msg);
+    }
+
+    #[test]
+    fn feedback_excerpt_empty() {
+        assert_eq!(EmailService::feedback_excerpt(""), "");
+    }
+
+    #[test]
+    fn feedback_excerpt_exactly_180_chars() {
+        let msg = "a".repeat(180);
+        assert_eq!(EmailService::feedback_excerpt(&msg), msg);
+    }
+
+    #[test]
+    fn feedback_excerpt_truncates_at_181() {
+        let msg = "a".repeat(200);
+        let result = EmailService::feedback_excerpt(&msg);
+        assert_eq!(result.len(), 183); // 180 + "..."
+        assert!(result.ends_with("..."));
+    }
+
+    #[test]
+    fn feedback_excerpt_normalizes_whitespace() {
+        let msg = "hello   world\t\tfoo\n\nbar";
+        assert_eq!(EmailService::feedback_excerpt(msg), "hello world foo bar");
+    }
+
+    #[test]
+    fn feedback_excerpt_whitespace_only() {
+        assert_eq!(EmailService::feedback_excerpt("   \t\n  "), "");
+    }
+}

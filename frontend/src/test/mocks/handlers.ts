@@ -645,6 +645,82 @@ export const handlers = [
     return HttpResponse.json({ success: true, data: {} })
   }),
 
+  // Accept invite
+  http.post(`${API_BASE}/auth/invite/accept`, async ({ request }) => {
+    const body = await request.json() as { token: string; password?: string }
+
+    if (body.token === 'valid-invite-token') {
+      if (!body.password) {
+        return HttpResponse.json({
+          success: true,
+          data: { needs_password: true, email: 'invited@example.com' },
+        })
+      }
+      return HttpResponse.json({
+        success: true,
+        data: { user: mockUser, access_token: 'mock-access-token' },
+      })
+    }
+
+    return HttpResponse.json(
+      { success: false, error: { code: 'INVALID_TOKEN', message: 'Invalid or expired invite link' } },
+      { status: 400 }
+    )
+  }),
+
+  // Initial setup
+  http.post(`${API_BASE}/auth/setup`, async ({ request }) => {
+    const body = await request.json() as { email: string; password: string }
+
+    if (body.email === 'taken@example.com') {
+      return HttpResponse.json(
+        { success: false, error: { code: 'CONFLICT', message: 'Setup already completed' } },
+        { status: 409 }
+      )
+    }
+
+    return HttpResponse.json({
+      success: true,
+      data: {
+        user: { ...mockAdminUser, email: body.email },
+        access_token: 'mock-access-token',
+      },
+    })
+  }),
+
+  // Admin Stripe config
+  http.get(`${API_BASE}/admin/stripe`, () => {
+    return HttpResponse.json({
+      success: true,
+      data: {
+        secret_key_masked: '***1234',
+        webhook_secret_masked: '***5678',
+        price_id_personal: 'price_personal_123',
+        price_id_business: 'price_business_456',
+        has_secret_key: true,
+        has_webhook_secret: true,
+        updated_at: '2024-06-01T00:00:00Z',
+        source: 'database',
+      },
+    })
+  }),
+
+  http.put(`${API_BASE}/admin/stripe`, async () => {
+    return HttpResponse.json({
+      success: true,
+      data: {
+        secret_key_masked: '***new1',
+        webhook_secret_masked: '***5678',
+        price_id_personal: 'price_personal_123',
+        price_id_business: 'price_business_456',
+        has_secret_key: true,
+        has_webhook_secret: true,
+        updated_at: '2024-06-02T00:00:00Z',
+        source: 'database',
+      },
+    })
+  }),
+
   // Feedback (public)
   http.post(`${API_BASE}/feedback`, () => {
     return HttpResponse.json({

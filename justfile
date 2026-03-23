@@ -68,6 +68,17 @@ test-api:
 test-frontend:
     {{ compose }}exec frontend bun run test:run
 
+# Run API tests via docker exec (no compose dependency)
+test-dev-api:
+    docker exec saas-api-{{ `echo $USER` }} cargo test
+
+# Run frontend tests via docker exec (no compose dependency)
+test-dev-frontend:
+    docker exec saas-frontend-{{ `echo $USER` }} bun run test:run
+
+# Run all tests via docker exec (no compose dependency)
+test-dev: test-dev-api test-dev-frontend
+
 # Run all tests
 test: test-api test-frontend
 
