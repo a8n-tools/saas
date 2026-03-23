@@ -23,9 +23,11 @@ export function DashboardPage() {
   const tagline = useMemo(() => taglines[Math.floor(Math.random() * taglines.length)], [])
 
   const hasActiveMembership =
+    user?.role === 'admin' ||
     user?.lifetime_member ||
     user?.membership_status === 'active' ||
     user?.membership_status === 'past_due' ||
+    user?.membership_status === 'grace_period' ||
     (user?.trial_ends_at != null && new Date(user.trial_ends_at) > new Date())
 
   return (
