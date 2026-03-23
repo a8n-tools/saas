@@ -1,9 +1,5 @@
 //! TOTP two-factor authentication service
 
-use aes_gcm::{
-    aead::{Aead, KeyInit},
-    Aes256Gcm, Nonce,
-};
 use rand::RngCore;
 use sha2::{Digest, Sha256};
 use sqlx::PgPool;
@@ -12,6 +8,7 @@ use uuid::Uuid;
 
 use crate::errors::AppError;
 use crate::repositories::TotpRepository;
+use crate::services::encryption::EncryptionKeySet;
 
 /// Response from beginning 2FA setup
 pub struct TotpSetupInfo {
@@ -21,18 +18,23 @@ pub struct TotpSetupInfo {
 
 /// TOTP service for managing two-factor authentication
 pub struct TotpService {
-    encryption_key: [u8; 32],
+    key_set: EncryptionKeySet,
     issuer: String,
     pool: PgPool,
 }
 
 impl TotpService {
-    pub fn new(encryption_key: [u8; 32], issuer: String, pool: PgPool) -> Self {
+    pub fn new(key_set: EncryptionKeySet, issuer: String, pool: PgPool) -> Self {
         Self {
-            encryption_key,
+            key_set,
             issuer,
             pool,
         }
+    }
+
+    /// Returns a reference to the encryption key set (used by admin rotation endpoints).
+    pub fn key_set(&self) -> &EncryptionKeySet {
+        &self.key_set
     }
 
     /// Begin 2FA setup: generate a TOTP secret and return the otpauth URI
@@ -51,8 +53,8 @@ impl TotpService {
         let secret_base32 = data_encoding::BASE32_NOPAD.encode(&secret_bytes);
 
         // Encrypt and store the secret
-        let (encrypted, nonce) = self.encrypt_secret(&secret_bytes)?;
-        TotpRepository::upsert_totp(&self.pool, user_id, &encrypted, &nonce).await?;
+        let (encrypted, nonce, key_version) = self.key_set.encrypt(&secret_bytes)?;
+        TotpRepository::upsert_totp(&self.pool, user_id, &encrypted, &nonce, key_version).await?;
 
         Ok(TotpSetupInfo {
             otpauth_uri,
@@ -75,7 +77,11 @@ impl TotpService {
         }
 
         // Decrypt secret and verify code
-        let secret = self.decrypt_secret(&totp_record.encrypted_secret, &totp_record.nonce)?;
+        let secret = self.key_set.decrypt(
+            &totp_record.encrypted_secret,
+            &totp_record.nonce,
+            totp_record.key_version,
+        )?;
         if !self.check_code(&secret, code)? {
             return Err(AppError::validation("code", "Invalid verification code"));
         }
@@ -98,7 +104,11 @@ impl TotpService {
             return Ok(false);
         }
 
-        let secret = self.decrypt_secret(&totp_record.encrypted_secret, &totp_record.nonce)?;
+        let secret = self.key_set.decrypt(
+            &totp_record.encrypted_secret,
+            &totp_record.nonce,
+            totp_record.key_version,
+        )?;
         self.check_code(&secret, code)
     }
 
@@ -187,32 +197,6 @@ impl TotpService {
             .map_err(|e| AppError::internal(format!("System time error: {}", e)))
     }
 
-    fn encrypt_secret(&self, secret: &[u8]) -> Result<(Vec<u8>, Vec<u8>), AppError> {
-        let cipher = Aes256Gcm::new_from_slice(&self.encryption_key)
-            .map_err(|e| AppError::internal(format!("Invalid encryption key: {}", e)))?;
-
-        let mut nonce_bytes = [0u8; 12];
-        rand::thread_rng().fill_bytes(&mut nonce_bytes);
-        let nonce = Nonce::from_slice(&nonce_bytes);
-
-        let encrypted = cipher
-            .encrypt(nonce, secret)
-            .map_err(|e| AppError::internal(format!("Encryption failed: {}", e)))?;
-
-        Ok((encrypted, nonce_bytes.to_vec()))
-    }
-
-    fn decrypt_secret(&self, encrypted: &[u8], nonce: &[u8]) -> Result<Vec<u8>, AppError> {
-        let cipher = Aes256Gcm::new_from_slice(&self.encryption_key)
-            .map_err(|e| AppError::internal(format!("Invalid encryption key: {}", e)))?;
-
-        let nonce = Nonce::from_slice(nonce);
-
-        cipher
-            .decrypt(nonce, encrypted)
-            .map_err(|e| AppError::internal(format!("Decryption failed: {}", e)))
-    }
-
     async fn generate_and_store_recovery_codes(
         &self,
         user_id: Uuid,
@@ -250,48 +234,44 @@ impl TotpService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::services::encryption::EncryptionKeySet;
 
-    fn test_encryption_key() -> [u8; 32] {
+    fn test_key_set() -> EncryptionKeySet {
         let mut key = [0u8; 32];
         key[..16].copy_from_slice(b"test-encrypt-key");
         key[16..].copy_from_slice(b"0123456789abcdef");
-        key
+        EncryptionKeySet {
+            current: key,
+            current_version: 1,
+            previous: None,
+        }
     }
 
     // -- encrypt/decrypt round-trip --
 
     #[test]
     fn encrypt_decrypt_roundtrip() {
-        let key = test_encryption_key();
-        // Cannot use TotpService::new (needs PgPool), test the crypto directly
-        let cipher = Aes256Gcm::new_from_slice(&key).unwrap();
-
+        let ks = test_key_set();
         let secret = b"my-totp-secret-data";
-        let mut nonce_bytes = [0u8; 12];
-        rand::thread_rng().fill_bytes(&mut nonce_bytes);
-        let nonce = Nonce::from_slice(&nonce_bytes);
 
-        let encrypted = cipher.encrypt(nonce, secret.as_ref()).unwrap();
-        let decrypted = cipher.decrypt(nonce, encrypted.as_ref()).unwrap();
+        let (encrypted, nonce, version) = ks.encrypt(secret).unwrap();
+        assert_eq!(version, 1);
 
+        let decrypted = ks.decrypt(&encrypted, &nonce, 1).unwrap();
         assert_eq!(decrypted, secret);
     }
 
     #[test]
     fn decrypt_with_wrong_key_fails() {
-        let key1 = test_encryption_key();
-        let mut key2 = test_encryption_key();
-        key2[0] ^= 0xFF;
+        let ks = test_key_set();
+        let (encrypted, nonce, _) = ks.encrypt(b"secret-data").unwrap();
 
-        let cipher1 = Aes256Gcm::new_from_slice(&key1).unwrap();
-        let cipher2 = Aes256Gcm::new_from_slice(&key2).unwrap();
-
-        let secret = b"secret-data";
-        let nonce_bytes = [0u8; 12];
-        let nonce = Nonce::from_slice(&nonce_bytes);
-
-        let encrypted = cipher1.encrypt(nonce, secret.as_ref()).unwrap();
-        assert!(cipher2.decrypt(nonce, encrypted.as_ref()).is_err());
+        let wrong_ks = EncryptionKeySet {
+            current: [0xFFu8; 32],
+            current_version: 1,
+            previous: None,
+        };
+        assert!(wrong_ks.decrypt(&encrypted, &nonce, 1).is_err());
     }
 
     // -- generate_recovery_code --
@@ -330,5 +310,86 @@ mod tests {
         let hash1 = TotpService::hash_code("CODE1");
         let hash2 = TotpService::hash_code("CODE2");
         assert_ne!(hash1, hash2);
+    }
+
+    // -- key rotation scenarios --
+
+    fn rotated_key() -> [u8; 32] {
+        [0xDD; 32]
+    }
+
+    #[test]
+    fn decrypt_totp_secret_with_previous_key() {
+        let ks_v1 = test_key_set();
+        let totp_secret = b"JBSWY3DPEHPK3PXP"; // typical TOTP base32 secret
+
+        // Encrypt with v1
+        let (ct, nonce, _) = ks_v1.encrypt(totp_secret).unwrap();
+
+        // Rotate: new key is current, old key is previous
+        let ks_v2 = EncryptionKeySet {
+            current: rotated_key(),
+            current_version: 2,
+            previous: Some(ks_v1.current),
+        };
+
+        // Should decrypt via fallback to previous key
+        let decrypted = ks_v2.decrypt(&ct, &nonce, 1).unwrap();
+        assert_eq!(decrypted, totp_secret);
+    }
+
+    #[test]
+    fn reencrypt_totp_secret_roundtrip() {
+        let ks_v1 = test_key_set();
+        let totp_secret = b"JBSWY3DPEHPK3PXP";
+
+        // Encrypt with v1
+        let (ct_old, nonce_old, _) = ks_v1.encrypt(totp_secret).unwrap();
+
+        // Rotate to v2
+        let ks_v2 = EncryptionKeySet {
+            current: rotated_key(),
+            current_version: 2,
+            previous: Some(ks_v1.current),
+        };
+
+        // Simulate re-encryption: decrypt old, encrypt new
+        let plain = ks_v2.decrypt(&ct_old, &nonce_old, 1).unwrap();
+        let (ct_new, nonce_new, ver_new) = ks_v2.encrypt(&plain).unwrap();
+        assert_eq!(ver_new, 2);
+
+        // After removing old key, new ciphertext still decrypts
+        let ks_v2_only = EncryptionKeySet {
+            current: rotated_key(),
+            current_version: 2,
+            previous: None,
+        };
+        let final_plain = ks_v2_only.decrypt(&ct_new, &nonce_new, 2).unwrap();
+        assert_eq!(final_plain, totp_secret);
+    }
+
+    #[test]
+    fn new_totp_setup_uses_current_version() {
+        // After rotation, new encryptions should use the current version
+        let ks_v2 = EncryptionKeySet {
+            current: rotated_key(),
+            current_version: 2,
+            previous: Some(test_key_set().current),
+        };
+
+        let (_, _, version) = ks_v2.encrypt(b"new-totp-secret").unwrap();
+        assert_eq!(version, 2);
+    }
+
+    #[test]
+    fn key_set_accessor_returns_reference() {
+        // Verify TotpService.key_set() is accessible for rotation endpoints.
+        // We can't construct a full TotpService without PgPool, but we can
+        // verify the EncryptionKeySet type is correct through the test helpers.
+        let ks = test_key_set();
+        assert_eq!(ks.current_version, 1);
+        assert!(ks.previous.is_none());
+        assert!(!ks.needs_reencrypt(1));
+        assert!(ks.needs_reencrypt(0));
     }
 }

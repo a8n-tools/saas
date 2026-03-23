@@ -26,8 +26,16 @@ pub struct Config {
     pub auto_ban: AutoBanConfig,
     /// TOTP encryption key (32 bytes) for encrypting TOTP secrets at rest
     pub totp_encryption_key: [u8; 32],
+    /// Previous TOTP encryption key for rotation (optional)
+    pub totp_encryption_key_prev: Option<[u8; 32]>,
+    /// Current TOTP key version (incremented on each rotation)
+    pub totp_key_version: i16,
     /// Stripe encryption key (32 bytes) for encrypting Stripe secrets at rest
     pub stripe_encryption_key: [u8; 32],
+    /// Previous Stripe encryption key for rotation (optional)
+    pub stripe_encryption_key_prev: Option<[u8; 32]>,
+    /// Current Stripe key version (incremented on each rotation)
+    pub stripe_key_version: i16,
 }
 
 /// SMTP TLS mode
@@ -216,6 +224,16 @@ impl Config {
 
         let totp_encryption_key = Self::load_totp_encryption_key(&environment);
         let stripe_encryption_key = Self::load_stripe_encryption_key(&environment);
+        let totp_encryption_key_prev = Self::load_optional_encryption_key("TOTP_ENCRYPTION_KEY_PREV");
+        let stripe_encryption_key_prev = Self::load_optional_encryption_key("STRIPE_ENCRYPTION_KEY_PREV");
+        let totp_key_version: i16 = env::var("TOTP_KEY_VERSION")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(1);
+        let stripe_key_version: i16 = env::var("STRIPE_KEY_VERSION")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(1);
 
         let config = Self {
             database_url,
@@ -229,7 +247,11 @@ impl Config {
             cookie_domain,
             auto_ban,
             totp_encryption_key,
+            totp_encryption_key_prev,
+            totp_key_version,
             stripe_encryption_key,
+            stripe_encryption_key_prev,
+            stripe_key_version,
         };
 
         info!(
@@ -287,6 +309,19 @@ impl Config {
                 [0u8; 32]
             }
         }
+    }
+
+    /// Load an optional encryption key from an env var (hex-encoded 32 bytes).
+    /// Returns `None` if the env var is not set.
+    fn load_optional_encryption_key(env_var: &str) -> Option<[u8; 32]> {
+        env::var(env_var).ok().map(|hex_str| {
+            let bytes = hex::decode(hex_str.trim())
+                .unwrap_or_else(|_| panic!("{env_var} must be valid hex"));
+            let key: [u8; 32] = bytes
+                .try_into()
+                .unwrap_or_else(|_| panic!("{env_var} must be exactly 32 bytes (64 hex chars)"));
+            key
+        })
     }
 
     /// Get the server bind address
@@ -356,5 +391,48 @@ mod tests {
         let input = "noreply@localhost";
         assert_eq!(parse_smtp_from_email(input), "noreply@localhost");
         assert_eq!(parse_smtp_from_name(input), "localhost");
+    }
+
+    // ---- Key rotation config ----
+
+    #[test]
+    fn test_load_optional_encryption_key_returns_none_when_unset() {
+        env::remove_var("TEST_OPTIONAL_KEY_UNSET");
+        let result = Config::load_optional_encryption_key("TEST_OPTIONAL_KEY_UNSET");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_load_optional_encryption_key_parses_hex() {
+        let hex_key = "aa".repeat(32); // 64 hex chars = 32 bytes
+        env::set_var("TEST_OPTIONAL_KEY_HEX", &hex_key);
+        let result = Config::load_optional_encryption_key("TEST_OPTIONAL_KEY_HEX");
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), [0xAA; 32]);
+        env::remove_var("TEST_OPTIONAL_KEY_HEX");
+    }
+
+    #[test]
+    #[should_panic(expected = "must be valid hex")]
+    fn test_load_optional_encryption_key_panics_on_invalid_hex() {
+        env::set_var("TEST_OPTIONAL_KEY_BAD", "not-valid-hex!");
+        Config::load_optional_encryption_key("TEST_OPTIONAL_KEY_BAD");
+    }
+
+    #[test]
+    #[should_panic(expected = "must be exactly 32 bytes")]
+    fn test_load_optional_encryption_key_panics_on_wrong_length() {
+        env::set_var("TEST_OPTIONAL_KEY_SHORT", "aabb"); // only 2 bytes
+        Config::load_optional_encryption_key("TEST_OPTIONAL_KEY_SHORT");
+    }
+
+    #[test]
+    fn test_key_version_parsing() {
+        // Test the parsing logic directly to avoid env var races with parallel tests.
+        // Key versions use: env::var("X").ok().and_then(|v| v.parse().ok()).unwrap_or(1)
+        assert_eq!("3".parse::<i16>().unwrap(), 3);
+        assert_eq!("7".parse::<i16>().unwrap(), 7);
+        assert_eq!(None::<String>.and_then(|v: String| v.parse::<i16>().ok()).unwrap_or(1), 1);
+        assert_eq!(Some("invalid".to_string()).and_then(|v| v.parse::<i16>().ok()).unwrap_or(1), 1);
     }
 }
