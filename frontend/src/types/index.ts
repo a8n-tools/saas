@@ -7,6 +7,7 @@ export type MembershipStatus =
   | 'past_due'
   | 'canceled'
   | 'incomplete'
+  | 'grace_period'
 
 export type MembershipTier = 'personal' | 'business'
 

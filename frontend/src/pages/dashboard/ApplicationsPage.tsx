@@ -14,8 +14,11 @@ export function ApplicationsPage() {
 
   const hasActiveMembership =
     user?.role === 'admin' ||
+    user?.lifetime_member ||
     user?.membership_status === 'active' ||
-    user?.membership_status === 'grace_period'
+    user?.membership_status === 'past_due' ||
+    user?.membership_status === 'grace_period' ||
+    (user?.trial_ends_at != null && new Date(user.trial_ends_at) > new Date())
 
   if (isLoading) {
     return (
