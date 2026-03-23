@@ -660,6 +660,124 @@ Write integration tests.
 
 ---
 
+## Prompt 3.9: Two-Factor Authentication (TOTP)
+
+```text
+Implement TOTP-based two-factor authentication with recovery codes.
+
+Tables: user_totp, recovery_codes (see 02-database-schema.md Prompt 2.9)
+TOTP secrets are encrypted at rest with AES-256-GCM using TOTP_ENCRYPTION_KEY.
+
+Create src/services/totp.rs with TotpService:
+- Generates TOTP secrets, encrypts before storage
+- Verifies TOTP codes with time-step tolerance
+- Generates and hashes recovery codes (SHA-256)
+
+Create src/handlers/totp.rs:
+
+1. POST /v1/auth/2fa/setup
+   - Authenticated user only
+   - Generates TOTP secret, stores encrypted in user_totp (unverified)
+   - Returns provisioning URI + QR code data + recovery codes
+   - Fails if 2FA already enabled
+
+2. POST /v1/auth/2fa/confirm
+   - Takes a TOTP code to verify the user scanned the QR code
+   - Marks user_totp as verified, sets users.two_factor_enabled = true
+   - Creates audit log
+
+3. POST /v1/auth/2fa/verify
+   - Called during login when 2FA is enabled
+   - Accepts TOTP code or recovery code
+   - On success: issues JWT tokens and sets auth cookies
+   - Recovery code is single-use (marks used_at)
+
+4. POST /v1/auth/2fa/disable
+   - Requires current password confirmation
+   - Deletes user_totp and recovery_codes rows
+   - Sets users.two_factor_enabled = false
+   - Creates audit log
+
+5. POST /v1/auth/2fa/recovery-codes
+   - Regenerates recovery codes (replaces existing)
+   - Returns new codes in response
+
+6. GET /v1/auth/2fa/status
+   - Returns { enabled: bool, verified: bool, recovery_codes_remaining: int }
+```
+
+---
+
+## Prompt 3.10: Email Change and Verification
+
+```text
+Implement email change workflow and email verification.
+
+Tables: email_change_requests, email_verification_tokens
+(see 02-database-schema.md Prompt 2.9)
+
+Create src/handlers/user.rs (add to existing):
+
+1. POST /v1/users/me/email
+   - Request email change
+   - Takes { new_email, password } — password required for security
+   - Creates email_change_request with hashed token
+   - Sends confirmation link to new email
+   - Token expires in 24 hours
+
+2. POST /v1/users/me/email/confirm
+   - Takes { token }
+   - Validates token hash, checks expiry
+   - Updates users.email, marks request confirmed
+   - Creates audit log
+
+3. POST /v1/users/me/email/verify
+   - Request email verification (for unverified accounts)
+   - Creates email_verification_token with hashed token
+   - Sends verification link to current email
+
+4. POST /v1/users/me/email/verify/confirm
+   - Takes { token }
+   - Validates token, marks users.email_verified = true
+   - Creates audit log
+```
+
+---
+
+## Prompt 3.11: Admin Setup and Invite System
+
+```text
+Implement first-run admin setup and admin invite acceptance.
+
+Table: admin_invites (see 02-database-schema.md Prompt 2.10)
+
+Create src/handlers/auth.rs (add to existing):
+
+1. GET /v1/auth/setup/status
+   - Public endpoint (no auth required)
+   - Returns { needs_setup: bool } — true if zero admin users exist
+
+2. POST /v1/auth/setup
+   - Creates the first admin account
+   - Only works when needs_setup is true (no admins exist)
+   - Takes { email, password }
+   - Creates user with role=admin, email_verified=true
+
+3. POST /v1/auth/invite/accept
+   - Accepts admin invite token
+   - Takes { token, password }
+   - Validates token_hash, checks expiry, not revoked
+   - Creates user with invite's role, marks invite accepted
+   - Issues JWT tokens
+
+Admin-side invite endpoints are in admin handlers:
+- POST /v1/admin/invites — create invite (sends email)
+- GET /v1/admin/invites — list invites
+- DELETE /v1/admin/invites/{invite_id} — revoke invite
+```
+
+---
+
 ## Validation Checklist
 
 After completing all prompts in this section, verify:
@@ -676,6 +794,12 @@ After completing all prompts in this section, verify:
 - [ ] Rate limiting prevents abuse
 - [ ] All endpoints return correct error formats
 - [ ] Audit logs created for security events
+- [ ] 2FA setup/verify/disable flow works end-to-end
+- [ ] Recovery codes work as 2FA fallback
+- [ ] Email change requires password and confirmation
+- [ ] Email verification marks account as verified
+- [ ] Admin setup works on first run (no existing admins)
+- [ ] Admin invite accept creates user with correct role
 
 ---
 

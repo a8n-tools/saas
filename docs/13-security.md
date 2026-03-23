@@ -602,6 +602,83 @@ impl AuditService {
 
 ---
 
+## Prompt 13.7: Encryption Key Health Checks
+
+```text
+Verify that encryption keys can still decrypt stored secrets.
+
+The platform encrypts secrets at rest with AES-256-GCM using per-purpose
+keys loaded from environment variables (STRIPE_ENCRYPTION_KEY,
+TOTP_ENCRYPTION_KEY). If a key rotates or is misconfigured, stored
+secrets become silently undecryptable.
+
+Admin endpoints to verify key health:
+
+GET /v1/admin/key-health        — aggregated check across all keys
+GET /v1/admin/key-health/{key_id} — check a single key (stripe, totp)
+
+Implementation in api/src/handlers/admin.rs:
+
+1. Per-key check helpers:
+   - check_stripe_key: fetches stripe_config row, attempts decrypt
+   - check_totp_key: fetches one user_totp row, attempts decrypt
+
+2. Dispatch registry:
+   - run_key_check(key_id, pool, config): match on key_id → call helper
+   - KEY_IDS: &[&str] const listing all registered keys
+
+3. To add a new encryption key:
+   - Add a check_* async fn returning KeyHealthCheck
+   - Add a match arm in run_key_check
+   - Add the key_id string to KEY_IDS
+
+Response shape:
+```json
+// GET /v1/admin/key-health
+{
+  "success": true,
+  "data": {
+    "status": "healthy",       // or "degraded"
+    "checks": {
+      "stripe": { "status": "healthy", "has_data": true },
+      "totp":   { "status": "no_data", "has_data": false }
+    }
+  }
+}
+
+// GET /v1/admin/key-health/stripe
+{
+  "success": true,
+  "data": {
+    "status": "healthy",
+    "has_data": true
+  }
+}
+```
+
+Per-key status values:
+- "healthy"  — decryption succeeded
+- "unhealthy" — data exists but decryption failed (includes error message)
+- "no_data"  — nothing encrypted in DB to verify
+
+Overall status: "healthy" unless any check is "unhealthy" → "degraded".
+
+Testing:
+```bash
+# All keys
+curl -b cookies http://localhost:18080/v1/admin/key-health
+
+# Single key
+curl -b cookies http://localhost:18080/v1/admin/key-health/stripe
+curl -b cookies http://localhost:18080/v1/admin/key-health/totp
+
+# Unknown key → 404
+curl -b cookies http://localhost:18080/v1/admin/key-health/unknown
+```
+```
+
+---
+
 ## Validation Checklist
 
 After completing all prompts in this section, verify:
@@ -616,6 +693,7 @@ After completing all prompts in this section, verify:
 - [ ] Secrets not logged anywhere
 - [ ] Audit logs capture all security events
 - [ ] HTTPS enforced everywhere
+- [ ] Encryption key health check reports correct status
 
 ---
 
