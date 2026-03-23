@@ -321,6 +321,7 @@ mod tests {
         env::remove_var("RUST_LOG");
         env::remove_var("CORS_ORIGIN");
         env::remove_var("SMTP_HOST");
+        env::remove_var("EMAIL_ENABLED");
         env::remove_var("COOKIE_DOMAIN");
 
         let config = Config::from_env().unwrap();

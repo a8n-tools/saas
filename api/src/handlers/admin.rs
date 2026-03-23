@@ -553,6 +553,7 @@ pub struct ListAuditLogsQuery {
     pub per_page: Option<i32>,
     pub user_id: Option<uuid::Uuid>,
     pub action: Option<String>,
+    pub admin_only: Option<bool>,
 }
 
 /// GET /v1/admin/audit-logs
@@ -574,7 +575,7 @@ pub async fn list_audit_logs(
         per_page,
         query.user_id,
         query.action.as_deref(),
-        false, // admin_only
+        query.admin_only.unwrap_or(false),
         None,  // start_date
         None,  // end_date
     )
