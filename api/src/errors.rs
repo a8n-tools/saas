@@ -271,5 +271,126 @@ mod tests {
             AppError::internal("oops").status_code(),
             StatusCode::INTERNAL_SERVER_ERROR
         );
+        assert_eq!(
+            AppError::DatabaseError {
+                message: "err".to_string()
+            }
+            .status_code(),
+            StatusCode::INTERNAL_SERVER_ERROR
+        );
+    }
+
+    #[test]
+    fn test_error_constructors() {
+        match AppError::validation("email", "bad format") {
+            AppError::ValidationError { field, message } => {
+                assert_eq!(field, "email");
+                assert_eq!(message, "bad format");
+            }
+            _ => panic!("wrong variant"),
+        }
+        match AppError::not_found("user") {
+            AppError::NotFound { resource } => assert_eq!(resource, "user"),
+            _ => panic!("wrong variant"),
+        }
+        match AppError::conflict("duplicate") {
+            AppError::Conflict { message } => assert_eq!(message, "duplicate"),
+            _ => panic!("wrong variant"),
+        }
+        match AppError::internal("oops") {
+            AppError::InternalError { message } => assert_eq!(message, "oops"),
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
+    fn test_display_messages() {
+        assert_eq!(
+            AppError::validation("email", "invalid").to_string(),
+            "Validation error on field 'email': invalid"
+        );
+        assert_eq!(AppError::InvalidCredentials.to_string(), "Invalid credentials");
+        assert_eq!(AppError::TokenExpired.to_string(), "Token has expired");
+        assert_eq!(AppError::Unauthorized.to_string(), "Unauthorized");
+        assert_eq!(AppError::Forbidden.to_string(), "Forbidden");
+        assert_eq!(
+            AppError::not_found("user").to_string(),
+            "Resource not found: user"
+        );
+        assert_eq!(
+            AppError::conflict("exists").to_string(),
+            "Conflict: exists"
+        );
+        assert_eq!(
+            AppError::RateLimited { retry_after: 60 }.to_string(),
+            "Rate limited, retry after 60 seconds"
+        );
+        assert_eq!(
+            AppError::internal("oops").to_string(),
+            "Internal error: oops"
+        );
+        assert_eq!(
+            AppError::DatabaseError {
+                message: "err".to_string()
+            }
+            .to_string(),
+            "Database error: err"
+        );
+    }
+
+    #[test]
+    fn test_error_response_json_shape() {
+        let err = AppError::validation("email", "invalid format");
+        let resp = err.error_response();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+        let body = resp.into_body();
+        let bytes = actix_web::body::to_bytes(body);
+        // Use a runtime to resolve the future
+        let rt = actix_web::rt::Runtime::new().unwrap();
+        let bytes = rt.block_on(bytes).unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+
+        assert_eq!(json["success"], false);
+        assert_eq!(json["error"]["code"], "VALIDATION_ERROR");
+        assert_eq!(json["error"]["message"], "invalid format");
+        assert_eq!(json["error"]["details"]["field"], "email");
+        assert!(json["meta"]["request_id"].is_string());
+        assert!(json["meta"]["timestamp"].is_string());
+    }
+
+    #[test]
+    fn test_rate_limited_response_has_details() {
+        let err = AppError::RateLimited { retry_after: 30 };
+        let resp = err.error_response();
+        assert_eq!(resp.status(), StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(
+            resp.headers().get("Retry-After").unwrap().to_str().unwrap(),
+            "30"
+        );
+
+        let body = resp.into_body();
+        let rt = actix_web::rt::Runtime::new().unwrap();
+        let bytes = rt.block_on(actix_web::body::to_bytes(body)).unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(json["error"]["details"]["retry_after"], 30);
+    }
+
+    #[test]
+    fn test_internal_error_hides_details() {
+        let err = AppError::internal("secret internal info");
+        let resp = err.error_response();
+
+        let body = resp.into_body();
+        let rt = actix_web::rt::Runtime::new().unwrap();
+        let bytes = rt.block_on(actix_web::body::to_bytes(body)).unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+
+        // Client message should NOT leak internal details
+        assert_eq!(
+            json["error"]["message"],
+            "An unexpected error occurred. Please try again later."
+        );
+        assert!(json["error"]["details"].is_null());
     }
 }

@@ -352,4 +352,55 @@ mod tests {
         assert!(domain_cookies.iter().any(|c| c.name() == "access_token"));
         assert!(domain_cookies.iter().any(|c| c.name() == "refresh_token"));
     }
+
+    #[test]
+    fn test_access_token_cookie_properties() {
+        let cookie = AuthCookies::access_token("tok123", true, None);
+        assert_eq!(cookie.name(), "access_token");
+        assert_eq!(cookie.value(), "tok123");
+        assert_eq!(cookie.path(), Some("/"));
+        assert!(cookie.http_only().unwrap_or(false));
+        assert!(cookie.secure().unwrap_or(false));
+        assert_eq!(
+            cookie.max_age(),
+            Some(actix_web::cookie::time::Duration::minutes(15))
+        );
+        assert!(cookie.domain().is_none());
+    }
+
+    #[test]
+    fn test_access_token_cookie_with_domain() {
+        let cookie = AuthCookies::access_token("tok123", false, Some(".example.com"));
+        assert_eq!(cookie.domain(), Some(".example.com"));
+        // secure=false in dev
+        assert!(!cookie.secure().unwrap_or(true));
+    }
+
+    #[test]
+    fn test_refresh_token_remember_true() {
+        let cookie = AuthCookies::refresh_token("ref123", true, true, None);
+        assert_eq!(cookie.name(), "refresh_token");
+        assert_eq!(cookie.value(), "ref123");
+        assert_eq!(cookie.path(), Some("/"));
+        assert!(cookie.http_only().unwrap_or(false));
+        assert_eq!(
+            cookie.max_age(),
+            Some(actix_web::cookie::time::Duration::days(30))
+        );
+    }
+
+    #[test]
+    fn test_refresh_token_remember_false() {
+        let cookie = AuthCookies::refresh_token("ref123", true, false, None);
+        assert_eq!(
+            cookie.max_age(),
+            Some(actix_web::cookie::time::Duration::days(7))
+        );
+    }
+
+    #[test]
+    fn test_refresh_token_with_domain() {
+        let cookie = AuthCookies::refresh_token("ref123", true, true, Some(".a8n.run"));
+        assert_eq!(cookie.domain(), Some(".a8n.run"));
+    }
 }

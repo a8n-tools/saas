@@ -113,3 +113,112 @@ impl StripeConfigResponse {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_key() -> [u8; 32] {
+        [0xAA; 32]
+    }
+
+    #[test]
+    fn encrypt_decrypt_round_trip() {
+        let key = test_key();
+        let plaintext = "sk_live_abc123xyz";
+        let (ciphertext, nonce) = encrypt_secret(&key, plaintext).unwrap();
+        let decrypted = decrypt_secret(&key, &ciphertext, &nonce).unwrap();
+        assert_eq!(decrypted, plaintext);
+    }
+
+    #[test]
+    fn encrypt_produces_unique_nonces() {
+        let key = test_key();
+        let (_, nonce1) = encrypt_secret(&key, "secret").unwrap();
+        let (_, nonce2) = encrypt_secret(&key, "secret").unwrap();
+        assert_ne!(nonce1, nonce2);
+    }
+
+    #[test]
+    fn decrypt_with_wrong_key_fails() {
+        let key = test_key();
+        let wrong_key = [0xBB; 32];
+        let (ciphertext, nonce) = encrypt_secret(&key, "secret").unwrap();
+        assert!(decrypt_secret(&wrong_key, &ciphertext, &nonce).is_err());
+    }
+
+    #[test]
+    fn decrypt_tampered_ciphertext_fails() {
+        let key = test_key();
+        let (mut ciphertext, nonce) = encrypt_secret(&key, "secret").unwrap();
+        ciphertext[0] ^= 0xFF;
+        assert!(decrypt_secret(&key, &ciphertext, &nonce).is_err());
+    }
+
+    #[test]
+    fn mask_secret_long_string() {
+        assert_eq!(mask_secret("sk_live_abcdefgh1234"), "***1234");
+    }
+
+    #[test]
+    fn mask_secret_short_strings() {
+        assert_eq!(mask_secret(""), "***");
+        assert_eq!(mask_secret("abc"), "***");
+        assert_eq!(mask_secret("abcd"), "***");
+    }
+
+    #[test]
+    fn mask_secret_five_chars() {
+        assert_eq!(mask_secret("abcde"), "***bcde");
+    }
+
+    #[test]
+    fn from_db_decrypts_and_masks() {
+        let key = test_key();
+        let (sk_ct, sk_nonce) = encrypt_secret(&key, "sk_live_test1234").unwrap();
+        let (wh_ct, wh_nonce) = encrypt_secret(&key, "whsec_abcdef5678").unwrap();
+
+        let config = StripeConfig {
+            id: 1,
+            secret_key: Some(sk_ct),
+            secret_key_nonce: Some(sk_nonce),
+            webhook_secret: Some(wh_ct),
+            webhook_secret_nonce: Some(wh_nonce),
+            price_id_personal: Some("price_123".to_string()),
+            price_id_business: None,
+            updated_at: Utc::now(),
+            updated_by: None,
+        };
+
+        let resp = StripeConfigResponse::from_db(&config, &key).unwrap();
+        assert_eq!(resp.secret_key_masked.as_deref(), Some("***1234"));
+        assert_eq!(resp.webhook_secret_masked.as_deref(), Some("***5678"));
+        assert_eq!(resp.price_id_personal.as_deref(), Some("price_123"));
+        assert!(resp.price_id_business.is_none());
+        assert!(resp.has_secret_key);
+        assert!(resp.has_webhook_secret);
+        assert_eq!(resp.source, "database");
+    }
+
+    #[test]
+    fn from_db_handles_missing_secrets() {
+        let key = test_key();
+        let config = StripeConfig {
+            id: 1,
+            secret_key: None,
+            secret_key_nonce: None,
+            webhook_secret: None,
+            webhook_secret_nonce: None,
+            price_id_personal: None,
+            price_id_business: None,
+            updated_at: Utc::now(),
+            updated_by: None,
+        };
+
+        let resp = StripeConfigResponse::from_db(&config, &key).unwrap();
+        assert!(resp.secret_key_masked.is_none());
+        assert!(resp.webhook_secret_masked.is_none());
+        assert!(!resp.has_secret_key);
+        assert!(!resp.has_webhook_secret);
+    }
+}

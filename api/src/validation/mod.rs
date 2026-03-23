@@ -180,6 +180,54 @@ mod tests {
     }
 
     #[test]
+    fn test_password_too_long() {
+        // 129 chars total: 100 uppercase + 21 lowercase + "12345678" (8 digits)
+        let long = "A".repeat(100) + &"a".repeat(20) + "12345678!";
+        assert!(long.len() > 128);
+        let result = validate_password_strength(&long);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().code.as_ref(), "password_too_long");
+    }
+
+    #[test]
+    fn test_password_at_max_length() {
+        // Exactly 128 chars should pass
+        let pw = "A".repeat(50) + &"a".repeat(50) + &"1".repeat(27) + "!";
+        assert_eq!(pw.len(), 128);
+        assert!(validate_password_strength(&pw).is_ok());
+    }
+
+    #[test]
+    fn test_email_at_max_length() {
+        // 255 chars: local@domain.com
+        let domain = format!("{}@{}.com", "a".repeat(100), "b".repeat(150));
+        assert_eq!(domain.len(), 255);
+        assert!(validate_email_format(&domain).is_ok());
+    }
+
+    #[test]
+    fn test_email_over_max_length() {
+        let domain = format!("{}@{}.com", "a".repeat(101), "b".repeat(150));
+        assert!(domain.len() > 255);
+        let result = validate_email_format(&domain);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().code.as_ref(), "email_too_long");
+    }
+
+    #[test]
+    fn test_validate_email_wrapper_returns_app_error() {
+        let result = validate_email("invalid");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            crate::errors::AppError::ValidationError { field, message } => {
+                assert_eq!(field, "email");
+                assert_eq!(message, "Invalid email format");
+            }
+            other => panic!("Expected ValidationError, got {:?}", other),
+        }
+    }
+
+    #[test]
     fn test_validate_uuid() {
         assert!(validate_uuid("550e8400-e29b-41d4-a716-446655440000").is_ok());
         assert!(validate_uuid("invalid-uuid").is_err());
@@ -190,5 +238,20 @@ mod tests {
         assert!(validate_slug("valid-slug-123").is_ok());
         assert!(validate_slug("Invalid Slug").is_err());
         assert!(validate_slug("").is_err());
+    }
+
+    #[test]
+    fn test_slug_single_char() {
+        assert!(validate_slug("a").is_ok());
+    }
+
+    #[test]
+    fn test_slug_hyphens_only() {
+        assert!(validate_slug("---").is_ok());
+    }
+
+    #[test]
+    fn test_slug_uppercase_rejected() {
+        assert!(validate_slug("ABC").is_err());
     }
 }
