@@ -1067,7 +1067,7 @@ pub async fn get_stripe_config(
         || db.price_id_personal.is_some()
         || db.price_id_business.is_some()
     {
-        StripeConfigResponse::from_db(&db, &config.totp_encryption_key)?
+        StripeConfigResponse::from_db(&db, &config.stripe_encryption_key)?
     } else {
         StripeConfigResponse::from_env()
     };
@@ -1086,7 +1086,7 @@ pub async fn update_stripe_config(
     body: web::Json<UpdateStripeConfigRequest>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
-    let key = &config.totp_encryption_key;
+    let key = &config.stripe_encryption_key;
 
     // Treat empty strings the same as None — user left the field blank
     let secret_key_plain = body.secret_key.as_deref().filter(|s| !s.is_empty());
