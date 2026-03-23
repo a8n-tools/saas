@@ -14,6 +14,25 @@ impl StripeConfigRepository {
         Ok(config)
     }
 
+    /// Clears encrypted secrets (secret_key, webhook_secret and their nonces) from the DB.
+    /// Called when decryption fails (e.g. encryption key was rotated).
+    pub async fn clear_secrets(pool: &PgPool) -> Result<(), AppError> {
+        sqlx::query(
+            r#"
+            UPDATE stripe_config
+            SET secret_key = NULL,
+                secret_key_nonce = NULL,
+                webhook_secret = NULL,
+                webhook_secret_nonce = NULL,
+                updated_at = NOW()
+            WHERE id = 1
+            "#,
+        )
+        .execute(pool)
+        .await?;
+        Ok(())
+    }
+
     /// Updates only the fields that are `Some`. `None` leaves the existing DB value unchanged.
     /// Secrets are passed as pre-encrypted (ciphertext, nonce) pairs.
     #[allow(clippy::too_many_arguments)]
