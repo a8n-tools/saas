@@ -56,6 +56,10 @@ pub struct StripeConfig {
 
 impl StripeConfig {
     pub fn from_env() -> Result<Self, AppError> {
+        let frontend_origin = std::env::var("CORS_ORIGIN")
+            .unwrap_or_else(|_| "http://localhost:5173".to_string());
+        let base = frontend_origin.trim_end_matches('/');
+
         Ok(Self {
             secret_key: std::env::var("STRIPE_SECRET_KEY")
                 .unwrap_or_else(|_| "sk_test_placeholder".to_string()),
@@ -66,9 +70,9 @@ impl StripeConfig {
             business_price_id: std::env::var("STRIPE_BUSINESS_PRICE_ID")
                 .unwrap_or_else(|_| "price_business_placeholder".to_string()),
             success_url: std::env::var("STRIPE_SUCCESS_URL")
-                .unwrap_or_else(|_| "http://localhost:5173/dashboard?checkout=success".to_string()),
+                .unwrap_or_else(|_| format!("{base}/dashboard?checkout=success")),
             cancel_url: std::env::var("STRIPE_CANCEL_URL")
-                .unwrap_or_else(|_| "http://localhost:5173/pricing?checkout=canceled".to_string()),
+                .unwrap_or_else(|_| format!("{base}/pricing?checkout=canceled")),
         })
     }
 
