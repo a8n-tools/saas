@@ -32,8 +32,9 @@ pub use membership::{
     get_payment_history, get_membership, reactivate_membership, subscribe,
 };
 pub use user::{
-    change_password, confirm_email_change, confirm_email_verification, get_current_user,
-    list_sessions, request_email_change, request_email_verification, revoke_session,
+    change_password, confirm_email_change, confirm_email_verification, delete_account,
+    get_current_user, list_sessions, request_email_change, request_email_verification,
+    revoke_session,
 };
 pub use billing::{download_invoice, list_invoices};
 pub use webhook::stripe_webhook;
