@@ -5,6 +5,7 @@
 pub mod application;
 pub mod audit;
 pub mod feedback;
+pub mod invoice;
 pub mod membership;
 pub mod rate_limit;
 pub mod stripe;
@@ -34,6 +35,7 @@ pub use token::{
     CreateMagicLinkToken, CreatePasswordResetToken, CreateRefreshToken, EmailChangeRequest,
     EmailVerificationToken, MagicLinkToken, PasswordResetToken, RefreshToken, SessionInfo,
 };
+pub use invoice::{CreateInvoice, Invoice, InvoiceResponse};
 pub use stripe::{StripeConfig, StripeConfigResponse};
 pub use totp::{RecoveryCode, UserTotp};
 pub use user::{CreateUser, MembershipStatus, MembershipTier, SubscriptionTier, User, UserResponse, UserRole};

@@ -5,6 +5,7 @@
 pub mod admin;
 pub mod application;
 pub mod auth;
+pub mod billing;
 pub mod feedback;
 pub mod membership;
 pub mod totp;
@@ -34,6 +35,7 @@ pub use user::{
     change_password, confirm_email_change, confirm_email_verification, get_current_user,
     list_sessions, request_email_change, request_email_verification, revoke_session,
 };
+pub use billing::{download_invoice, list_invoices};
 pub use webhook::stripe_webhook;
 
 // Admin handlers

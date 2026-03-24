@@ -901,14 +901,14 @@ impl AuthService {
 
     /// Confirm email verification using token.
     ///
-    /// Returns `(email, subscription_tier)`. The tier is assigned atomically using
+    /// Returns `(user_id, email, subscription_tier)`. The tier is assigned atomically using
     /// a transaction-level advisory lock so concurrent verifications cannot race
     /// and land on the same slot count.
     pub async fn confirm_email_verification(
         &self,
         token: String,
         ip_address: Option<IpAddr>,
-    ) -> Result<(String, SubscriptionTier), AppError> {
+    ) -> Result<(Uuid, String, SubscriptionTier), AppError> {
         let ip = ip_address.map(|ip| IpNetwork::from(ip));
         let token_hash = self.jwt.hash_token(&token);
 
@@ -971,7 +971,7 @@ impl AuthService {
         )
         .await?;
 
-        Ok((user.email, tier))
+        Ok((user.id, user.email, tier))
     }
 
     /// Create an admin invite
