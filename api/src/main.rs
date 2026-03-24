@@ -132,12 +132,6 @@ async fn main() -> anyhow::Result<()> {
 
     info!(enabled = config.email.enabled, "Email service initialized");
 
-    // Initialize Stripe service
-    let stripe_config = StripeConfig::from_env()?;
-    let stripe_service = Arc::new(StripeService::new(stripe_config));
-
-    info!("Stripe service initialized");
-
     // Build encryption key sets for key rotation support
     let totp_key_set = EncryptionKeySet {
         current: config.totp_encryption_key,
@@ -149,6 +143,29 @@ async fn main() -> anyhow::Result<()> {
         current_version: config.stripe_key_version,
         previous: config.stripe_encryption_key_prev,
     };
+
+    // Initialize Stripe service — prefer DB config (set via admin UI), fall back to env vars
+    let stripe_config = {
+        use a8n_api::repositories::StripeConfigRepository;
+        match StripeConfigRepository::get(&pool).await {
+            Ok(db_config) if db_config.secret_key.is_some() => {
+                match StripeConfig::from_db_model(&db_config, &stripe_key_set) {
+                    Ok(cfg) => {
+                        info!("Stripe service initialized from database config");
+                        cfg
+                    }
+                    Err(e) => {
+                        tracing::warn!(error = %e, "Failed to decrypt DB Stripe config, falling back to env vars");
+                        StripeConfig::from_env()?
+                    }
+                }
+            }
+            _ => StripeConfig::from_env()?,
+        }
+    };
+    let stripe_service = Arc::new(StripeService::new(stripe_config));
+
+    info!("Stripe service initialized");
 
     // Initialize TOTP service
     let totp_service = Arc::new(TotpService::new(

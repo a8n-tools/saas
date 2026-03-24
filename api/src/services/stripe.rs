@@ -1,11 +1,13 @@
 //! Stripe payment service
 
 use crate::errors::AppError;
+use crate::models::stripe::decrypt_secret;
+use crate::services::encryption::EncryptionKeySet;
 use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use uuid::Uuid;
 
 type HmacSha256 = Hmac<Sha256>;
@@ -70,6 +72,39 @@ impl StripeConfig {
         })
     }
 
+    /// Build a `StripeConfig` from the DB model, decrypting secrets.
+    /// Falls back to env vars for any fields not set in the DB.
+    pub fn from_db_model(
+        db: &crate::models::stripe::StripeConfig,
+        key_set: &EncryptionKeySet,
+    ) -> Result<Self, AppError> {
+        let env_config = Self::from_env()?;
+
+        let secret_key = match (&db.secret_key, &db.secret_key_nonce) {
+            (Some(ct), Some(nonce)) => decrypt_secret(key_set, ct, nonce, db.key_version)?,
+            _ => env_config.secret_key,
+        };
+        let webhook_secret = match (&db.webhook_secret, &db.webhook_secret_nonce) {
+            (Some(ct), Some(nonce)) => decrypt_secret(key_set, ct, nonce, db.key_version)?,
+            _ => env_config.webhook_secret,
+        };
+
+        Ok(Self {
+            secret_key,
+            webhook_secret,
+            personal_price_id: db
+                .price_id_personal
+                .clone()
+                .unwrap_or(env_config.personal_price_id),
+            business_price_id: db
+                .price_id_business
+                .clone()
+                .unwrap_or(env_config.business_price_id),
+            success_url: env_config.success_url,
+            cancel_url: env_config.cancel_url,
+        })
+    }
+
     /// Get the price ID for a given tier
     pub fn price_id_for_tier(&self, tier: MembershipTier) -> &str {
         match tier {
@@ -79,28 +114,44 @@ impl StripeConfig {
     }
 }
 
-/// Stripe service for payment operations
-pub struct StripeService {
+/// Inner state that can be swapped when admin updates Stripe config.
+struct StripeServiceInner {
     config: StripeConfig,
     client: Arc<stripe::Client>,
 }
 
-impl Clone for StripeService {
-    fn clone(&self) -> Self {
-        Self {
-            config: self.config.clone(),
-            client: self.client.clone(),
-        }
-    }
+/// Stripe service for payment operations.
+///
+/// Uses `RwLock` internally so the config + client can be hot-reloaded
+/// when an admin updates Stripe keys via the dashboard.
+pub struct StripeService {
+    inner: RwLock<StripeServiceInner>,
 }
 
 impl StripeService {
     pub fn new(config: StripeConfig) -> Self {
         let client = stripe::Client::new(&config.secret_key);
         Self {
-            config,
-            client: Arc::new(client),
+            inner: RwLock::new(StripeServiceInner {
+                config,
+                client: Arc::new(client),
+            }),
         }
+    }
+
+    /// Hot-reload the service with a new config (e.g. after admin update).
+    /// Builds a new Stripe client with the updated secret key.
+    pub fn reload(&self, config: StripeConfig) {
+        let client = stripe::Client::new(&config.secret_key);
+        let mut inner = self.inner.write().expect("StripeService lock poisoned");
+        inner.config = config;
+        inner.client = Arc::new(client);
+    }
+
+    /// Snapshot current config + client for use in an async operation.
+    fn snapshot(&self) -> (StripeConfig, Arc<stripe::Client>) {
+        let inner = self.inner.read().expect("StripeService lock poisoned");
+        (inner.config.clone(), inner.client.clone())
     }
 
     /// Create a Stripe customer linked to a platform user
@@ -109,6 +160,8 @@ impl StripeService {
         email: &str,
         user_id: Uuid,
     ) -> Result<String, AppError> {
+        let (_config, client) = self.snapshot();
+
         let mut metadata = HashMap::new();
         metadata.insert("user_id".to_string(), user_id.to_string());
 
@@ -118,7 +171,7 @@ impl StripeService {
             ..Default::default()
         };
 
-        let customer = stripe::Customer::create(&self.client, params)
+        let customer = stripe::Customer::create(&client, params)
             .await
             .map_err(|e| {
                 tracing::error!(error = %e, email = %email, "Failed to create Stripe customer");
@@ -141,7 +194,8 @@ impl StripeService {
         user_id: Uuid,
         tier: MembershipTier,
     ) -> Result<(String, String), AppError> {
-        let price_id = self.config.price_id_for_tier(tier);
+        let (config, client) = self.snapshot();
+        let price_id = config.price_id_for_tier(tier);
 
         let mut metadata = HashMap::new();
         metadata.insert("user_id".to_string(), user_id.to_string());
@@ -161,8 +215,8 @@ impl StripeService {
                 quantity: Some(1),
                 ..Default::default()
             }]),
-            success_url: Some(&self.config.success_url),
-            cancel_url: Some(&self.config.cancel_url),
+            success_url: Some(&config.success_url),
+            cancel_url: Some(&config.cancel_url),
             metadata: Some(metadata.clone()),
             subscription_data: Some(stripe::CreateCheckoutSessionSubscriptionData {
                 metadata: Some(metadata),
@@ -171,7 +225,7 @@ impl StripeService {
             ..Default::default()
         };
 
-        let session = stripe::CheckoutSession::create(&self.client, params)
+        let session = stripe::CheckoutSession::create(&client, params)
             .await
             .map_err(|e| {
                 tracing::error!(error = %e, "Failed to create Stripe checkout session");
@@ -193,7 +247,8 @@ impl StripeService {
 
     /// Get the tier from a price ID
     pub fn tier_from_price_id(&self, price_id: &str) -> MembershipTier {
-        if price_id == self.config.business_price_id {
+        let (config, _) = self.snapshot();
+        if price_id == config.business_price_id {
             MembershipTier::Business
         } else {
             MembershipTier::Personal
@@ -212,13 +267,15 @@ impl StripeService {
                 AppError::internal("Invalid subscription ID")
             })?;
 
+        let (_config, client) = self.snapshot();
+
         if at_period_end {
             // Cancel at end of current billing period
             let params = stripe::UpdateSubscription {
                 cancel_at_period_end: Some(true),
                 ..Default::default()
             };
-            stripe::Subscription::update(&self.client, &sub_id, params)
+            stripe::Subscription::update(&client, &sub_id, params)
                 .await
                 .map_err(|e| {
                     tracing::error!(error = %e, "Failed to schedule subscription cancellation");
@@ -227,7 +284,7 @@ impl StripeService {
         } else {
             // Cancel immediately
             stripe::Subscription::cancel(
-                &self.client,
+                &client,
                 &sub_id,
                 stripe::CancelSubscription::default(),
             )
@@ -249,6 +306,8 @@ impl StripeService {
 
     /// Reactivate a subscription (remove cancel_at_period_end flag)
     pub async fn reactivate_subscription(&self, subscription_id: &str) -> Result<(), AppError> {
+        let (_config, client) = self.snapshot();
+
         let sub_id: stripe::SubscriptionId = subscription_id.parse()
             .map_err(|_| {
                 tracing::error!(subscription_id = %subscription_id, "Invalid subscription ID format");
@@ -260,7 +319,7 @@ impl StripeService {
             ..Default::default()
         };
 
-        stripe::Subscription::update(&self.client, &sub_id, params)
+        stripe::Subscription::update(&client, &sub_id, params)
             .await
             .map_err(|e| {
                 tracing::error!(error = %e, "Failed to reactivate subscription");
@@ -277,6 +336,8 @@ impl StripeService {
         &self,
         customer_id: &str,
     ) -> Result<String, AppError> {
+        let (config, client) = self.snapshot();
+
         let customer_id: stripe::CustomerId = customer_id.parse()
             .map_err(|_| {
                 tracing::error!(customer_id = %customer_id, "Invalid customer ID format");
@@ -284,9 +345,9 @@ impl StripeService {
             })?;
 
         let mut params = stripe::CreateBillingPortalSession::new(customer_id);
-        params.return_url = Some(&self.config.success_url);
+        params.return_url = Some(&config.success_url);
 
-        let session = stripe::BillingPortalSession::create(&self.client, params)
+        let session = stripe::BillingPortalSession::create(&client, params)
             .await
             .map_err(|e| {
                 tracing::error!(error = %e, "Failed to create billing portal session");
@@ -342,7 +403,8 @@ impl StripeService {
         let signed_payload = format!("{}.{}", timestamp, payload_str);
 
         // Compute expected HMAC-SHA256 signature
-        let mut mac = HmacSha256::new_from_slice(self.config.webhook_secret.as_bytes())
+        let (config, _) = self.snapshot();
+        let mut mac = HmacSha256::new_from_slice(config.webhook_secret.as_bytes())
             .map_err(|_| AppError::internal("Invalid webhook secret key"))?;
         mac.update(signed_payload.as_bytes());
         let expected = hex::encode(mac.finalize().into_bytes());
@@ -357,13 +419,15 @@ impl StripeService {
     }
 
     /// Get the configured personal price ID (for backwards compatibility)
-    pub fn price_id(&self) -> &str {
-        &self.config.personal_price_id
+    pub fn price_id(&self) -> String {
+        let (config, _) = self.snapshot();
+        config.personal_price_id
     }
 
     /// Get the configured business price ID
-    pub fn business_price_id(&self) -> &str {
-        &self.config.business_price_id
+    pub fn business_price_id(&self) -> String {
+        let (config, _) = self.snapshot();
+        config.business_price_id
     }
 }
 
