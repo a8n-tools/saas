@@ -167,6 +167,16 @@ export interface PaginatedResponse<T> {
   total_pages: number
 }
 
+// Invoice types
+export interface Invoice {
+  id: string
+  invoice_number: string
+  amount_cents: number
+  currency: string
+  description: string
+  created_at: string
+}
+
 // Admin types
 export interface AuditLog {
   id: string

@@ -8,7 +8,11 @@
       "Bash(docker ps:*)",
       "Bash(docker exec:*)",
       "Bash(git stash:*)",
-      "Bash(bun run:*)"
+      "Bash(bun run:*)",
+      "Bash(python3 -m json.tool)",
+      "Bash(pkg-config --exists openssl)",
+      "Bash(dpkg -l)",
+      "Bash(ls /usr/lib64/libssl*)"
     ]
   }
 }

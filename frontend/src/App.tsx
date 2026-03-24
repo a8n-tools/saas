@@ -27,6 +27,7 @@ import { AcceptInvitePage } from '@/pages/public/AcceptInvitePage'
 import { SetupPage } from '@/pages/public/SetupPage'
 
 // Dashboard pages
+import { BillingPage } from '@/pages/dashboard/BillingPage'
 import { DashboardPage } from '@/pages/dashboard/DashboardPage'
 import { ApplicationsPage } from '@/pages/dashboard/ApplicationsPage'
 import { MembershipPage } from '@/pages/dashboard/MembershipPage'
@@ -188,6 +189,7 @@ export default function App() {
         >
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/applications" element={<ApplicationsPage />} />
+          <Route path="/billing" element={<BillingPage />} />
           <Route path="/membership" element={<MembershipPage />} />
           <Route path="/checkout/success" element={<CheckoutSuccessPage />} />
           <Route path="/settings" element={<SettingsPage />} />

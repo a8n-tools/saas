@@ -12,7 +12,7 @@ use crate::middleware::{extract_client_ip, AuthenticatedUser};
 use crate::models::UserResponse;
 use crate::repositories::{TokenRepository, UserRepository};
 use crate::responses::{get_request_id, success, success_no_data};
-use crate::services::{AuthService, EmailService};
+use crate::services::{AuthService, EmailService, InvoiceService};
 use crate::validation::validate_email;
 
 /// Request body for changing password
@@ -259,16 +259,23 @@ pub async fn request_email_verification(
 pub async fn confirm_email_verification(
     req: HttpRequest,
     auth_service: web::Data<Arc<AuthService>>,
+    invoice_service: web::Data<Arc<InvoiceService>>,
+    pool: web::Data<PgPool>,
     body: web::Json<ConfirmEmailVerificationBody>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
     let ip_address = extract_client_ip(&req);
 
-    let (email, tier) = auth_service
+    let (user_id, email, tier) = auth_service
         .confirm_email_verification(body.token.clone(), ip_address)
         .await?;
 
     tracing::info!(email = %email, subscription_tier = %tier.as_str(), "Email verified successfully");
+
+    // Generate invoice asynchronously — failure must not block verification
+    if let Err(e) = invoice_service.generate_invoice(&pool, user_id, &email, &tier).await {
+        tracing::warn!(error = %e, %user_id, "Failed to generate invoice after email verification");
+    }
 
     Ok(success(
         serde_json::json!({

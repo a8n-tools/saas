@@ -6,6 +6,7 @@ import {
   AppWindow,
   Banknote,
   CreditCard,
+  Receipt,
   Settings,
   Users,
   FileText,
@@ -23,6 +24,7 @@ const dashboardItems: SidebarItem[] = [
   { title: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { title: 'Applications', href: '/applications', icon: AppWindow },
   { title: 'Membership', href: '/membership', icon: CreditCard },
+  { title: 'Billing', href: '/billing', icon: Receipt },
   { title: 'Settings', href: '/settings', icon: Settings },
 ]
 
