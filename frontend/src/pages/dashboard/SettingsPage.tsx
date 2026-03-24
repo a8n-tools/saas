@@ -19,7 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { User, Lock, Shield, Check, Loader2, AlertCircle, Mail, ShieldCheck, ShieldOff, KeyRound } from 'lucide-react'
+import { User, Lock, Shield, Check, Loader2, AlertCircle, Mail, ShieldCheck, ShieldOff, KeyRound, Trash2, AlertTriangle } from 'lucide-react'
 
 const passwordSchema = z.object({
   currentPassword: z.string().min(1, 'Current password is required'),
@@ -403,6 +403,9 @@ export function SettingsPage() {
 
       {/* Security / Two-Factor Authentication */}
       <TwoFactorCard />
+
+      {/* Danger Zone */}
+      <DeleteAccountCard />
     </div>
   )
 }
@@ -687,6 +690,125 @@ function TwoFactorCard() {
                 </Button>
               </>
             )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}
+
+function DeleteAccountCard() {
+  const navigate = useNavigate()
+  const { user, logout } = useAuthStore()
+  const [showDialog, setShowDialog] = useState(false)
+  const [password, setPassword] = useState('')
+  const [totpCode, setTotpCode] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleDelete = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      await authApi.deleteAccount({
+        password,
+        totp_code: user?.two_factor_enabled ? totpCode : undefined,
+      })
+      await logout()
+      navigate('/')
+    } catch (err) {
+      const apiError = err as { error?: { message?: string } }
+      setError(apiError.error?.message || 'Failed to delete account')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const resetDialog = () => {
+    setShowDialog(false)
+    setPassword('')
+    setTotpCode('')
+    setError(null)
+  }
+
+  return (
+    <>
+      <Card className="border-red-200 dark:border-red-900">
+        <CardHeader>
+          <CardTitle className="text-red-600 dark:text-red-400 flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5" />
+            Danger Zone
+          </CardTitle>
+          <CardDescription>
+            Permanently delete your account and all associated data.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground mb-4">
+            Once you delete your account, there is no going back. This will cancel any active
+            subscriptions and remove all your data.
+          </p>
+          <Button variant="destructive" onClick={() => setShowDialog(true)}>
+            <Trash2 className="mr-2 h-4 w-4" />
+            Delete Account
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Dialog open={showDialog} onOpenChange={(open) => { if (!open) resetDialog() }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-red-600">Delete Account</DialogTitle>
+            <DialogDescription>
+              This action is permanent and cannot be undone. All your data, subscriptions, and
+              settings will be permanently removed.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {error && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+            <div className="space-y-2">
+              <Label htmlFor="delete-password">Password</Label>
+              <Input
+                id="delete-password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter your password to confirm"
+                autoFocus
+              />
+            </div>
+            {user?.two_factor_enabled && (
+              <div className="space-y-2">
+                <Label htmlFor="delete-totp">Two-Factor Authentication Code</Label>
+                <Input
+                  id="delete-totp"
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={totpCode}
+                  onChange={(e) => setTotpCode(e.target.value)}
+                  placeholder="Enter your 6-digit code"
+                />
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={resetDialog}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={loading || !password || (user?.two_factor_enabled && !totpCode)}
+            >
+              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Delete My Account
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

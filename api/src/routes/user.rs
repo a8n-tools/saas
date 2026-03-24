@@ -15,6 +15,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route("/me/email/verify", web::post().to(handlers::request_email_verification))
             .route("/me/email/verify/confirm", web::post().to(handlers::confirm_email_verification))
             .route("/me/sessions", web::get().to(handlers::list_sessions))
+            .route("/me", web::delete().to(handlers::delete_account))
             .route("/me/sessions/{session_id}", web::delete().to(handlers::revoke_session)),
     );
 }

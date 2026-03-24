@@ -8,12 +8,19 @@ use sqlx::PgPool;
 use std::sync::Arc;
 
 use crate::errors::AppError;
-use crate::middleware::{extract_client_ip, AuthenticatedUser};
-use crate::models::UserResponse;
-use crate::repositories::{TokenRepository, UserRepository};
+use crate::middleware::{extract_client_ip, AuthCookies, AuthenticatedUser};
+use crate::models::{AuditAction, CreateAuditLog, UserResponse};
+use crate::repositories::{AuditLogRepository, MembershipRepository, TokenRepository, UserRepository};
 use crate::responses::{get_request_id, success, success_no_data};
-use crate::services::{AuthService, EmailService, InvoiceService};
+use crate::services::{AuthService, EmailService, InvoiceService, PasswordService, StripeService, TotpService};
 use crate::validation::validate_email;
+
+/// Request body for deleting account
+#[derive(Debug, Deserialize)]
+pub struct DeleteAccountRequest {
+    pub password: String,
+    pub totp_code: Option<String>,
+}
 
 /// Request body for changing password
 #[derive(Debug, Deserialize)]
@@ -284,4 +291,104 @@ pub async fn confirm_email_verification(
         }),
         request_id,
     ))
+}
+
+/// DELETE /v1/users/me
+/// Delete current user's account (soft delete)
+pub async fn delete_account(
+    req: HttpRequest,
+    user: AuthenticatedUser,
+    pool: web::Data<PgPool>,
+    config: web::Data<crate::config::Config>,
+    totp_service: web::Data<Arc<TotpService>>,
+    stripe_service: web::Data<Arc<StripeService>>,
+    body: web::Json<DeleteAccountRequest>,
+) -> Result<HttpResponse, AppError> {
+    let request_id = get_request_id(&req);
+    let ip_address = extract_client_ip(&req);
+
+    // Look up the full user record
+    let db_user = UserRepository::find_by_id(&pool, user.0.sub)
+        .await?
+        .ok_or(AppError::not_found("User"))?;
+
+    // Verify password
+    let password_hash = db_user
+        .password_hash
+        .as_ref()
+        .ok_or(AppError::validation("password", "No password set for this account"))?;
+
+    let password_service = PasswordService::new();
+    if !password_service.verify(&body.password, password_hash)? {
+        return Err(AppError::validation("password", "Invalid password"));
+    }
+
+    // If 2FA is enabled, require and verify TOTP code
+    if db_user.two_factor_enabled {
+        let totp_code = body.totp_code.as_deref().ok_or_else(|| {
+            AppError::validation("totp_code", "Two-factor authentication code is required")
+        })?;
+
+        if totp_code.is_empty() {
+            return Err(AppError::validation("totp_code", "Two-factor authentication code is required"));
+        }
+
+        let valid = totp_service.verify_code(user.0.sub, totp_code).await?;
+        if !valid {
+            return Err(AppError::validation("totp_code", "Invalid two-factor authentication code"));
+        }
+    }
+
+    // Cancel active Stripe subscription if one exists
+    if let Some(membership) = MembershipRepository::find_by_user_id(&pool, user.0.sub).await? {
+        if membership.status == "active" || membership.status == "past_due" {
+            if let Err(e) = stripe_service.cancel_subscription(&membership.stripe_subscription_id, false).await {
+                tracing::error!(
+                    error = %e,
+                    user_id = %user.0.sub,
+                    subscription_id = %membership.stripe_subscription_id,
+                    "Failed to cancel Stripe subscription during account deletion"
+                );
+            }
+        }
+    }
+
+    // Soft-delete the user
+    UserRepository::soft_delete(&pool, user.0.sub).await?;
+
+    // Revoke all refresh tokens
+    TokenRepository::revoke_all_user_refresh_tokens(&pool, user.0.sub).await?;
+
+    // Audit log
+    let ip = ip_address.map(ipnetwork::IpNetwork::from);
+    AuditLogRepository::create(
+        &pool,
+        CreateAuditLog::new(AuditAction::UserAccountDeleted)
+            .with_actor(user.0.sub, &user.0.email, &user.0.role)
+            .with_resource("user", user.0.sub)
+            .with_ip(ip),
+    )
+    .await?;
+
+    tracing::info!(
+        user_id = %user.0.sub,
+        user_email = %user.0.email,
+        "User deleted their own account"
+    );
+
+    // Clear auth cookies and return success
+    let secure = config.is_production();
+    let cookie_domain = config.cookie_domain.as_deref();
+
+    let mut response = HttpResponse::Ok().json(crate::responses::ApiResponse::<()> {
+        success: true,
+        data: None,
+        meta: crate::responses::ResponseMeta::new(request_id),
+    });
+
+    for cookie in AuthCookies::clear(secure, cookie_domain) {
+        response.add_cookie(&cookie).ok();
+    }
+
+    Ok(response)
 }

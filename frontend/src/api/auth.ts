@@ -81,4 +81,7 @@ export const authApi = {
 
   setup: (data: { email: string; password: string }): Promise<AuthResponse> =>
     apiClient.post('/auth/setup', data),
+
+  deleteAccount: (data: { password: string; totp_code?: string }): Promise<void> =>
+    apiClient.delete('/users/me', data),
 }
