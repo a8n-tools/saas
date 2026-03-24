@@ -699,7 +699,7 @@ function TwoFactorCard() {
 
 function DeleteAccountCard() {
   const navigate = useNavigate()
-  const { user, logout } = useAuthStore()
+  const { user } = useAuthStore()
   const [showDialog, setShowDialog] = useState(false)
   const [password, setPassword] = useState('')
   const [totpCode, setTotpCode] = useState('')
@@ -714,7 +714,8 @@ function DeleteAccountCard() {
         password,
         totp_code: user?.two_factor_enabled ? totpCode : undefined,
       })
-      await logout()
+      // Clear local auth state without calling /logout (backend already cleared cookies/tokens)
+      useAuthStore.setState({ user: null, isAuthenticated: false, isLoading: false, pendingChallenge: null })
       navigate('/')
     } catch (err) {
       const apiError = err as { error?: { message?: string } }
