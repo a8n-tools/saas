@@ -23,7 +23,7 @@ use crate::repositories::{
     NotificationRepository, StripeConfigRepository, TokenRepository, TotpRepository, UserRepository,
 };
 use crate::responses::{get_request_id, created, paginated, success, success_no_data};
-use crate::services::{AuthService, EmailService, EncryptionKeySet, JwtService, PasswordService, TotpService, WebhookService};
+use crate::services::{AuthService, EmailService, EncryptionKeySet, JwtService, PasswordService, StripeConfig, StripeService, TotpService, WebhookService};
 use crate::validation;
 
 // =============================================================================
@@ -1094,6 +1094,7 @@ pub async fn update_stripe_config(
     admin: AdminUser,
     pool: web::Data<PgPool>,
     stripe_key_set: web::Data<EncryptionKeySet>,
+    stripe_service: web::Data<Arc<StripeService>>,
     body: web::Json<UpdateStripeConfigRequest>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
@@ -1132,6 +1133,17 @@ pub async fn update_stripe_config(
         key_version,
     )
     .await?;
+
+    // Hot-reload the live StripeService so new API calls use the updated keys
+    match StripeConfig::from_db_model(&updated, &stripe_key_set) {
+        Ok(new_config) => {
+            stripe_service.reload(new_config);
+            tracing::info!("Stripe service reloaded with updated config");
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "Failed to reload Stripe service after config update");
+        }
+    }
 
     let audit_log = CreateAuditLog::new(AuditAction::AdminStripeConfigUpdated)
         .with_actor(admin.0.sub, &admin.0.email, &admin.0.role)
