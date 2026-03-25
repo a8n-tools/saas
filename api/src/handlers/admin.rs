@@ -290,6 +290,11 @@ pub async fn revoke_membership(
     UserRepository::update_membership_status(pool.get_ref(), body.user_id, MembershipStatus::Canceled)
         .await?;
 
+    // Also update the subscription record so the admin memberships list reflects the change
+    if let Some(membership) = MembershipRepository::find_by_user_id(&pool, body.user_id).await? {
+        MembershipRepository::update_status(pool.get_ref(), membership.id, "canceled").await?;
+    }
+
     // Clear any grace period
     UserRepository::clear_grace_period(pool.get_ref(), body.user_id).await?;
 
