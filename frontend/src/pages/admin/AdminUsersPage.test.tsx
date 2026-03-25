@@ -42,7 +42,7 @@ describe('AdminUsersPage', () => {
     render(<AdminUsersPage />)
 
     await waitFor(() => {
-      expect(screen.getByText('subscriber')).toBeInTheDocument()
+      expect(screen.getByText('Subscriber')).toBeInTheDocument()
     })
   })
 

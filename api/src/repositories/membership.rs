@@ -6,7 +6,7 @@ use sqlx::postgres::Postgres;
 use uuid::Uuid;
 
 use crate::errors::AppError;
-use crate::models::{CreateMembership, Membership};
+use crate::models::{AdminMembershipResponse, CreateMembership, Membership};
 
 pub struct MembershipRepository;
 
@@ -158,21 +158,27 @@ impl MembershipRepository {
         Ok(())
     }
 
-    /// List memberships with pagination
-    pub async fn list_paginated(
+    /// List memberships with pagination (admin view with user email and tier)
+    pub async fn list_paginated_admin(
         pool: &PgPool,
         page: i32,
         per_page: i32,
         status_filter: Option<&str>,
-    ) -> Result<(Vec<Membership>, i64), AppError> {
+    ) -> Result<(Vec<AdminMembershipResponse>, i64), AppError> {
         let offset = (page - 1) * per_page;
 
-        let (memberships, total): (Vec<Membership>, i64) = if let Some(status) = status_filter {
-            let memberships = sqlx::query_as::<_, Membership>(
+        let (memberships, total): (Vec<AdminMembershipResponse>, i64) = if let Some(status) = status_filter {
+            let memberships = sqlx::query_as::<_, AdminMembershipResponse>(
                 r#"
-                SELECT * FROM subscriptions
-                WHERE status = $3
-                ORDER BY created_at DESC
+                SELECT s.id, s.user_id, u.email AS user_email,
+                       s.stripe_subscription_id, s.status,
+                       COALESCE(u.membership_tier, 'personal') AS tier,
+                       s.amount, s.current_period_start, s.current_period_end,
+                       s.cancel_at_period_end, s.created_at
+                FROM subscriptions s
+                JOIN users u ON u.id = s.user_id
+                WHERE s.status = $3
+                ORDER BY s.created_at DESC
                 LIMIT $1 OFFSET $2
                 "#,
             )
@@ -191,10 +197,16 @@ impl MembershipRepository {
 
             (memberships, total.0)
         } else {
-            let memberships = sqlx::query_as::<_, Membership>(
+            let memberships = sqlx::query_as::<_, AdminMembershipResponse>(
                 r#"
-                SELECT * FROM subscriptions
-                ORDER BY created_at DESC
+                SELECT s.id, s.user_id, u.email AS user_email,
+                       s.stripe_subscription_id, s.status,
+                       COALESCE(u.membership_tier, 'personal') AS tier,
+                       s.amount, s.current_period_start, s.current_period_end,
+                       s.cancel_at_period_end, s.created_at
+                FROM subscriptions s
+                JOIN users u ON u.id = s.user_id
+                ORDER BY s.created_at DESC
                 LIMIT $1 OFFSET $2
                 "#,
             )

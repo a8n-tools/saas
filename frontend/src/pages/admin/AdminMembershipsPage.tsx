@@ -153,7 +153,7 @@ export function AdminMembershipsPage() {
                       <div>
                         <p className="font-medium">{membership.user_email}</p>
                         <p className="text-sm text-muted-foreground">
-                          {formatCurrency(membership.amount_cents)} / month
+                          {formatCurrency(membership.amount)} / month
                           {membership.current_period_end && ` - Ends ${formatDate(membership.current_period_end)}`}
                         </p>
                       </div>

@@ -25,7 +25,7 @@ describe('AdminAuditLogsPage', () => {
   it('shows admin-only toggle', () => {
     render(<AdminAuditLogsPage />)
 
-    expect(screen.getByText('Admin actions only')).toBeInTheDocument()
+    expect(screen.getByText('Admin Actions Only')).toBeInTheDocument()
   })
 
   it('shows audit log entries after loading', async () => {

@@ -66,7 +66,7 @@ describe('AcceptInvitePage', () => {
     await user.click(screen.getByRole('button', { name: /create account/i }))
 
     await waitFor(() => {
-      expect(screen.getByText(/at least 12 characters/i)).toBeInTheDocument()
+      expect(screen.getByText(/password must be at least 12 characters/i)).toBeInTheDocument()
     })
   })
 })

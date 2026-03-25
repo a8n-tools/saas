@@ -104,6 +104,22 @@ pub struct MembershipResponse {
     pub grace_period_end: Option<DateTime<Utc>>,
 }
 
+/// Admin membership response (includes user email and tier from users table)
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct AdminMembershipResponse {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub user_email: String,
+    pub stripe_subscription_id: String,
+    pub status: String,
+    pub tier: String,
+    pub amount: i32,
+    pub current_period_start: DateTime<Utc>,
+    pub current_period_end: DateTime<Utc>,
+    pub cancel_at_period_end: bool,
+    pub created_at: DateTime<Utc>,
+}
+
 /// Payment status
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
