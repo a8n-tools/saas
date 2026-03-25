@@ -70,7 +70,9 @@ export function DashboardPage() {
           ) : (
             <div className="flex items-center justify-between">
               <p className="text-sm text-muted-foreground">
-                Your trial has ended — subscribe to continue.
+                {user?.trial_ends_at || user?.membership_status === 'canceled'
+                  ? 'Your trial has ended — subscribe to continue.'
+                  : 'Subscribe to get access to all applications.'}
               </p>
               <Link to="/membership">
                 <Button size="sm" className="gap-2 bg-gradient-to-r from-primary to-indigo-500 text-white border-0 shadow-md shadow-primary/20">
