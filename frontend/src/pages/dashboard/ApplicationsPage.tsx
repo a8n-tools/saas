@@ -6,19 +6,13 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ExternalLink, Loader2, Link2, ArrowRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { getAppGradient } from '@/lib/utils'
+import { getAppGradient, hasActiveMembership } from '@/lib/utils'
 
 export function ApplicationsPage() {
   const { user } = useAuthStore()
   const { applications, isLoading } = useApplications()
 
-  const hasActiveMembership =
-    user?.role === 'admin' ||
-    user?.lifetime_member ||
-    user?.membership_status === 'active' ||
-    user?.membership_status === 'past_due' ||
-    user?.membership_status === 'grace_period' ||
-    (user?.trial_ends_at != null && new Date(user.trial_ends_at) > new Date())
+  const isMember = hasActiveMembership(user)
 
   if (isLoading) {
     return (
@@ -37,7 +31,7 @@ export function ApplicationsPage() {
         </p>
       </div>
 
-      {!hasActiveMembership && (
+      {!isMember && (
         <Card className="border-indigo-500/20 bg-gradient-to-r from-indigo-500/5 via-primary/5 to-teal-500/5 overflow-hidden">
           <div className="h-1 bg-gradient-to-r from-indigo-500 via-primary to-teal-500" />
           <CardContent className="flex items-center justify-between py-4">
@@ -103,7 +97,7 @@ export function ApplicationsPage() {
                   </a>
                 ) : (
                   <Button className="w-full" disabled>
-                    {!hasActiveMembership
+                    {!isMember
                       ? 'Membership Required'
                       : app.maintenance_mode
                       ? 'Under Maintenance'

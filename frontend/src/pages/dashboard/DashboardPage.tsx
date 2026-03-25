@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { AppWindow, CreditCard, ExternalLink, Loader2, ArrowRight } from 'lucide-react'
-import { getAppGradient } from '@/lib/utils'
+import { getAppGradient, hasActiveMembership } from '@/lib/utils'
 
 const taglines = [
   'All access. No clock.',
@@ -22,13 +22,7 @@ export function DashboardPage() {
   const { applications, isLoading } = useApplications()
   const tagline = useMemo(() => taglines[Math.floor(Math.random() * taglines.length)], [])
 
-  const hasActiveMembership =
-    user?.role === 'admin' ||
-    user?.lifetime_member ||
-    user?.membership_status === 'active' ||
-    user?.membership_status === 'past_due' ||
-    user?.membership_status === 'grace_period' ||
-    (user?.trial_ends_at != null && new Date(user.trial_ends_at) > new Date())
+  const isMember = hasActiveMembership(user)
 
   return (
     <div className="space-y-8">
@@ -56,7 +50,7 @@ export function DashboardPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {hasActiveMembership ? (
+          {isMember ? (
             <div className="flex items-center justify-between">
               <div>
                 <SubscriptionStatusText user={user} />
@@ -133,7 +127,7 @@ export function DashboardPage() {
                       </a>
                     ) : (
                       <Button className="w-full" disabled>
-                        {!hasActiveMembership
+                        {!isMember
                           ? 'Membership Required'
                           : app.maintenance_mode
                           ? 'Under Maintenance'

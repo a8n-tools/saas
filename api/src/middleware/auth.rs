@@ -11,8 +11,6 @@ use actix_web::{
 };
 use std::future::{ready, Ready};
 use std::sync::Arc;
-use chrono;
-
 use crate::errors::AppError;
 use crate::services::{AccessTokenClaims, JwtService};
 
@@ -148,15 +146,7 @@ impl FromRequest for MemberUser {
         match token {
             Some(token) => match jwt_service.verify_access_token(&token) {
                 Ok(claims) => {
-                    let has_access = claims.role == "admin"
-                        || claims.lifetime_member
-                        || claims.trial_ends_at.map_or(false, |ts| {
-                            ts > chrono::Utc::now().timestamp()
-                        })
-                        || claims.membership_status == "active"
-                        || claims.membership_status == "grace_period";
-
-                    if !has_access {
+                    if !claims.has_member_access() {
                         return ready(Err(AppError::Forbidden));
                     }
 

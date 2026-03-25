@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
+import { hasActiveMembership } from '@/lib/utils'
 
 export function useAuth() {
   const store = useAuthStore()
@@ -39,9 +40,7 @@ export function useAuth() {
     register: registerAndRedirect,
     logout: logoutAndRedirect,
     clearError: store.clearError,
-    hasActiveMembership:
-      store.user?.membership_status === 'active' ||
-      store.user?.membership_status === 'past_due',
+    hasActiveMembership: hasActiveMembership(store.user),
     isAdmin: store.user?.role === 'admin',
   }
 }
