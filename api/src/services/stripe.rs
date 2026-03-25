@@ -422,6 +422,54 @@ impl StripeService {
         }
     }
 
+    /// Create a Stripe Customer and a SetupIntent for $0 card authorization at signup.
+    ///
+    /// Returns `(customer_id, client_secret)`. The caller passes the `client_secret`
+    /// to the frontend so Stripe.js can confirm the setup, and passes the `customer_id`
+    /// back to the register endpoint so it can be stored on the newly-created user.
+    pub async fn create_setup_intent(&self, email: &str) -> Result<(String, String), AppError> {
+        let (_config, client) = self.snapshot();
+
+        let customer_params = stripe::CreateCustomer {
+            email: Some(email),
+            ..Default::default()
+        };
+
+        let customer = stripe::Customer::create(&client, customer_params)
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, email = %email, "Failed to create Stripe customer for signup");
+                AppError::internal("Failed to initialize payment")
+            })?;
+
+        let customer_id: stripe::CustomerId = customer.id.to_string().parse().map_err(|_| {
+            AppError::internal("Invalid customer ID returned from Stripe")
+        })?;
+
+        let intent_params = stripe::CreateSetupIntent {
+            customer: Some(customer_id),
+            ..Default::default()
+        };
+
+        let setup_intent = stripe::SetupIntent::create(&client, intent_params)
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, "Failed to create SetupIntent for signup");
+                AppError::internal("Failed to initialize payment")
+            })?;
+
+        let client_secret = setup_intent
+            .client_secret
+            .ok_or_else(|| AppError::internal("SetupIntent missing client_secret"))?;
+
+        tracing::info!(
+            customer_id = %customer.id,
+            "Created Stripe customer and SetupIntent for signup"
+        );
+
+        Ok((customer.id.to_string(), client_secret))
+    }
+
     /// Get the configured personal price ID (for backwards compatibility)
     pub fn price_id(&self) -> String {
         let (config, _) = self.snapshot();

@@ -68,7 +68,7 @@ interface AuthState {
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
   login: (email: string, password: string, remember?: boolean) => Promise<void>
-  register: (email: string, password: string) => Promise<void>
+  register: (email: string, password: string, stripeInfo?: { stripe_customer_id: string; payment_method_id: string }) => Promise<void>
   logout: () => Promise<void>
   refreshUser: () => Promise<void>
   clearError: () => void
@@ -165,10 +165,10 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      register: async (email, password) => {
+      register: async (email, password, stripeInfo) => {
         set({ isLoading: true, error: null })
         try {
-          const response = await authApi.register({ email, password })
+          const response = await authApi.register({ email, password, ...stripeInfo })
           set({
             user: response.user,
             isAuthenticated: true,
