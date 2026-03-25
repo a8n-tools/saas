@@ -19,7 +19,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { AlertCircle, Loader2, Check, CheckCircle2, CreditCard } from 'lucide-react'
 
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? '')
+const STRIPE_PUBLISHABLE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? ''
+const stripeEnabled = STRIPE_PUBLISHABLE_KEY.length > 0
+const stripePromise = stripeEnabled ? loadStripe(STRIPE_PUBLISHABLE_KEY) : null
 
 const registerSchema = z
   .object({
@@ -144,7 +146,7 @@ function CardAuthForm({ email, password, stripeCustomerId, onSuccess, onBack }: 
 
 export function RegisterPage() {
   const navigate = useNavigate()
-  const { error, clearError } = useAuthStore()
+  const { register: registerUser, error, clearError } = useAuthStore()
   const [step, setStep] = useState<1 | 2>(1)
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [stripeCustomerId, setStripeCustomerId] = useState<string | null>(null)
@@ -169,6 +171,11 @@ export function RegisterPage() {
     setStepError(null)
     clearError()
     try {
+      if (!stripeEnabled) {
+        await registerUser(data.email, data.password)
+        handleRegistrationSuccess()
+        return
+      }
       const response = await apiClient.post<{ client_secret: string; customer_id: string }>(
         '/billing/setup-intent',
         { email: data.email }
@@ -263,10 +270,10 @@ export function RegisterPage() {
                 <Button type="submit" className="w-full" disabled={isStepLoading}>
                   {isStepLoading ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
+                  ) : stripeEnabled ? (
                     <CreditCard className="mr-2 h-4 w-4" />
-                  )}
-                  Continue to Card Verification
+                  ) : null}
+                  {stripeEnabled ? 'Continue to Card Verification' : 'Create Account'}
                 </Button>
               </form>
 
