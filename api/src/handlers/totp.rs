@@ -145,7 +145,9 @@ pub async fn verify_2fa(
     let user_id = claims.sub;
 
     // Try TOTP code first, then recovery code
-    let code = body.code.trim();
+    // Strip spaces so users can enter TOTP as "XXX XXX"
+    let code = body.code.trim().replace(' ', "");
+    let code = code.as_str();
     let is_recovery = code.contains('-') || code.len() > 6;
 
     let verified = if is_recovery {
