@@ -187,6 +187,29 @@ impl UserRepository {
         Ok(())
     }
 
+    /// Store the Stripe customer ID and authorized payment method ID captured at signup.
+    pub async fn update_stripe_registration_info(
+        pool: &PgPool,
+        user_id: Uuid,
+        customer_id: &str,
+        payment_method_id: &str,
+    ) -> Result<(), AppError> {
+        sqlx::query(
+            r#"
+            UPDATE users
+            SET stripe_customer_id = $1, stripe_payment_method_id = $2, updated_at = NOW()
+            WHERE id = $3
+            "#,
+        )
+        .bind(customer_id)
+        .bind(payment_method_id)
+        .bind(user_id)
+        .execute(pool)
+        .await?;
+
+        Ok(())
+    }
+
     /// Lock price for user
     pub async fn lock_price(
         pool: &PgPool,
