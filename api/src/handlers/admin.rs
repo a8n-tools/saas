@@ -323,7 +323,7 @@ pub async fn list_memberships(
     let per_page = query.per_page.unwrap_or(20).min(100);
 
     let (memberships, total) =
-        MembershipRepository::list_paginated(&pool, page, per_page, query.status.as_deref())
+        MembershipRepository::list_paginated_admin(&pool, page, per_page, query.status.as_deref())
             .await?;
 
     Ok(paginated(memberships, total, page, per_page, request_id))

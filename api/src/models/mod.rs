@@ -27,8 +27,8 @@ pub use feedback::{
 };
 pub use rate_limit::{RateLimit, RateLimitConfig};
 pub use membership::{
-    CreatePayment, CreateMembership, PaymentHistory, PaymentResponse, PaymentStatus,
-    StripeSubscriptionStatus, Membership, MembershipResponse,
+    AdminMembershipResponse, CreatePayment, CreateMembership, PaymentHistory, PaymentResponse,
+    PaymentStatus, StripeSubscriptionStatus, Membership, MembershipResponse,
 };
 pub use token::{
     AdminInvite, CreateAdminInvite, CreateEmailChangeRequest, CreateEmailVerificationToken,
