@@ -63,6 +63,49 @@ impl InvoiceService {
         Ok(invoice)
     }
 
+    /// Generate an invoice for a Stripe payment (membership purchase or renewal).
+    /// Accepts amount and description directly rather than deriving from tier.
+    pub async fn generate_payment_invoice(
+        &self,
+        pool: &PgPool,
+        user_id: Uuid,
+        email: &str,
+        amount_cents: i32,
+        description: &str,
+    ) -> Result<Invoice, AppError> {
+        let invoice_number = InvoiceRepository::next_invoice_number(pool).await?;
+
+        let pdf_bytes = generate_pdf_bytes(&invoice_number, email, description, amount_cents)
+            .map_err(|e| AppError::InternalError { message: format!("PDF generation failed: {e}") })?;
+
+        let relative_path = format!("{}/{}.pdf", user_id, invoice_number);
+        let full_dir = format!("{}/{}", self.storage_base_path, user_id);
+        let full_path = format!("{}/{}.pdf", full_dir, invoice_number);
+
+        tokio::fs::create_dir_all(&full_dir)
+            .await
+            .map_err(|e| AppError::InternalError { message: format!("Failed to create invoice directory: {e}") })?;
+
+        tokio::fs::write(&full_path, &pdf_bytes)
+            .await
+            .map_err(|e| AppError::InternalError { message: format!("Failed to write invoice PDF: {e}") })?;
+
+        let invoice = InvoiceRepository::create(
+            pool,
+            CreateInvoice {
+                user_id,
+                invoice_number,
+                amount_cents,
+                currency: "usd".to_string(),
+                description: description.to_string(),
+                pdf_storage_path: Some(relative_path),
+            },
+        )
+        .await?;
+
+        Ok(invoice)
+    }
+
     /// Read the PDF bytes for an invoice from disk.
     pub async fn read_invoice_pdf(
         &self,

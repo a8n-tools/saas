@@ -10,7 +10,7 @@ use std::sync::Arc;
 use crate::errors::AppError;
 use crate::models::{AuditAction, AuditSeverity, CreateAuditLog, CreatePayment, CreateMembership, PaymentStatus, MembershipStatus};
 use crate::repositories::{AuditLogRepository, PaymentRepository, MembershipRepository, UserRepository};
-use crate::services::{EmailService, StripeService};
+use crate::services::{EmailService, InvoiceService, StripeService};
 
 /// POST /v1/webhooks/stripe
 /// Handle Stripe webhook events
@@ -20,6 +20,7 @@ pub async fn stripe_webhook(
     pool: web::Data<PgPool>,
     stripe: web::Data<Arc<StripeService>>,
     email: web::Data<Arc<EmailService>>,
+    invoice_service: web::Data<Arc<InvoiceService>>,
 ) -> Result<HttpResponse, AppError> {
     // Get signature header
     let signature = req
@@ -59,7 +60,7 @@ pub async fn stripe_webhook(
             handle_subscription_deleted(&event, &pool, &email).await?;
         }
         "invoice.payment_succeeded" => {
-            handle_payment_succeeded(&event, &pool, &email).await?;
+            handle_payment_succeeded(&event, &pool, &email, &invoice_service).await?;
         }
         "invoice.payment_failed" => {
             handle_payment_failed(&event, &pool, &email).await?;
@@ -336,6 +337,7 @@ async fn handle_payment_succeeded(
     event: &serde_json::Value,
     pool: &PgPool,
     email: &EmailService,
+    invoice_service: &InvoiceService,
 ) -> Result<(), AppError> {
     let invoice = &event["data"]["object"];
 
@@ -396,6 +398,19 @@ async fn handle_payment_succeeded(
         UserRepository::clear_grace_period(&mut *tx, user.id).await?;
         UserRepository::update_membership_status(&mut *tx, user.id, MembershipStatus::Active).await?;
         tx.commit().await?;
+    }
+
+    // Generate invoice for this payment
+    let invoice_description = invoice["lines"]["data"][0]["description"]
+        .as_str()
+        .unwrap_or("Membership Payment")
+        .to_string();
+
+    if let Err(e) = invoice_service
+        .generate_payment_invoice(pool, user.id, &user.email, amount, &invoice_description)
+        .await
+    {
+        tracing::error!(error = %e, user_id = %user.id, "Failed to generate invoice for payment");
     }
 
     tracing::info!(
