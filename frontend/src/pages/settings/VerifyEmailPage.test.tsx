@@ -40,7 +40,7 @@ describe('VerifyEmailPage', () => {
       expect(screen.getByText('Email Verified!')).toBeInTheDocument()
     })
 
-    expect(screen.getByText(/verified successfully/i)).toBeInTheDocument()
+    expect(screen.getByText(/1 month free/i)).toBeInTheDocument()
   })
 
   it('shows error state after invalid token', async () => {
