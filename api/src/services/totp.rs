@@ -182,6 +182,8 @@ impl TotpService {
     }
 
     fn check_code(&self, secret: &[u8], code: &str) -> Result<bool, AppError> {
+        // Allow spaced format (e.g. "123 456" → "123456")
+        let code = code.replace(' ', "");
         let totp = TOTP::new(
             Algorithm::SHA1,
             6,
@@ -193,7 +195,7 @@ impl TotpService {
         )
         .map_err(|e| AppError::internal(format!("Failed to create TOTP for verification: {}", e)))?;
 
-        totp.check_current(code)
+        totp.check_current(&code)
             .map_err(|e| AppError::internal(format!("System time error: {}", e)))
     }
 

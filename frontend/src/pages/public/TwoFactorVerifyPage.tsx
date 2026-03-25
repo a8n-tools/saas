@@ -121,7 +121,7 @@ export function TwoFactorVerifyPage() {
                 id="code"
                 type="text"
                 inputMode={useRecovery ? 'text' : 'numeric'}
-                placeholder={useRecovery ? 'XXXX-XXXX' : '000000'}
+                placeholder={useRecovery ? 'XXXX-XXXX' : '000 000'}
                 value={code}
                 onChange={(e) => handleCodeChange(e.target.value)}
                 autoComplete="one-time-code"
