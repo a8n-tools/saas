@@ -86,7 +86,7 @@ export const mockAdminMembership = {
   stripe_subscription_id: 'sub_123',
   status: 'active',
   tier: 'personal',
-  amount_cents: 300,
+  amount: 300,
   current_period_start: '2024-01-01T00:00:00Z',
   current_period_end: '2026-04-01T00:00:00Z',
   cancel_at_period_end: false,
