@@ -54,6 +54,23 @@ pub struct AccessTokenClaims {
     pub iss: String,
 }
 
+impl AccessTokenClaims {
+    /// Check if the user has active member access.
+    ///
+    /// Access is granted when ANY of the following are true:
+    /// - User is an admin
+    /// - User is a lifetime member
+    /// - User has an active trial (trial_ends_at in the future)
+    /// - User has an active or grace_period subscription
+    pub fn has_member_access(&self) -> bool {
+        self.role == "admin"
+            || self.lifetime_member
+            || self.trial_ends_at.map_or(false, |ts| ts > chrono::Utc::now().timestamp())
+            || self.membership_status == "active"
+            || self.membership_status == "grace_period"
+    }
+}
+
 /// Two-factor authentication challenge claims
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TwoFactorChallengeClaims {
@@ -304,5 +321,79 @@ mod tests {
 
         assert_eq!(hash1, hash2);
         assert_ne!(hash1, token);
+    }
+
+    fn test_claims(membership_status: &str, lifetime_member: bool, trial_ends_at: Option<i64>, role: &str) -> AccessTokenClaims {
+        AccessTokenClaims {
+            sub: Uuid::new_v4(),
+            email: "test@example.com".to_string(),
+            role: role.to_string(),
+            membership_status: membership_status.to_string(),
+            membership_tier: "personal".to_string(),
+            price_locked: false,
+            price_id: None,
+            lifetime_member,
+            trial_ends_at,
+            iat: Utc::now().timestamp(),
+            exp: (Utc::now() + Duration::minutes(15)).timestamp(),
+            jti: "test".to_string(),
+            iss: "test".to_string(),
+        }
+    }
+
+    #[test]
+    fn has_member_access_admin() {
+        let claims = test_claims("none", false, None, "admin");
+        assert!(claims.has_member_access());
+    }
+
+    #[test]
+    fn has_member_access_active_subscription() {
+        let claims = test_claims("active", false, None, "subscriber");
+        assert!(claims.has_member_access());
+    }
+
+    #[test]
+    fn has_member_access_grace_period() {
+        let claims = test_claims("grace_period", false, None, "subscriber");
+        assert!(claims.has_member_access());
+    }
+
+    #[test]
+    fn has_member_access_lifetime_member() {
+        let claims = test_claims("none", true, None, "subscriber");
+        assert!(claims.has_member_access());
+    }
+
+    #[test]
+    fn has_member_access_active_trial() {
+        let future = Utc::now().timestamp() + 86400; // 1 day in the future
+        let claims = test_claims("none", false, Some(future), "subscriber");
+        assert!(claims.has_member_access());
+    }
+
+    #[test]
+    fn has_member_access_expired_trial_no_access() {
+        let past = Utc::now().timestamp() - 86400; // 1 day in the past
+        let claims = test_claims("none", false, Some(past), "subscriber");
+        assert!(!claims.has_member_access());
+    }
+
+    #[test]
+    fn has_member_access_none_no_access() {
+        let claims = test_claims("none", false, None, "subscriber");
+        assert!(!claims.has_member_access());
+    }
+
+    #[test]
+    fn has_member_access_canceled_no_access() {
+        let claims = test_claims("canceled", false, None, "subscriber");
+        assert!(!claims.has_member_access());
+    }
+
+    #[test]
+    fn has_member_access_past_due_no_access() {
+        let claims = test_claims("past_due", false, None, "subscriber");
+        assert!(!claims.has_member_access());
     }
 }

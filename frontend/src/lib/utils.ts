@@ -1,5 +1,6 @@
 import { type ClassValue, clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
+import type { User } from '@/types'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -28,6 +29,18 @@ export const APP_GRADIENTS = [
 ]
 
 export const getAppGradient = (index: number) => APP_GRADIENTS[index % APP_GRADIENTS.length]
+
+/** Check if a user has active membership access. Mirrors backend AccessTokenClaims::has_member_access(). */
+export function hasActiveMembership(user: User | null | undefined): boolean {
+  if (!user) return false
+  return (
+    user.role === 'admin' ||
+    user.lifetime_member ||
+    (user.trial_ends_at != null && new Date(user.trial_ends_at) > new Date()) ||
+    user.membership_status === 'active' ||
+    user.membership_status === 'grace_period'
+  )
+}
 
 export function formatRelativeTime(date: string | Date): string {
   const now = new Date()
