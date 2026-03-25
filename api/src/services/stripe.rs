@@ -70,7 +70,7 @@ impl StripeConfig {
             business_price_id: std::env::var("STRIPE_BUSINESS_PRICE_ID")
                 .unwrap_or_else(|_| "price_business_placeholder".to_string()),
             success_url: std::env::var("STRIPE_SUCCESS_URL")
-                .unwrap_or_else(|_| format!("{base}/dashboard?checkout=success")),
+                .unwrap_or_else(|_| format!("{base}/checkout/success")),
             cancel_url: std::env::var("STRIPE_CANCEL_URL")
                 .unwrap_or_else(|_| format!("{base}/pricing?checkout=canceled")),
         })
@@ -445,7 +445,7 @@ mod tests {
             webhook_secret: "whsec_test_secret".to_string(),
             personal_price_id: "price_personal".to_string(),
             business_price_id: "price_business".to_string(),
-            success_url: "http://localhost/success".to_string(),
+            success_url: "http://localhost/checkout/success".to_string(),
             cancel_url: "http://localhost/cancel".to_string(),
         }
     }
