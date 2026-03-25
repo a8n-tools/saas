@@ -246,6 +246,7 @@ mod tests {
             password_hash: None,
             role: "subscriber".to_string(),
             stripe_customer_id: None,
+            stripe_payment_method_id: None,
             membership_status: "active".to_string(),
             membership_tier: Some("personal".to_string()),
             price_locked: false,
