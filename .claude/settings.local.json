@@ -12,7 +12,13 @@
       "Bash(python3 -m json.tool)",
       "Bash(pkg-config --exists openssl)",
       "Bash(dpkg -l)",
-      "Bash(ls /usr/lib64/libssl*)"
+      "Bash(ls /usr/lib64/libssl*)",
+      "Bash(bun add:*)",
+      "Bash(just logs-api:*)",
+      "Bash(ls ~/.cargo/registry/src/index.crates.io-*/async-stripe-0.37.*/src/)",
+      "Bash(grep -r SetupIntent ~/.cargo/registry/src/index.crates.io-*/async-stripe-0.37.*/src/ --include=*.rs -l)",
+      "Bash(find:*)",
+      "Bash(grep -rn setup_intent /home/long/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-stripe-0.37.3/src/ --include=*.rs)"
     ]
   }
 }
