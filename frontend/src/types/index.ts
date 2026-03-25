@@ -41,6 +41,8 @@ export interface LoginRequest {
 export interface RegisterRequest {
   email: string
   password: string
+  stripe_customer_id?: string
+  payment_method_id?: string
 }
 
 export interface MagicLinkRequest {
