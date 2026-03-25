@@ -175,6 +175,7 @@ pub struct User {
     pub password_hash: Option<String>,
     pub role: String,
     pub stripe_customer_id: Option<String>,
+    pub stripe_payment_method_id: Option<String>,
     #[sqlx(rename = "subscription_status")]
     #[serde(rename = "membership_status")]
     pub membership_status: String,
@@ -324,6 +325,7 @@ mod tests {
             password_hash: Some("hash".to_string()),
             role: "subscriber".to_string(),
             stripe_customer_id: None,
+            stripe_payment_method_id: None,
             membership_status: "active".to_string(),
             membership_tier: Some("personal".to_string()),
             price_locked: false,

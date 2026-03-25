@@ -35,6 +35,10 @@ async fn check_rate_limit(
 pub struct RegisterRequest {
     pub email: String,
     pub password: String,
+    /// Stripe Customer ID created by POST /v1/billing/setup-intent before this request.
+    pub stripe_customer_id: Option<String>,
+    /// Payment method ID returned by stripe.confirmSetup() on the frontend.
+    pub payment_method_id: Option<String>,
 }
 
 /// Request body for login
@@ -129,6 +133,19 @@ pub async fn register(
             return Err(AppError::internal("Unexpected 2FA challenge during registration"));
         }
     };
+
+    // Store Stripe customer and payment method if card authorization was completed
+    if let (Some(customer_id), Some(payment_method_id)) =
+        (&body.stripe_customer_id, &body.payment_method_id)
+    {
+        UserRepository::update_stripe_registration_info(
+            &pool,
+            user.id,
+            customer_id,
+            payment_method_id,
+        )
+        .await?;
+    }
 
     let secure = config.is_production();
     let cookie_domain = config.cookie_domain.as_deref();

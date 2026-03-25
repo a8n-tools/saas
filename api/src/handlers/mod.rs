@@ -36,7 +36,7 @@ pub use user::{
     get_current_user, list_sessions, request_email_change, request_email_verification,
     revoke_session,
 };
-pub use billing::{download_invoice, list_invoices};
+pub use billing::{create_setup_intent, download_invoice, list_invoices};
 pub use webhook::stripe_webhook;
 
 // Admin handlers
