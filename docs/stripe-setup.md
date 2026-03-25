@@ -53,6 +53,42 @@ The publishable key is baked into the frontend at build time via Vite. It must b
 
 ---
 
+## Enabling and Disabling Card Authorization
+
+The card authorization step is controlled entirely by `VITE_STRIPE_PUBLISHABLE_KEY` in the root `.env`. No code changes needed.
+
+### Disable (skip card step on signup)
+
+```
+VITE_STRIPE_PUBLISHABLE_KEY=
+```
+
+Useful during development so you can register test accounts without a card.
+
+### Enable (card step required on signup)
+
+```
+VITE_STRIPE_PUBLISHABLE_KEY=pk_test_51...
+```
+
+### Apply the change
+
+After editing `.env`, force-recreate the frontend container:
+
+```
+docker compose -f compose.dev.yml up --force-recreate --detach frontend
+```
+
+Verify the value reached the container:
+
+```
+docker exec saas-frontend-long env | grep VITE_STRIPE
+```
+
+> `docker compose restart` does **not** re-read `.env`. Always use `up --force-recreate`.
+
+---
+
 ## Webhook Secret (optional for local dev)
 
 The webhook secret (`STRIPE_WEBHOOK_SECRET`) is only required if you are testing webhook events (e.g. subscription lifecycle). For the card authorization signup flow, it is not needed.
