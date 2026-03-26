@@ -5,7 +5,6 @@ import type {
   CheckoutSessionResponse,
   CheckoutRequest,
   MembershipTier,
-  PaginatedResponse,
 } from '@/types'
 
 export interface SubscribeResponse {
@@ -33,9 +32,6 @@ export const membershipApi = {
   reactivate: (): Promise<void> =>
     apiClient.post('/memberships/reactivate'),
 
-  getPaymentHistory: (
-    page = 1,
-    pageSize = 10
-  ): Promise<PaginatedResponse<StripePaymentResponse>> =>
-    apiClient.get(`/memberships/payments?page=${page}&page_size=${pageSize}`),
+  getPaymentHistory: (): Promise<StripePaymentResponse[]> =>
+    apiClient.get('/memberships/payments'),
 }

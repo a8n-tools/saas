@@ -305,13 +305,13 @@ export function MembershipPage() {
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-6 w-6 animate-spin text-indigo-500" />
             </div>
-          ) : payments?.items.length === 0 ? (
+          ) : payments?.length === 0 ? (
             <p className="text-center text-muted-foreground py-8">
               No payment history yet.
             </p>
           ) : (
             <div className="space-y-4">
-              {payments?.items.map((payment) => (
+              {payments?.map((payment) => (
                 <div
                   key={payment.id}
                   className="flex items-center justify-between py-3 border-b border-border/50 last:border-0"
