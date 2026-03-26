@@ -11,8 +11,8 @@ use std::sync::Arc;
 use crate::config::Config;
 use crate::errors::AppError;
 use crate::middleware::{AuthCookies, AuthenticatedUser};
-use crate::models::{PaymentResponse, MembershipResponse};
-use crate::repositories::{PaymentRepository, MembershipRepository, UserRepository};
+use crate::models::MembershipResponse;
+use crate::repositories::UserRepository;
 use crate::responses::{get_request_id, success};
 use crate::services::{JwtService, MembershipTier, StripeService};
 
@@ -36,12 +36,24 @@ pub struct PortalResponse {
     pub url: String,
 }
 
+/// Payment response from Stripe invoices
+#[derive(Debug, Serialize)]
+pub struct StripePaymentResponse {
+    pub id: String,
+    pub amount: i64,
+    pub currency: String,
+    pub status: Option<String>,
+    pub created: i64,
+    pub invoice_pdf: Option<String>,
+}
+
 /// GET /v1/memberships/me
 /// Get current user's membership status
 pub async fn get_membership(
     req: HttpRequest,
     user: AuthenticatedUser,
     pool: web::Data<PgPool>,
+    stripe: web::Data<Arc<StripeService>>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
 
@@ -50,15 +62,28 @@ pub async fn get_membership(
         .await?
         .ok_or(AppError::not_found("User"))?;
 
-    // Get active membership if any
-    let membership = MembershipRepository::find_by_user_id(&pool, user.0.sub).await?;
+    // If user has a Stripe customer, fetch live subscription data
+    let (current_period_end, cancel_at_period_end) = if let Some(ref customer_id) =
+        db_user.stripe_customer_id
+    {
+        match stripe.get_customer_subscription(customer_id).await? {
+            Some(sub) => {
+                let period_end =
+                    chrono::DateTime::from_timestamp(sub.current_period_end, 0);
+                (period_end, sub.cancel_at_period_end)
+            }
+            None => (None, false),
+        }
+    } else {
+        (None, false)
+    };
 
     let response = MembershipResponse {
         status: db_user.membership_status.clone(),
         price_locked: db_user.price_locked,
         locked_price_amount: db_user.locked_price_amount,
-        current_period_end: membership.as_ref().map(|s| s.current_period_end),
-        cancel_at_period_end: membership.as_ref().map(|s| s.cancel_at_period_end).unwrap_or(false),
+        current_period_end,
+        cancel_at_period_end,
         grace_period_end: db_user.grace_period_end,
     };
 
@@ -149,15 +174,12 @@ pub async fn cancel_membership(
     }
 
     // Cancel in Stripe (at period end so user keeps access until billing cycle ends)
-    if let Some(membership) = MembershipRepository::find_by_user_id(&pool, user.0.sub).await? {
-        stripe
-            .cancel_subscription(&membership.stripe_subscription_id, true)
-            .await?;
-
-        // Mark as cancel_at_period_end in our DB (Stripe webhook will confirm)
-        MembershipRepository::set_cancel_at_period_end(&pool, membership.id, true).await?;
+    if let Some(ref customer_id) = db_user.stripe_customer_id {
+        if let Some(sub) = stripe.get_customer_subscription(customer_id).await? {
+            stripe.cancel_subscription(&sub.id, true).await?;
+        }
     } else {
-        // No Stripe subscription record — just update status directly
+        // No Stripe customer — just update status directly
         UserRepository::update_membership_status(pool.get_ref(), user.0.sub, crate::models::MembershipStatus::Canceled).await?;
     }
 
@@ -214,12 +236,10 @@ pub async fn cancel_membership_immediate(
     }
 
     // Cancel immediately in Stripe
-    if let Some(membership) = MembershipRepository::find_by_user_id(&pool, user.0.sub).await? {
-        stripe
-            .cancel_subscription(&membership.stripe_subscription_id, false)
-            .await?;
-
-        MembershipRepository::update_status(pool.get_ref(), membership.id, "canceled").await?;
+    if let Some(ref customer_id) = db_user.stripe_customer_id {
+        if let Some(sub) = stripe.get_customer_subscription(customer_id).await? {
+            stripe.cancel_subscription(&sub.id, false).await?;
+        }
     }
 
     // Update user status immediately
@@ -257,22 +277,27 @@ pub async fn reactivate_membership(
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
 
-    // Get user's membership
-    let membership = MembershipRepository::find_by_user_id(&pool, user.0.sub)
+    // Get user to find Stripe customer
+    let db_user = UserRepository::find_by_id(&pool, user.0.sub)
         .await?
-        .ok_or(AppError::not_found("Membership"))?;
+        .ok_or(AppError::not_found("User"))?;
 
-    if !membership.cancel_at_period_end {
+    let customer_id = db_user
+        .stripe_customer_id
+        .ok_or(AppError::not_found("No billing account found"))?;
+
+    // Get subscription from Stripe
+    let sub = stripe
+        .get_customer_subscription(&customer_id)
+        .await?
+        .ok_or(AppError::not_found("Subscription"))?;
+
+    if !sub.cancel_at_period_end {
         return Err(AppError::conflict("Membership is not scheduled for cancellation"));
     }
 
     // Reactivate in Stripe
-    stripe
-        .reactivate_subscription(&membership.stripe_subscription_id)
-        .await?;
-
-    // Update local database
-    MembershipRepository::set_cancel_at_period_end(&pool, membership.id, false).await?;
+    stripe.reactivate_subscription(&sub.id).await?;
 
     Ok(crate::responses::success_no_data(request_id))
 }
@@ -302,29 +327,39 @@ pub async fn billing_portal(
 }
 
 /// GET /v1/memberships/payments
-/// Get payment history
+/// Get payment history from Stripe
 pub async fn get_payment_history(
     req: HttpRequest,
     user: AuthenticatedUser,
     pool: web::Data<PgPool>,
+    stripe: web::Data<Arc<StripeService>>,
     query: web::Query<PaginationQuery>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
 
-    let page = query.page.unwrap_or(1).max(1);
-    let per_page = query.per_page.unwrap_or(20).min(100);
+    let db_user = UserRepository::find_by_id(&pool, user.0.sub)
+        .await?
+        .ok_or(AppError::not_found("User"))?;
 
-    let (payments, total) = PaymentRepository::list_by_user(&pool, user.0.sub, page, per_page).await?;
+    let payments = if let Some(ref customer_id) = db_user.stripe_customer_id {
+        let limit = query.per_page.map(|p| p.min(100).max(1) as u64);
+        let invoices = stripe.list_customer_invoices(customer_id, limit).await?;
+        invoices
+            .into_iter()
+            .map(|inv| StripePaymentResponse {
+                id: inv.id,
+                amount: inv.amount_paid,
+                currency: inv.currency,
+                status: inv.status,
+                created: inv.created,
+                invoice_pdf: inv.invoice_pdf,
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
 
-    let payment_responses: Vec<PaymentResponse> = payments.into_iter().map(PaymentResponse::from).collect();
-
-    Ok(crate::responses::paginated(
-        payment_responses,
-        total,
-        page,
-        per_page,
-        request_id,
-    ))
+    Ok(success(payments, request_id))
 }
 
 #[derive(Debug, Deserialize)]

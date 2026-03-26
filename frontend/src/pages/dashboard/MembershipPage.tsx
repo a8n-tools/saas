@@ -16,6 +16,7 @@ import {
   CheckCircle,
   Receipt,
   ArrowRight,
+  FileText,
 } from 'lucide-react'
 
 // Helper to get tier display name
@@ -324,13 +325,31 @@ export function MembershipPage() {
                         {formatCurrency(payment.amount, payment.currency)}
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        {formatDate(payment.created_at)}
+                        {formatDate(new Date(payment.created * 1000))}
                       </p>
                     </div>
                   </div>
-                  <Badge variant="outline" className="capitalize">
-                    {payment.status}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    {payment.invoice_pdf && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        asChild
+                      >
+                        <a
+                          href={payment.invoice_pdf}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="Download invoice PDF"
+                        >
+                          <FileText className="h-4 w-4" />
+                        </a>
+                      </Button>
+                    )}
+                    <Badge variant="outline" className="capitalize">
+                      {payment.status}
+                    </Badge>
+                  </div>
                 </div>
               ))}
             </div>

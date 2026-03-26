@@ -10,9 +10,9 @@ use std::sync::Arc;
 use crate::errors::AppError;
 use crate::middleware::{extract_client_ip, AuthCookies, AuthenticatedUser};
 use crate::models::{AuditAction, CreateAuditLog, UserResponse};
-use crate::repositories::{AuditLogRepository, MembershipRepository, TokenRepository, UserRepository};
+use crate::repositories::{AuditLogRepository, TokenRepository, UserRepository};
 use crate::responses::{get_request_id, success, success_no_data};
-use crate::services::{AuthService, EmailService, InvoiceService, PasswordService, StripeService, TotpService};
+use crate::services::{AuthService, EmailService, PasswordService, StripeService, TotpService};
 use crate::validation::validate_email;
 
 /// Request body for deleting account
@@ -266,23 +266,17 @@ pub async fn request_email_verification(
 pub async fn confirm_email_verification(
     req: HttpRequest,
     auth_service: web::Data<Arc<AuthService>>,
-    invoice_service: web::Data<Arc<InvoiceService>>,
-    pool: web::Data<PgPool>,
+    _pool: web::Data<PgPool>,
     body: web::Json<ConfirmEmailVerificationBody>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
     let ip_address = extract_client_ip(&req);
 
-    let (user_id, email, tier) = auth_service
+    let (_user_id, email, tier) = auth_service
         .confirm_email_verification(body.token.clone(), ip_address)
         .await?;
 
     tracing::info!(email = %email, subscription_tier = %tier.as_str(), "Email verified successfully");
-
-    // Generate invoice asynchronously — failure must not block verification
-    if let Err(e) = invoice_service.generate_invoice(&pool, user_id, &email, &tier).await {
-        tracing::warn!(error = %e, %user_id, "Failed to generate invoice after email verification");
-    }
 
     Ok(success(
         serde_json::json!({
@@ -340,15 +334,17 @@ pub async fn delete_account(
     }
 
     // Cancel active Stripe subscription if one exists
-    if let Some(membership) = MembershipRepository::find_by_user_id(&pool, user.0.sub).await? {
-        if membership.status == "active" || membership.status == "past_due" {
-            if let Err(e) = stripe_service.cancel_subscription(&membership.stripe_subscription_id, false).await {
-                tracing::error!(
-                    error = %e,
-                    user_id = %user.0.sub,
-                    subscription_id = %membership.stripe_subscription_id,
-                    "Failed to cancel Stripe subscription during account deletion"
-                );
+    if let Some(customer_id) = &db_user.stripe_customer_id {
+        if let Ok(Some(sub)) = stripe_service.get_customer_subscription(customer_id).await {
+            if sub.status == "active" || sub.status == "past_due" {
+                if let Err(e) = stripe_service.cancel_subscription(&sub.id, false).await {
+                    tracing::error!(
+                        error = %e,
+                        user_id = %user.0.sub,
+                        subscription_id = %sub.id,
+                        "Failed to cancel Stripe subscription during account deletion"
+                    );
+                }
             }
         }
     }

@@ -30,23 +30,31 @@ describe('AdminStripePage', () => {
     render(<AdminStripePage />)
 
     await waitFor(() => {
-      expect(screen.getByText('***1234')).toBeInTheDocument()
+      expect(screen.getByText('sk_live_***1234')).toBeInTheDocument()
     })
-    expect(screen.getByText('***5678')).toBeInTheDocument()
-    expect(screen.getByText('price_personal_123')).toBeInTheDocument()
-    expect(screen.getByText('price_business_456')).toBeInTheDocument()
+    // Webhook secret is displayed in a read-only input
+    expect(screen.getByDisplayValue('whsec_***5678')).toBeInTheDocument()
   })
 
-  it('renders form fields', async () => {
+  it('renders API keys tab with form fields', async () => {
     render(<AdminStripePage />)
 
     await waitFor(() => {
       expect(screen.getByLabelText('Secret Key')).toBeInTheDocument()
     })
-    expect(screen.getByLabelText('Webhook Secret')).toBeInTheDocument()
-    expect(screen.getByLabelText('Personal Plan Price ID')).toBeInTheDocument()
-    expect(screen.getByLabelText('Business Plan Price ID')).toBeInTheDocument()
+    expect(screen.getByText('Webhook Secret')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /save changes/i })).toBeInTheDocument()
+  })
+
+  it('renders tabs for products, prices, and webhooks', async () => {
+    render(<AdminStripePage />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: /api keys/i })).toBeInTheDocument()
+    })
+    expect(screen.getByRole('tab', { name: /products/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /prices/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /webhooks/i })).toBeInTheDocument()
   })
 
   it('shows success message after saving', async () => {

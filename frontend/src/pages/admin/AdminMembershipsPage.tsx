@@ -24,7 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { formatDate, formatCurrency } from '@/lib/utils'
+import { formatDate } from '@/lib/utils'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { CreditCard, MoreVertical, Loader2, XCircle, AlertCircle } from 'lucide-react'
 import { adminApi, type AdminMembership } from '@/api/admin'
@@ -143,7 +143,7 @@ export function AdminMembershipsPage() {
               <div className="space-y-4">
                 {data?.items.map((membership) => (
                   <div
-                    key={membership.id}
+                    key={membership.user_id}
                     className="flex items-center justify-between py-4 border-b last:border-0"
                   >
                     <div className="flex items-center gap-4">
@@ -153,8 +153,8 @@ export function AdminMembershipsPage() {
                       <div>
                         <p className="font-medium">{membership.user_email}</p>
                         <p className="text-sm text-muted-foreground">
-                          {formatCurrency(membership.amount)} / month
-                          {membership.current_period_end && ` - Ends ${formatDate(membership.current_period_end)}`}
+                          Joined {formatDate(membership.created_at)}
+                          {membership.stripe_customer_id ? ' (Stripe)' : ' (Admin-granted)'}
                         </p>
                       </div>
                     </div>

@@ -8,9 +8,9 @@ use sqlx::PgPool;
 use std::sync::Arc;
 
 use crate::errors::AppError;
-use crate::models::{AuditAction, AuditSeverity, CreateAuditLog, CreatePayment, CreateMembership, PaymentStatus, MembershipStatus};
-use crate::repositories::{AuditLogRepository, PaymentRepository, MembershipRepository, UserRepository};
-use crate::services::{EmailService, InvoiceService, StripeService};
+use crate::models::{AuditAction, AuditSeverity, CreateAuditLog, MembershipStatus};
+use crate::repositories::{AuditLogRepository, UserRepository};
+use crate::services::{EmailService, StripeService};
 
 /// POST /v1/webhooks/stripe
 /// Handle Stripe webhook events
@@ -20,7 +20,6 @@ pub async fn stripe_webhook(
     pool: web::Data<PgPool>,
     stripe: web::Data<Arc<StripeService>>,
     email: web::Data<Arc<EmailService>>,
-    invoice_service: web::Data<Arc<InvoiceService>>,
 ) -> Result<HttpResponse, AppError> {
     // Get signature header
     let signature = req
@@ -60,7 +59,7 @@ pub async fn stripe_webhook(
             handle_subscription_deleted(&event, &pool, &email).await?;
         }
         "invoice.payment_succeeded" => {
-            handle_payment_succeeded(&event, &pool, &email, &invoice_service).await?;
+            handle_payment_succeeded(&event, &pool, &email).await?;
         }
         "invoice.payment_failed" => {
             handle_payment_failed(&event, &pool, &email).await?;
@@ -151,23 +150,6 @@ async fn handle_subscription_created(
         .await?
         .ok_or(AppError::not_found("User"))?;
 
-    // Parse dates
-    let period_start = match subscription["current_period_start"].as_i64() {
-        Some(ts) => chrono::DateTime::from_timestamp(ts, 0).unwrap_or_else(Utc::now),
-        None => {
-            tracing::warn!(subscription_id = %stripe_subscription_id, "Missing current_period_start, defaulting to now");
-            Utc::now()
-        }
-    };
-
-    let period_end = match subscription["current_period_end"].as_i64() {
-        Some(ts) => chrono::DateTime::from_timestamp(ts, 0).unwrap_or_else(Utc::now),
-        None => {
-            tracing::warn!(subscription_id = %stripe_subscription_id, "Missing current_period_end, defaulting to now");
-            Utc::now()
-        }
-    };
-
     let price_id = subscription["items"]["data"][0]["price"]["id"]
         .as_str()
         .unwrap_or("unknown");
@@ -176,35 +158,18 @@ async fn handle_subscription_created(
         .as_i64()
         .unwrap_or(300) as i32;
 
-    let status = subscription["status"]
-        .as_str()
-        .unwrap_or("active");
-
-    // Create membership record
-    let membership = MembershipRepository::create(
-        pool,
-        CreateMembership {
-            user_id: user.id,
-            stripe_subscription_id: stripe_subscription_id.to_string(),
-            stripe_price_id: price_id.to_string(),
-            status: status.to_string(),
-            current_period_start: period_start,
-            current_period_end: period_end,
-            amount,
-            currency: "usd".to_string(),
-        },
-    )
-    .await?;
+    // Update user membership status
+    UserRepository::update_membership_status(pool, user.id, MembershipStatus::Active).await?;
 
     tracing::info!(
         user_id = %user.id,
-        membership_id = %stripe_subscription_id,
-        "Membership created"
+        stripe_subscription_id = %stripe_subscription_id,
+        "Subscription created"
     );
 
     let audit_log = CreateAuditLog::new(AuditAction::MembershipCreated)
         .with_actor(user.id, &user.email, &user.role)
-        .with_resource("membership", membership.id)
+        .with_resource("user", user.id)
         .with_metadata(serde_json::json!({
             "stripe_subscription_id": stripe_subscription_id,
             "stripe_price_id": price_id,
@@ -227,6 +192,10 @@ async fn handle_subscription_updated(
         .as_str()
         .ok_or(AppError::validation("id", "Missing subscription ID"))?;
 
+    let customer_id = subscription["customer"]
+        .as_str()
+        .ok_or(AppError::validation("customer", "Missing customer ID"))?;
+
     let status = subscription["status"]
         .as_str()
         .unwrap_or("active");
@@ -235,14 +204,8 @@ async fn handle_subscription_updated(
         .as_bool()
         .unwrap_or(false);
 
-    // Find membership by Stripe ID
-    if let Some(membership) = MembershipRepository::find_by_stripe_subscription_id(pool, stripe_subscription_id).await? {
-        // Update status
-        MembershipRepository::update_status(pool, membership.id, status).await?;
-
-        // Update cancel_at_period_end
-        MembershipRepository::set_cancel_at_period_end(pool, membership.id, cancel_at_period_end).await?;
-
+    // Find user by customer ID
+    if let Some(user) = UserRepository::find_by_stripe_customer_id(pool, customer_id).await? {
         // Update user membership status
         let user_status = match status {
             "active" => MembershipStatus::Active,
@@ -250,12 +213,12 @@ async fn handle_subscription_updated(
             "canceled" => MembershipStatus::Canceled,
             _ => MembershipStatus::Active,
         };
-        UserRepository::update_membership_status(pool, membership.user_id, user_status).await?;
+        UserRepository::update_membership_status(pool, user.id, user_status).await?;
 
         tracing::info!(
-            membership_id = %stripe_subscription_id,
+            stripe_subscription_id = %stripe_subscription_id,
             status = %status,
-            "Membership updated"
+            "Subscription updated"
         );
 
         // Audit log
@@ -267,18 +230,16 @@ async fn handle_subscription_updated(
             AuditAction::MembershipCanceled
         };
 
-        if let Ok(Some(user)) = UserRepository::find_by_id(pool, membership.user_id).await {
-            let audit_log = CreateAuditLog::new(action)
-                .with_actor(user.id, &user.email, &user.role)
-                .with_resource("membership", membership.id)
-                .with_metadata(serde_json::json!({
-                    "stripe_subscription_id": stripe_subscription_id,
-                    "status": status,
-                    "cancel_at_period_end": cancel_at_period_end,
-                }));
-            if let Err(e) = AuditLogRepository::create(pool, audit_log).await {
-                tracing::error!(error = %e, "Failed to create audit log for subscription update");
-            }
+        let audit_log = CreateAuditLog::new(action)
+            .with_actor(user.id, &user.email, &user.role)
+            .with_resource("user", user.id)
+            .with_metadata(serde_json::json!({
+                "stripe_subscription_id": stripe_subscription_id,
+                "status": status,
+                "cancel_at_period_end": cancel_at_period_end,
+            }));
+        if let Err(e) = AuditLogRepository::create(pool, audit_log).await {
+            tracing::error!(error = %e, "Failed to create audit log for subscription update");
         }
     }
 
@@ -296,37 +257,37 @@ async fn handle_subscription_deleted(
         .as_str()
         .ok_or(AppError::validation("id", "Missing subscription ID"))?;
 
-    // Find membership by Stripe ID
-    if let Some(membership) = MembershipRepository::find_by_stripe_subscription_id(pool, stripe_subscription_id).await? {
-        // Wrap related writes in a transaction
+    let customer_id = subscription["customer"]
+        .as_str()
+        .ok_or(AppError::validation("customer", "Missing customer ID"))?;
+
+    // Find user by customer ID
+    if let Some(user) = UserRepository::find_by_stripe_customer_id(pool, customer_id).await? {
         let mut tx = pool.begin().await?;
-        MembershipRepository::update_status(&mut *tx, membership.id, "canceled").await?;
-        UserRepository::update_membership_status(&mut *tx, membership.user_id, MembershipStatus::Canceled).await?;
-        UserRepository::clear_grace_period(&mut *tx, membership.user_id).await?;
+        UserRepository::update_membership_status(&mut *tx, user.id, MembershipStatus::Canceled).await?;
+        UserRepository::clear_grace_period(&mut *tx, user.id).await?;
         tx.commit().await?;
 
         tracing::info!(
-            user_id = %membership.user_id,
-            membership_id = %stripe_subscription_id,
-            "Membership deleted"
+            user_id = %user.id,
+            stripe_subscription_id = %stripe_subscription_id,
+            "Subscription deleted"
         );
 
         // Send cancellation email and audit log
-        if let Ok(Some(user)) = UserRepository::find_by_id(pool, membership.user_id).await {
-            if let Err(e) = email.send_membership_canceled(&user.email, membership.current_period_end).await {
-                tracing::error!(error = %e, user_id = %membership.user_id, "Failed to send membership canceled email");
-            }
+        if let Err(e) = email.send_membership_canceled(&user.email, Utc::now()).await {
+            tracing::error!(error = %e, user_id = %user.id, "Failed to send membership canceled email");
+        }
 
-            let audit_log = CreateAuditLog::new(AuditAction::MembershipCanceled)
-                .with_actor(user.id, &user.email, &user.role)
-                .with_resource("membership", membership.id)
-                .with_metadata(serde_json::json!({
-                    "source": "stripe_subscription_deleted",
-                    "stripe_subscription_id": stripe_subscription_id,
-                }));
-            if let Err(e) = AuditLogRepository::create(pool, audit_log).await {
-                tracing::error!(error = %e, user_id = %user.id, "Failed to create audit log for subscription deleted");
-            }
+        let audit_log = CreateAuditLog::new(AuditAction::MembershipCanceled)
+            .with_actor(user.id, &user.email, &user.role)
+            .with_resource("user", user.id)
+            .with_metadata(serde_json::json!({
+                "source": "stripe_subscription_deleted",
+                "stripe_subscription_id": stripe_subscription_id,
+            }));
+        if let Err(e) = AuditLogRepository::create(pool, audit_log).await {
+            tracing::error!(error = %e, user_id = %user.id, "Failed to create audit log for subscription deleted");
         }
     }
 
@@ -337,7 +298,6 @@ async fn handle_payment_succeeded(
     event: &serde_json::Value,
     pool: &PgPool,
     email: &EmailService,
-    invoice_service: &InvoiceService,
 ) -> Result<(), AppError> {
     let invoice = &event["data"]["object"];
 
@@ -358,39 +318,6 @@ async fn handle_payment_succeeded(
         .as_i64()
         .unwrap_or(0) as i32;
 
-    let payment_intent_id = invoice["payment_intent"]
-        .as_str()
-        .map(|s| s.to_string());
-
-    let invoice_id = invoice["id"]
-        .as_str()
-        .map(|s| s.to_string());
-
-    // Get membership ID if available
-    let subscription_id = if let Some(stripe_sub_id) = invoice["subscription"].as_str() {
-        MembershipRepository::find_by_stripe_subscription_id(pool, stripe_sub_id)
-            .await?
-            .map(|m| m.id)
-    } else {
-        None
-    };
-
-    // Record the payment
-    PaymentRepository::create(
-        pool,
-        CreatePayment {
-            user_id: user.id,
-            subscription_id,
-            stripe_payment_intent_id: payment_intent_id,
-            stripe_invoice_id: invoice_id,
-            amount,
-            currency: "usd".to_string(),
-            status: PaymentStatus::Succeeded,
-            failure_reason: None,
-        },
-    )
-    .await?;
-
     // Clear any grace period if exists
     let had_grace_period = user.grace_period_start.is_some();
     if had_grace_period {
@@ -398,19 +325,6 @@ async fn handle_payment_succeeded(
         UserRepository::clear_grace_period(&mut *tx, user.id).await?;
         UserRepository::update_membership_status(&mut *tx, user.id, MembershipStatus::Active).await?;
         tx.commit().await?;
-    }
-
-    // Generate invoice for this payment
-    let invoice_description = invoice["lines"]["data"][0]["description"]
-        .as_str()
-        .unwrap_or("Membership Payment")
-        .to_string();
-
-    if let Err(e) = invoice_service
-        .generate_payment_invoice(pool, user.id, &user.email, amount, &invoice_description)
-        .await
-    {
-        tracing::error!(error = %e, user_id = %user.id, "Failed to generate invoice for payment");
     }
 
     tracing::info!(
@@ -472,35 +386,6 @@ async fn handle_payment_failed(
     let amount = invoice["amount_due"]
         .as_i64()
         .unwrap_or(0) as i32;
-
-    let failure_message = invoice["last_finalization_error"]["message"]
-        .as_str()
-        .map(|s| s.to_string());
-
-    // Get membership ID if available
-    let subscription_id = if let Some(stripe_sub_id) = invoice["subscription"].as_str() {
-        MembershipRepository::find_by_stripe_subscription_id(pool, stripe_sub_id)
-            .await?
-            .map(|m| m.id)
-    } else {
-        None
-    };
-
-    // Record the failed payment
-    PaymentRepository::create(
-        pool,
-        CreatePayment {
-            user_id: user.id,
-            subscription_id,
-            stripe_payment_intent_id: invoice["payment_intent"].as_str().map(|s| s.to_string()),
-            stripe_invoice_id: invoice["id"].as_str().map(|s| s.to_string()),
-            amount,
-            currency: "usd".to_string(),
-            status: PaymentStatus::Failed,
-            failure_reason: failure_message,
-        },
-    )
-    .await?;
 
     // Audit log for payment failure
     let audit_log = CreateAuditLog::new(AuditAction::PaymentFailed)

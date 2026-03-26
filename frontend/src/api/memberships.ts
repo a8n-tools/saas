@@ -1,7 +1,7 @@
 import { apiClient } from './client'
 import type {
   Membership,
-  PaymentHistory,
+  StripePaymentResponse,
   CheckoutSessionResponse,
   CheckoutRequest,
   MembershipTier,
@@ -36,6 +36,6 @@ export const membershipApi = {
   getPaymentHistory: (
     page = 1,
     pageSize = 10
-  ): Promise<PaginatedResponse<PaymentHistory>> =>
+  ): Promise<PaginatedResponse<StripePaymentResponse>> =>
     apiClient.get(`/memberships/payments?page=${page}&page_size=${pageSize}`),
 }

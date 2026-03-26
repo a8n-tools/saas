@@ -54,6 +54,19 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             // Stripe config
             .route("/stripe", web::get().to(handlers::get_stripe_config))
             .route("/stripe", web::put().to(handlers::update_stripe_config))
+            // Stripe products
+            .route("/stripe/products", web::get().to(handlers::list_stripe_products))
+            .route("/stripe/products", web::post().to(handlers::create_stripe_product))
+            .route("/stripe/products/{id}", web::put().to(handlers::update_stripe_product))
+            .route("/stripe/products/{id}", web::delete().to(handlers::archive_stripe_product))
+            // Stripe prices
+            .route("/stripe/prices", web::get().to(handlers::list_stripe_prices))
+            .route("/stripe/prices", web::post().to(handlers::create_stripe_price))
+            .route("/stripe/prices/{id}", web::delete().to(handlers::archive_stripe_price))
+            // Stripe webhooks
+            .route("/stripe/webhooks", web::get().to(handlers::list_stripe_webhooks))
+            .route("/stripe/webhooks", web::post().to(handlers::create_stripe_webhook))
+            .route("/stripe/webhooks/{id}", web::delete().to(handlers::delete_stripe_webhook))
             // Notifications
             .route("/notifications", web::get().to(handlers::list_notifications))
             .route("/notifications/{notification_id}/read", web::post().to(handlers::mark_notification_read))

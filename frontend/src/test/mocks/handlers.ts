@@ -80,16 +80,11 @@ export const mockAdminApplication = {
 }
 
 export const mockAdminMembership = {
-  id: 'mem-1',
   user_id: mockUser.id,
   user_email: mockUser.email,
-  stripe_subscription_id: 'sub_123',
+  stripe_customer_id: 'cus_123',
   status: 'active',
   tier: 'personal',
-  amount: 300,
-  current_period_start: '2024-01-01T00:00:00Z',
-  current_period_end: '2026-04-01T00:00:00Z',
-  cancel_at_period_end: false,
   created_at: '2024-01-01T00:00:00Z',
 }
 
@@ -693,10 +688,8 @@ export const handlers = [
     return HttpResponse.json({
       success: true,
       data: {
-        secret_key_masked: '***1234',
-        webhook_secret_masked: '***5678',
-        price_id_personal: 'price_personal_123',
-        price_id_business: 'price_business_456',
+        secret_key_masked: 'sk_live_***1234',
+        webhook_secret_masked: 'whsec_***5678',
         has_secret_key: true,
         has_webhook_secret: true,
         updated_at: '2024-06-01T00:00:00Z',
@@ -709,10 +702,8 @@ export const handlers = [
     return HttpResponse.json({
       success: true,
       data: {
-        secret_key_masked: '***new1',
-        webhook_secret_masked: '***5678',
-        price_id_personal: 'price_personal_123',
-        price_id_business: 'price_business_456',
+        secret_key_masked: 'sk_live_***new1',
+        webhook_secret_masked: 'whsec_***5678',
         has_secret_key: true,
         has_webhook_secret: true,
         updated_at: '2024-06-02T00:00:00Z',

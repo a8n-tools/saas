@@ -1,19 +1,27 @@
 //! Stripe payment service
+//!
+//! All Stripe state is managed through the Stripe API. This service provides
+//! proxy methods for products, prices, subscriptions, invoices, and webhook
+//! endpoints. No local database tables are used for Stripe state.
 
 use crate::errors::AppError;
-use crate::models::stripe::decrypt_secret;
+use crate::models::stripe::{
+    decrypt_secret, StripeInvoiceResponse, StripePriceResponse, StripeProductResponse,
+    StripeSubscriptionItemResponse, StripeSubscriptionResponse, StripeWebhookEndpointResponse,
+};
 use crate::services::encryption::EncryptionKeySet;
 use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
+use std::time::{Duration, Instant};
 use uuid::Uuid;
 
 type HmacSha256 = Hmac<Sha256>;
 
 /// Subscription tier enum
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum MembershipTier {
     Personal,
@@ -48,8 +56,6 @@ impl Default for MembershipTier {
 pub struct StripeConfig {
     pub secret_key: String,
     pub webhook_secret: String,
-    pub personal_price_id: String,
-    pub business_price_id: String,
     pub success_url: String,
     pub cancel_url: String,
 }
@@ -65,10 +71,6 @@ impl StripeConfig {
                 .unwrap_or_else(|_| "sk_test_placeholder".to_string()),
             webhook_secret: std::env::var("STRIPE_WEBHOOK_SECRET")
                 .unwrap_or_else(|_| "whsec_placeholder".to_string()),
-            personal_price_id: std::env::var("STRIPE_PRICE_ID")
-                .unwrap_or_else(|_| "price_personal_placeholder".to_string()),
-            business_price_id: std::env::var("STRIPE_BUSINESS_PRICE_ID")
-                .unwrap_or_else(|_| "price_business_placeholder".to_string()),
             success_url: std::env::var("STRIPE_SUCCESS_URL")
                 .unwrap_or_else(|_| format!("{base}/checkout/success")),
             cancel_url: std::env::var("STRIPE_CANCEL_URL")
@@ -96,33 +98,27 @@ impl StripeConfig {
         Ok(Self {
             secret_key,
             webhook_secret,
-            personal_price_id: db
-                .price_id_personal
-                .clone()
-                .unwrap_or(env_config.personal_price_id),
-            business_price_id: db
-                .price_id_business
-                .clone()
-                .unwrap_or(env_config.business_price_id),
             success_url: env_config.success_url,
             cancel_url: env_config.cancel_url,
         })
     }
+}
 
-    /// Get the price ID for a given tier
-    pub fn price_id_for_tier(&self, tier: MembershipTier) -> &str {
-        match tier {
-            MembershipTier::Personal => &self.personal_price_id,
-            MembershipTier::Business => &self.business_price_id,
-        }
-    }
+/// Cached tier resolution entry
+struct TierCacheEntry {
+    tier: MembershipTier,
+    cached_at: Instant,
 }
 
 /// Inner state that can be swapped when admin updates Stripe config.
 struct StripeServiceInner {
     config: StripeConfig,
     client: Arc<stripe::Client>,
+    /// Cache: price_id -> tier (resolved from product metadata)
+    tier_cache: HashMap<String, TierCacheEntry>,
 }
+
+const TIER_CACHE_TTL: Duration = Duration::from_secs(300); // 5 minutes
 
 /// Stripe service for payment operations.
 ///
@@ -139,6 +135,7 @@ impl StripeService {
             inner: RwLock::new(StripeServiceInner {
                 config,
                 client: Arc::new(client),
+                tier_cache: HashMap::new(),
             }),
         }
     }
@@ -150,6 +147,7 @@ impl StripeService {
         let mut inner = self.inner.write().expect("StripeService lock poisoned");
         inner.config = config;
         inner.client = Arc::new(client);
+        inner.tier_cache.clear();
     }
 
     /// Snapshot current config + client for use in an async operation.
@@ -157,6 +155,674 @@ impl StripeService {
         let inner = self.inner.read().expect("StripeService lock poisoned");
         (inner.config.clone(), inner.client.clone())
     }
+
+    // ─── Products ────────────────────────────────────────────
+
+    /// List all products from Stripe (active and inactive)
+    pub async fn list_products(&self) -> Result<Vec<StripeProductResponse>, AppError> {
+        let (_config, client) = self.snapshot();
+
+        let mut params = stripe::ListProducts::new();
+        params.limit = Some(100);
+
+        let products = stripe::Product::list(&client, &params)
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, "Failed to list Stripe products");
+                AppError::internal("Failed to list products")
+            })?;
+
+        Ok(products
+            .data
+            .into_iter()
+            .map(|p| StripeProductResponse {
+                id: p.id.to_string(),
+                name: p.name.unwrap_or_default(),
+                description: p.description,
+                active: p.active.unwrap_or(false),
+                metadata: p.metadata.unwrap_or_default(),
+                created: p.created.unwrap_or_default(),
+            })
+            .collect())
+    }
+
+    /// Create a product in Stripe
+    pub async fn create_product(
+        &self,
+        name: &str,
+        description: Option<&str>,
+        metadata: HashMap<String, String>,
+    ) -> Result<StripeProductResponse, AppError> {
+        let (_config, client) = self.snapshot();
+
+        let mut params = stripe::CreateProduct::new(name);
+        if let Some(desc) = description {
+            params.description = Some(desc);
+        }
+        params.metadata = Some(metadata);
+
+        let product = stripe::Product::create(&client, params)
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, "Failed to create Stripe product");
+                AppError::internal("Failed to create product")
+            })?;
+
+        tracing::info!(product_id = %product.id, name = %name, "Created Stripe product");
+
+        Ok(StripeProductResponse {
+            id: product.id.to_string(),
+            name: product.name.unwrap_or_default(),
+            description: product.description,
+            active: product.active.unwrap_or(true),
+            metadata: product.metadata.unwrap_or_default(),
+            created: product.created.unwrap_or_default(),
+        })
+    }
+
+    /// Update a product in Stripe
+    pub async fn update_product(
+        &self,
+        product_id: &str,
+        name: Option<&str>,
+        description: Option<&str>,
+        metadata: Option<HashMap<String, String>>,
+        active: Option<bool>,
+    ) -> Result<StripeProductResponse, AppError> {
+        let (_config, client) = self.snapshot();
+
+        let pid: stripe::ProductId = product_id.parse().map_err(|_| {
+            AppError::validation("product_id", "Invalid product ID")
+        })?;
+
+        let mut params = stripe::UpdateProduct::default();
+        if let Some(n) = name {
+            params.name = Some(n);
+        }
+        if let Some(d) = description {
+            params.description = Some(d.to_string());
+        }
+        if let Some(m) = metadata {
+            params.metadata = Some(m);
+        }
+        if let Some(a) = active {
+            params.active = Some(a);
+        }
+
+        let product = stripe::Product::update(&client, &pid, params)
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, product_id = %product_id, "Failed to update Stripe product");
+                AppError::internal("Failed to update product")
+            })?;
+
+        // Clear tier cache since product metadata may have changed
+        self.clear_tier_cache();
+
+        Ok(StripeProductResponse {
+            id: product.id.to_string(),
+            name: product.name.unwrap_or_default(),
+            description: product.description,
+            active: product.active.unwrap_or(true),
+            metadata: product.metadata.unwrap_or_default(),
+            created: product.created.unwrap_or_default(),
+        })
+    }
+
+    /// Archive (deactivate) a product in Stripe
+    pub async fn archive_product(&self, product_id: &str) -> Result<(), AppError> {
+        let (_config, client) = self.snapshot();
+
+        let pid: stripe::ProductId = product_id.parse().map_err(|_| {
+            AppError::validation("product_id", "Invalid product ID")
+        })?;
+
+        let mut params = stripe::UpdateProduct::default();
+        params.active = Some(false);
+
+        stripe::Product::update(&client, &pid, params)
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, product_id = %product_id, "Failed to archive Stripe product");
+                AppError::internal("Failed to archive product")
+            })?;
+
+        self.clear_tier_cache();
+        tracing::info!(product_id = %product_id, "Archived Stripe product");
+        Ok(())
+    }
+
+    // ─── Prices ──────────────────────────────────────────────
+
+    /// List prices from Stripe, optionally filtered by product
+    pub async fn list_prices(
+        &self,
+        product_id: Option<&str>,
+    ) -> Result<Vec<StripePriceResponse>, AppError> {
+        let (_config, client) = self.snapshot();
+
+        let mut params = stripe::ListPrices::new();
+        params.limit = Some(100);
+
+        let parsed_product_id: Option<stripe::ProductId> = product_id
+            .map(|pid| pid.parse().map_err(|_| AppError::validation("product_id", "Invalid product ID")))
+            .transpose()?;
+        if let Some(ref pid) = parsed_product_id {
+            params.product = Some(stripe::IdOrCreate::Id(pid));
+        }
+
+        let prices = stripe::Price::list(&client, &params).await.map_err(|e| {
+            tracing::error!(error = %e, "Failed to list Stripe prices");
+            AppError::internal("Failed to list prices")
+        })?;
+
+        Ok(prices
+            .data
+            .into_iter()
+            .map(|p| {
+                let product_id = match &p.product {
+                    Some(stripe::Expandable::Id(id)) => id.to_string(),
+                    Some(stripe::Expandable::Object(obj)) => obj.id.to_string(),
+                    None => String::new(),
+                };
+                StripePriceResponse {
+                    id: p.id.to_string(),
+                    product_id,
+                    unit_amount: p.unit_amount,
+                    currency: p
+                        .currency
+                        .map(|c| c.to_string())
+                        .unwrap_or_else(|| "usd".to_string()),
+                    recurring_interval: p
+                        .recurring
+                        .as_ref()
+                        .map(|r| format!("{:?}", r.interval).to_lowercase()),
+                    active: p.active.unwrap_or(false),
+                }
+            })
+            .collect())
+    }
+
+    /// Create a price in Stripe
+    pub async fn create_price(
+        &self,
+        product_id: &str,
+        unit_amount: i64,
+        currency: &str,
+        interval: &str,
+    ) -> Result<StripePriceResponse, AppError> {
+        let (_config, client) = self.snapshot();
+
+        let cur: stripe::Currency = currency.parse().unwrap_or(stripe::Currency::USD);
+        let recurring_interval = match interval {
+            "year" => stripe::CreatePriceRecurringInterval::Year,
+            "week" => stripe::CreatePriceRecurringInterval::Week,
+            "day" => stripe::CreatePriceRecurringInterval::Day,
+            _ => stripe::CreatePriceRecurringInterval::Month,
+        };
+
+        let mut params = stripe::CreatePrice::new(cur);
+        params.product = Some(stripe::IdOrCreate::Id(product_id));
+        params.unit_amount = Some(unit_amount);
+        params.recurring = Some(stripe::CreatePriceRecurring {
+            interval: recurring_interval,
+            ..Default::default()
+        });
+
+        let price = stripe::Price::create(&client, params)
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, "Failed to create Stripe price");
+                AppError::internal("Failed to create price")
+            })?;
+
+        tracing::info!(price_id = %price.id, product_id = %product_id, "Created Stripe price");
+
+        let pid = match &price.product {
+            Some(stripe::Expandable::Id(id)) => id.to_string(),
+            Some(stripe::Expandable::Object(obj)) => obj.id.to_string(),
+            None => product_id.to_string(),
+        };
+
+        Ok(StripePriceResponse {
+            id: price.id.to_string(),
+            product_id: pid,
+            unit_amount: price.unit_amount,
+            currency: price
+                .currency
+                .map(|c| c.to_string())
+                .unwrap_or_else(|| currency.to_string()),
+            recurring_interval: Some(interval.to_string()),
+            active: price.active.unwrap_or(true),
+        })
+    }
+
+    /// Archive (deactivate) a price in Stripe
+    pub async fn archive_price(&self, price_id: &str) -> Result<(), AppError> {
+        let (_config, client) = self.snapshot();
+
+        let pid: stripe::PriceId = price_id.parse().map_err(|_| {
+            AppError::validation("price_id", "Invalid price ID")
+        })?;
+
+        let mut params = stripe::UpdatePrice::default();
+        params.active = Some(false);
+
+        stripe::Price::update(&client, &pid, params)
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, price_id = %price_id, "Failed to archive Stripe price");
+                AppError::internal("Failed to archive price")
+            })?;
+
+        self.clear_tier_cache();
+        tracing::info!(price_id = %price_id, "Archived Stripe price");
+        Ok(())
+    }
+
+    // ─── Subscriptions ───────────────────────────────────────
+
+    /// Get the active subscription for a customer from Stripe
+    pub async fn get_customer_subscription(
+        &self,
+        customer_id: &str,
+    ) -> Result<Option<StripeSubscriptionResponse>, AppError> {
+        let (_config, client) = self.snapshot();
+
+        let cid: stripe::CustomerId = customer_id.parse().map_err(|_| {
+            AppError::validation("customer_id", "Invalid customer ID")
+        })?;
+
+        let mut params = stripe::ListSubscriptions::new();
+        params.customer = Some(cid);
+        params.limit = Some(1);
+
+        let subscriptions =
+            stripe::Subscription::list(&client, &params)
+                .await
+                .map_err(|e| {
+                    tracing::error!(error = %e, customer_id = %customer_id, "Failed to list subscriptions");
+                    AppError::internal("Failed to fetch subscription")
+                })?;
+
+        Ok(subscriptions.data.into_iter().next().map(|sub| {
+            let items: Vec<StripeSubscriptionItemResponse> = sub
+                .items
+                .data
+                .iter()
+                .map(|item| {
+                    let price_id = item
+                        .price
+                        .as_ref()
+                        .map(|p| p.id.to_string())
+                        .unwrap_or_default();
+                    let product_id = item
+                        .price
+                        .as_ref()
+                        .and_then(|p| p.product.as_ref())
+                        .map(|prod| match prod {
+                            stripe::Expandable::Id(id) => id.to_string(),
+                            stripe::Expandable::Object(obj) => obj.id.to_string(),
+                        })
+                        .unwrap_or_default();
+                    StripeSubscriptionItemResponse {
+                        price_id,
+                        product_id,
+                        quantity: item.quantity.map(|q| q as u64),
+                    }
+                })
+                .collect();
+
+            StripeSubscriptionResponse {
+                id: sub.id.to_string(),
+                status: format!("{:?}", sub.status).to_lowercase(),
+                current_period_start: sub.current_period_start,
+                current_period_end: sub.current_period_end,
+                cancel_at_period_end: sub.cancel_at_period_end,
+                items,
+            }
+        }))
+    }
+
+    // ─── Invoices ────────────────────────────────────────────
+
+    /// List invoices for a customer from Stripe
+    pub async fn list_customer_invoices(
+        &self,
+        customer_id: &str,
+        limit: Option<u64>,
+    ) -> Result<Vec<StripeInvoiceResponse>, AppError> {
+        let (_config, client) = self.snapshot();
+
+        let cid: stripe::CustomerId = customer_id.parse().map_err(|_| {
+            AppError::validation("customer_id", "Invalid customer ID")
+        })?;
+
+        let mut params = stripe::ListInvoices::new();
+        params.customer = Some(cid);
+        params.limit = Some(limit.unwrap_or(50));
+
+        let invoices = stripe::Invoice::list(&client, &params)
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, customer_id = %customer_id, "Failed to list invoices");
+                AppError::internal("Failed to list invoices")
+            })?;
+
+        Ok(invoices
+            .data
+            .into_iter()
+            .map(|inv| {
+                let customer_id = inv.customer.as_ref().map(|c| match c {
+                    stripe::Expandable::Id(id) => id.to_string(),
+                    stripe::Expandable::Object(obj) => obj.id.to_string(),
+                });
+                StripeInvoiceResponse {
+                    id: inv.id.to_string(),
+                    customer_id,
+                    amount_paid: inv.amount_paid.unwrap_or(0),
+                    currency: inv
+                        .currency
+                        .map(|c| c.to_string())
+                        .unwrap_or_else(|| "usd".to_string()),
+                    status: inv.status.map(|s| format!("{:?}", s).to_lowercase()),
+                    invoice_pdf: inv.invoice_pdf,
+                    hosted_invoice_url: inv.hosted_invoice_url,
+                    created: inv.created.unwrap_or_default(),
+                    description: inv.description,
+                    number: inv.number,
+                }
+            })
+            .collect())
+    }
+
+    /// Get a single invoice from Stripe by ID
+    pub async fn get_invoice(
+        &self,
+        invoice_id: &str,
+    ) -> Result<StripeInvoiceResponse, AppError> {
+        let (_config, client) = self.snapshot();
+
+        let iid: stripe::InvoiceId = invoice_id.parse().map_err(|_| {
+            AppError::validation("invoice_id", "Invalid invoice ID")
+        })?;
+
+        let inv = stripe::Invoice::retrieve(&client, &iid, &[])
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, invoice_id = %invoice_id, "Failed to retrieve invoice");
+                AppError::not_found("Invoice")
+            })?;
+
+        let customer_id = inv.customer.as_ref().map(|c| match c {
+            stripe::Expandable::Id(id) => id.to_string(),
+            stripe::Expandable::Object(obj) => obj.id.to_string(),
+        });
+
+        Ok(StripeInvoiceResponse {
+            id: inv.id.to_string(),
+            customer_id,
+            amount_paid: inv.amount_paid.unwrap_or(0),
+            currency: inv
+                .currency
+                .map(|c| c.to_string())
+                .unwrap_or_else(|| "usd".to_string()),
+            status: inv.status.map(|s| format!("{:?}", s).to_lowercase()),
+            invoice_pdf: inv.invoice_pdf,
+            hosted_invoice_url: inv.hosted_invoice_url,
+            created: inv.created.unwrap_or_default(),
+            description: inv.description,
+            number: inv.number,
+        })
+    }
+
+    // ─── Webhook Endpoints ───────────────────────────────────
+
+    /// List all webhook endpoints from Stripe
+    pub async fn list_webhook_endpoints(
+        &self,
+    ) -> Result<Vec<StripeWebhookEndpointResponse>, AppError> {
+        let (config, _client) = self.snapshot();
+
+        // Use raw reqwest — async-stripe may not expose WebhookEndpoint in current features
+        let url = "https://api.stripe.com/v1/webhook_endpoints?limit=100";
+        let resp = reqwest::Client::new()
+            .get(url)
+            .bearer_auth(&config.secret_key)
+            .send()
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, "Failed to list webhook endpoints");
+                AppError::internal("Failed to list webhook endpoints")
+            })?;
+
+        let body: serde_json::Value = resp.json().await.map_err(|e| {
+            tracing::error!(error = %e, "Failed to parse webhook endpoints response");
+            AppError::internal("Failed to list webhook endpoints")
+        })?;
+
+        let endpoints = body["data"]
+            .as_array()
+            .unwrap_or(&vec![])
+            .iter()
+            .map(|ep| StripeWebhookEndpointResponse {
+                id: ep["id"].as_str().unwrap_or_default().to_string(),
+                url: ep["url"].as_str().unwrap_or_default().to_string(),
+                enabled_events: ep["enabled_events"]
+                    .as_array()
+                    .unwrap_or(&vec![])
+                    .iter()
+                    .filter_map(|e| e.as_str().map(String::from))
+                    .collect(),
+                status: ep["status"].as_str().unwrap_or("enabled").to_string(),
+                secret: None,
+            })
+            .collect();
+
+        Ok(endpoints)
+    }
+
+    /// Create a webhook endpoint in Stripe, returns the endpoint with secret
+    pub async fn create_webhook_endpoint(
+        &self,
+        url: &str,
+        events: Vec<String>,
+    ) -> Result<StripeWebhookEndpointResponse, AppError> {
+        let (config, _client) = self.snapshot();
+
+        let mut form_params: Vec<(String, String)> = Vec::new();
+        form_params.push(("url".to_string(), url.to_string()));
+        for (i, event) in events.iter().enumerate() {
+            form_params.push((format!("enabled_events[{}]", i), event.clone()));
+        }
+
+        let resp = reqwest::Client::new()
+            .post("https://api.stripe.com/v1/webhook_endpoints")
+            .bearer_auth(&config.secret_key)
+            .form(&form_params)
+            .send()
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, "Failed to create webhook endpoint");
+                AppError::internal("Failed to create webhook endpoint")
+            })?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            tracing::error!(status = %status, body = %body, "Stripe webhook endpoint creation failed");
+            return Err(AppError::internal("Failed to create webhook endpoint"));
+        }
+
+        let body: serde_json::Value = resp.json().await.map_err(|e| {
+            tracing::error!(error = %e, "Failed to parse webhook endpoint response");
+            AppError::internal("Failed to create webhook endpoint")
+        })?;
+
+        let endpoint = StripeWebhookEndpointResponse {
+            id: body["id"].as_str().unwrap_or_default().to_string(),
+            url: body["url"].as_str().unwrap_or_default().to_string(),
+            enabled_events: body["enabled_events"]
+                .as_array()
+                .unwrap_or(&vec![])
+                .iter()
+                .filter_map(|e| e.as_str().map(String::from))
+                .collect(),
+            status: body["status"].as_str().unwrap_or("enabled").to_string(),
+            secret: body["secret"].as_str().map(String::from),
+        };
+
+        tracing::info!(
+            webhook_id = %endpoint.id,
+            url = %endpoint.url,
+            "Created Stripe webhook endpoint"
+        );
+
+        Ok(endpoint)
+    }
+
+    /// Delete a webhook endpoint in Stripe
+    pub async fn delete_webhook_endpoint(&self, endpoint_id: &str) -> Result<(), AppError> {
+        let (config, _client) = self.snapshot();
+
+        let url = format!(
+            "https://api.stripe.com/v1/webhook_endpoints/{}",
+            endpoint_id
+        );
+
+        let resp = reqwest::Client::new()
+            .delete(&url)
+            .bearer_auth(&config.secret_key)
+            .send()
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, endpoint_id = %endpoint_id, "Failed to delete webhook endpoint");
+                AppError::internal("Failed to delete webhook endpoint")
+            })?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            tracing::error!(status = %status, body = %body, "Stripe webhook endpoint deletion failed");
+            return Err(AppError::internal("Failed to delete webhook endpoint"));
+        }
+
+        tracing::info!(endpoint_id = %endpoint_id, "Deleted Stripe webhook endpoint");
+        Ok(())
+    }
+
+    // ─── Tier Resolution ─────────────────────────────────────
+
+    /// Resolve membership tier from a Stripe price ID by looking at the product's metadata.
+    /// Uses an in-memory cache with TTL to avoid hitting Stripe on every call.
+    pub async fn resolve_tier_from_price(
+        &self,
+        price_id: &str,
+    ) -> Result<MembershipTier, AppError> {
+        // Check cache first
+        {
+            let inner = self.inner.read().expect("StripeService lock poisoned");
+            if let Some(entry) = inner.tier_cache.get(price_id) {
+                if entry.cached_at.elapsed() < TIER_CACHE_TTL {
+                    return Ok(entry.tier);
+                }
+            }
+        }
+
+        // Fetch price from Stripe to get product
+        let (_config, client) = self.snapshot();
+
+        let pid: stripe::PriceId = price_id.parse().map_err(|_| {
+            AppError::validation("price_id", "Invalid price ID")
+        })?;
+
+        let price = stripe::Price::retrieve(&client, &pid, &["product"])
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, price_id = %price_id, "Failed to retrieve price for tier resolution");
+                AppError::internal("Failed to resolve tier")
+            })?;
+
+        // Get product metadata
+        let tier = match &price.product {
+            Some(stripe::Expandable::Object(product)) => {
+                let metadata = product.metadata.as_ref();
+                match metadata.and_then(|m| m.get("tier")).map(|s| s.as_str()) {
+                    Some("business") => MembershipTier::Business,
+                    _ => MembershipTier::Personal,
+                }
+            }
+            Some(stripe::Expandable::Id(product_id)) => {
+                // Product not expanded, fetch it
+                let product = stripe::Product::retrieve(&client, product_id, &[])
+                    .await
+                    .map_err(|e| {
+                        tracing::error!(error = %e, "Failed to retrieve product for tier resolution");
+                        AppError::internal("Failed to resolve tier")
+                    })?;
+                let metadata = product.metadata.as_ref();
+                match metadata.and_then(|m| m.get("tier")).map(|s| s.as_str()) {
+                    Some("business") => MembershipTier::Business,
+                    _ => MembershipTier::Personal,
+                }
+            }
+            None => MembershipTier::Personal,
+        };
+
+        // Update cache
+        {
+            let mut inner = self.inner.write().expect("StripeService lock poisoned");
+            inner.tier_cache.insert(
+                price_id.to_string(),
+                TierCacheEntry {
+                    tier,
+                    cached_at: Instant::now(),
+                },
+            );
+        }
+
+        Ok(tier)
+    }
+
+    /// Get active prices grouped by tier. Returns a map of tier -> list of prices.
+    pub async fn get_prices_by_tier(
+        &self,
+    ) -> Result<HashMap<MembershipTier, Vec<StripePriceResponse>>, AppError> {
+        let products = self.list_products().await?;
+        let prices = self.list_prices(None).await?;
+
+        // Build product_id -> tier mapping from product metadata
+        let mut product_tier_map: HashMap<String, MembershipTier> = HashMap::new();
+        for product in &products {
+            if product.active {
+                let tier = match product.metadata.get("tier").map(|s| s.as_str()) {
+                    Some("business") => MembershipTier::Business,
+                    Some("personal") => MembershipTier::Personal,
+                    _ => continue, // Skip products without tier metadata
+                };
+                product_tier_map.insert(product.id.clone(), tier);
+            }
+        }
+
+        let mut result: HashMap<MembershipTier, Vec<StripePriceResponse>> = HashMap::new();
+        for price in prices {
+            if price.active {
+                if let Some(tier) = product_tier_map.get(&price.product_id) {
+                    result.entry(*tier).or_default().push(price);
+                }
+            }
+        }
+
+        Ok(result)
+    }
+
+    /// Clear the tier cache (called after product/price changes)
+    fn clear_tier_cache(&self) {
+        let mut inner = self.inner.write().expect("StripeService lock poisoned");
+        inner.tier_cache.clear();
+    }
+
+    // ─── Existing Methods (Checkout, Customer, etc.) ─────────
 
     /// Create a Stripe customer linked to a platform user
     pub async fn create_customer(
@@ -191,7 +857,8 @@ impl StripeService {
         Ok(customer.id.to_string())
     }
 
-    /// Create a checkout session for a specific membership tier
+    /// Create a checkout session for a specific membership tier.
+    /// Discovers the price from Stripe product metadata.
     pub async fn create_checkout_session(
         &self,
         customer_id: &str,
@@ -199,7 +866,20 @@ impl StripeService {
         tier: MembershipTier,
     ) -> Result<(String, String), AppError> {
         let (config, client) = self.snapshot();
-        let price_id = config.price_id_for_tier(tier);
+
+        // Discover price for this tier from Stripe
+        let prices_by_tier = self.get_prices_by_tier().await?;
+        let prices = prices_by_tier.get(&tier).ok_or_else(|| {
+            tracing::error!(tier = %tier.as_str(), "No active price found for tier");
+            AppError::validation("tier", "No active price configured for this tier")
+        })?;
+
+        let price_id = &prices
+            .first()
+            .ok_or_else(|| {
+                AppError::validation("tier", "No active price configured for this tier")
+            })?
+            .id;
 
         let mut metadata = HashMap::new();
         metadata.insert("user_id".to_string(), user_id.to_string());
@@ -249,16 +929,6 @@ impl StripeService {
         Ok((session_id, checkout_url))
     }
 
-    /// Get the tier from a price ID
-    pub fn tier_from_price_id(&self, price_id: &str) -> MembershipTier {
-        let (config, _) = self.snapshot();
-        if price_id == config.business_price_id {
-            MembershipTier::Business
-        } else {
-            MembershipTier::Personal
-        }
-    }
-
     /// Cancel a subscription (at period end or immediately)
     pub async fn cancel_subscription(
         &self,
@@ -274,7 +944,6 @@ impl StripeService {
         let (_config, client) = self.snapshot();
 
         if at_period_end {
-            // Cancel at end of current billing period
             let params = stripe::UpdateSubscription {
                 cancel_at_period_end: Some(true),
                 ..Default::default()
@@ -286,7 +955,6 @@ impl StripeService {
                     AppError::internal("Failed to cancel subscription")
                 })?;
         } else {
-            // Cancel immediately
             stripe::Subscription::cancel(
                 &client,
                 &sub_id,
@@ -367,7 +1035,6 @@ impl StripeService {
         payload: &[u8],
         signature: &str,
     ) -> Result<(), AppError> {
-        // Parse the Stripe-Signature header: t=timestamp,v1=sig1,v1=sig2,...
         let mut timestamp = None;
         let mut signatures = Vec::new();
 
@@ -388,7 +1055,6 @@ impl StripeService {
             return Err(AppError::validation("signature", "No v1 signature found"));
         }
 
-        // Verify timestamp is within tolerance (5 minutes)
         let ts: i64 = timestamp.parse()
             .map_err(|_| AppError::validation("signature", "Invalid timestamp"))?;
         let now = chrono::Utc::now().timestamp();
@@ -401,19 +1067,16 @@ impl StripeService {
             return Err(AppError::validation("signature", "Webhook timestamp too old"));
         }
 
-        // Build signed payload: "{timestamp}.{payload}"
         let payload_str = std::str::from_utf8(payload)
             .map_err(|_| AppError::validation("body", "Invalid UTF-8 in webhook payload"))?;
         let signed_payload = format!("{}.{}", timestamp, payload_str);
 
-        // Compute expected HMAC-SHA256 signature
         let (config, _) = self.snapshot();
         let mut mac = HmacSha256::new_from_slice(config.webhook_secret.as_bytes())
             .map_err(|_| AppError::internal("Invalid webhook secret key"))?;
         mac.update(signed_payload.as_bytes());
         let expected = hex::encode(mac.finalize().into_bytes());
 
-        // Compare against all v1 signatures (Stripe may include multiple)
         if signatures.iter().any(|sig| sig == &expected) {
             Ok(())
         } else {
@@ -423,10 +1086,6 @@ impl StripeService {
     }
 
     /// Create a Stripe Customer and a SetupIntent for $0 card authorization at signup.
-    ///
-    /// Returns `(customer_id, client_secret)`. The caller passes the `client_secret`
-    /// to the frontend so Stripe.js can confirm the setup, and passes the `customer_id`
-    /// back to the register endpoint so it can be stored on the newly-created user.
     pub async fn create_setup_intent(&self, email: &str) -> Result<(String, String), AppError> {
         let (_config, client) = self.snapshot();
 
@@ -469,18 +1128,6 @@ impl StripeService {
 
         Ok((customer.id.to_string(), client_secret))
     }
-
-    /// Get the configured personal price ID (for backwards compatibility)
-    pub fn price_id(&self) -> String {
-        let (config, _) = self.snapshot();
-        config.personal_price_id
-    }
-
-    /// Get the configured business price ID
-    pub fn business_price_id(&self) -> String {
-        let (config, _) = self.snapshot();
-        config.business_price_id
-    }
 }
 
 #[cfg(test)]
@@ -491,8 +1138,6 @@ mod tests {
         StripeConfig {
             secret_key: "sk_test_xxx".to_string(),
             webhook_secret: "whsec_test_secret".to_string(),
-            personal_price_id: "price_personal".to_string(),
-            business_price_id: "price_business".to_string(),
             success_url: "http://localhost/checkout/success".to_string(),
             cancel_url: "http://localhost/cancel".to_string(),
         }
@@ -521,42 +1166,6 @@ mod tests {
         assert_eq!(MembershipTier::default(), MembershipTier::Personal);
     }
 
-    // -- StripeConfig --
-
-    #[test]
-    fn price_id_for_tier() {
-        let config = test_config();
-        assert_eq!(config.price_id_for_tier(MembershipTier::Personal), "price_personal");
-        assert_eq!(config.price_id_for_tier(MembershipTier::Business), "price_business");
-    }
-
-    // -- StripeService --
-
-    #[test]
-    fn tier_from_price_id_personal() {
-        let service = test_service();
-        assert_eq!(service.tier_from_price_id("price_personal"), MembershipTier::Personal);
-    }
-
-    #[test]
-    fn tier_from_price_id_business() {
-        let service = test_service();
-        assert_eq!(service.tier_from_price_id("price_business"), MembershipTier::Business);
-    }
-
-    #[test]
-    fn tier_from_unknown_price_defaults_to_personal() {
-        let service = test_service();
-        assert_eq!(service.tier_from_price_id("price_unknown"), MembershipTier::Personal);
-    }
-
-    #[test]
-    fn price_id_accessors() {
-        let service = test_service();
-        assert_eq!(service.price_id(), "price_personal");
-        assert_eq!(service.business_price_id(), "price_business");
-    }
-
     // -- Webhook signature verification --
 
     #[test]
@@ -565,7 +1174,6 @@ mod tests {
         let payload = b"{\"type\":\"test\"}";
         let timestamp = chrono::Utc::now().timestamp().to_string();
 
-        // Compute the expected signature
         let signed_payload = format!("{}.{}", timestamp, std::str::from_utf8(payload).unwrap());
         let mut mac = HmacSha256::new_from_slice(b"whsec_test_secret").unwrap();
         mac.update(signed_payload.as_bytes());
@@ -607,7 +1215,6 @@ mod tests {
     fn verify_webhook_signature_old_timestamp() {
         let service = test_service();
         let payload = b"{\"type\":\"test\"}";
-        // Use a timestamp from 10 minutes ago (beyond 5-minute tolerance)
         let old_ts = (chrono::Utc::now().timestamp() - 600).to_string();
 
         let signed_payload = format!("{}.{}", old_ts, std::str::from_utf8(payload).unwrap());
