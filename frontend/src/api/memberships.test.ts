@@ -42,8 +42,7 @@ describe('membershipApi', () => {
     it('returns payment history', async () => {
       const history = await membershipApi.getPaymentHistory()
 
-      expect(history.items).toEqual([])
-      expect(history.total).toBe(0)
+      expect(history).toEqual([])
     })
   })
 })

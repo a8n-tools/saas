@@ -385,7 +385,7 @@ export const handlers = [
   http.get(`${API_BASE}/memberships/payments`, () => {
     return HttpResponse.json({
       success: true,
-      data: { items: [], total: 0, page: 1, total_pages: 1 },
+      data: [],
     })
   }),
 
