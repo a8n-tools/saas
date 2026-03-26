@@ -688,8 +688,8 @@ export const handlers = [
     return HttpResponse.json({
       success: true,
       data: {
-        secret_key_masked: '***1234',
-        webhook_secret_masked: '***5678',
+        secret_key_masked: 'sk_live_***1234',
+        webhook_secret_masked: 'whsec_***5678',
         has_secret_key: true,
         has_webhook_secret: true,
         updated_at: '2024-06-01T00:00:00Z',
@@ -702,8 +702,8 @@ export const handlers = [
     return HttpResponse.json({
       success: true,
       data: {
-        secret_key_masked: '***new1',
-        webhook_secret_masked: '***5678',
+        secret_key_masked: 'sk_live_***new1',
+        webhook_secret_masked: 'whsec_***5678',
         has_secret_key: true,
         has_webhook_secret: true,
         updated_at: '2024-06-02T00:00:00Z',

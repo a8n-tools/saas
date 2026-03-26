@@ -102,12 +102,21 @@ pub fn decrypt_secret(
         .map_err(|e| AppError::internal(format!("Invalid UTF-8 in decrypted secret: {e}")))
 }
 
-/// Returns `***<last 4 chars>` so admins can identify which key is stored.
+/// Returns a masked version of a secret showing the prefix (e.g. `sk_live_`)
+/// and the last 4 characters, so admins can identify the key type and mode.
 pub fn mask_secret(s: &str) -> String {
     if s.len() <= 4 {
         return "***".to_string();
     }
-    format!("***{}", &s[s.len() - 4..])
+    // For Stripe-style keys like "sk_live_abc...xyz" or "whsec_abc...xyz",
+    // show prefix through the last underscore plus *** plus last 4 chars.
+    let prefix_end = s.rfind('_').map(|i| i + 1).unwrap_or(0);
+    let suffix = &s[s.len() - 4..];
+    if prefix_end > 0 && prefix_end + 4 < s.len() {
+        format!("{}***{}", &s[..prefix_end], suffix)
+    } else {
+        format!("***{}", suffix)
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -215,8 +224,18 @@ mod tests {
     }
 
     #[test]
-    fn mask_secret_long_string() {
-        assert_eq!(mask_secret("sk_live_abcdefgh1234"), "***1234");
+    fn mask_secret_stripe_live_key() {
+        assert_eq!(mask_secret("sk_live_abcdefgh1234"), "sk_live_***1234");
+    }
+
+    #[test]
+    fn mask_secret_stripe_test_key() {
+        assert_eq!(mask_secret("sk_test_abcdefgh5678"), "sk_test_***5678");
+    }
+
+    #[test]
+    fn mask_secret_webhook_secret() {
+        assert_eq!(mask_secret("whsec_abcdefgh1234"), "whsec_***1234");
     }
 
     #[test]
@@ -227,8 +246,8 @@ mod tests {
     }
 
     #[test]
-    fn mask_secret_five_chars() {
-        assert_eq!(mask_secret("abcde"), "***bcde");
+    fn mask_secret_no_prefix() {
+        assert_eq!(mask_secret("abcdefghij"), "***ghij");
     }
 
     #[test]
@@ -249,8 +268,8 @@ mod tests {
         };
 
         let resp = StripeConfigResponse::from_db(&config, &ks).unwrap();
-        assert_eq!(resp.secret_key_masked.as_deref(), Some("***1234"));
-        assert_eq!(resp.webhook_secret_masked.as_deref(), Some("***5678"));
+        assert_eq!(resp.secret_key_masked.as_deref(), Some("sk_live_***1234"));
+        assert_eq!(resp.webhook_secret_masked.as_deref(), Some("whsec_***5678"));
         assert!(resp.has_secret_key);
         assert!(resp.has_webhook_secret);
         assert_eq!(resp.source, "database");
@@ -347,7 +366,7 @@ mod tests {
             previous: Some([0xAA; 32]),
         };
         let resp = StripeConfigResponse::from_db(&config, &ks_v2).unwrap();
-        assert_eq!(resp.secret_key_masked.as_deref(), Some("***ated"));
+        assert_eq!(resp.secret_key_masked.as_deref(), Some("sk_live_***ated"));
         assert!(resp.has_secret_key);
     }
 

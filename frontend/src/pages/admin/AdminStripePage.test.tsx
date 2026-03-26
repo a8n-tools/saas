@@ -30,10 +30,10 @@ describe('AdminStripePage', () => {
     render(<AdminStripePage />)
 
     await waitFor(() => {
-      expect(screen.getByText('***1234')).toBeInTheDocument()
+      expect(screen.getByText('sk_live_***1234')).toBeInTheDocument()
     })
     // Webhook secret is displayed in a read-only input
-    expect(screen.getByDisplayValue('***5678')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('whsec_***5678')).toBeInTheDocument()
   })
 
   it('renders API keys tab with form fields', async () => {
