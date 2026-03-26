@@ -21,7 +21,7 @@ use a8n_api::{
     models::{CreateUser, UserRole},
     repositories::{FeedbackRepository, RateLimitRepository, UserRepository},
     routes,
-    services::{AuthService, EmailService, EncryptionKeySet, InvoiceService, JwtConfig, JwtService, PasswordService, StripeConfig, StripeService, TotpService, WebhookService},
+    services::{AuthService, EmailService, EncryptionKeySet, JwtConfig, JwtService, PasswordService, StripeConfig, StripeService, TotpService, WebhookService},
 };
 
 #[tokio::main]
@@ -181,12 +181,6 @@ async fn main() -> anyhow::Result<()> {
 
     info!("Webhook service initialized");
 
-    // Initialize Invoice service
-    let invoice_storage_path = std::env::var("INVOICE_STORAGE_PATH")
-        .unwrap_or_else(|_| "./storage/invoices".to_string());
-    let invoice_service = Arc::new(InvoiceService::new(invoice_storage_path));
-
-    info!("Invoice service initialized");
 
     // Initialize auto-ban service
     let auto_ban_service = Arc::new(AutoBanService::new(config.auto_ban.clone(), pool.clone()));
@@ -344,7 +338,6 @@ async fn main() -> anyhow::Result<()> {
             .app_data(web::Data::new(stripe_service.clone()))
             .app_data(web::Data::new(totp_service.clone()))
             .app_data(web::Data::new(webhook_service.clone()))
-            .app_data(web::Data::new(invoice_service.clone()))
             .app_data(web::Data::new(stripe_key_set.clone()))
             .app_data(web::Data::new(config_data.clone()))
             // Configure routes

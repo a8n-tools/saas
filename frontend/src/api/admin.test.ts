@@ -60,7 +60,7 @@ describe('adminApi', () => {
       const result = await adminApi.getMemberships()
       expect(result.items).toHaveLength(1)
       expect(result.items[0]).toMatchObject({
-        id: mockAdminMembership.id,
+        user_id: mockAdminMembership.user_id,
         status: 'active',
       })
     })

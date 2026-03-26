@@ -19,7 +19,7 @@ use crate::models::{
 };
 use crate::models::stripe::encrypt_secret;
 use crate::repositories::{
-    ApplicationRepository, AuditLogRepository, InviteRepository, MembershipRepository,
+    ApplicationRepository, AuditLogRepository, InviteRepository,
     NotificationRepository, StripeConfigRepository, TokenRepository, TotpRepository, UserRepository,
 };
 use crate::responses::{get_request_id, created, paginated, success, success_no_data};
@@ -290,11 +290,6 @@ pub async fn revoke_membership(
     UserRepository::update_membership_status(pool.get_ref(), body.user_id, MembershipStatus::Canceled)
         .await?;
 
-    // Also update the subscription record so the admin memberships list reflects the change
-    if let Some(membership) = MembershipRepository::find_by_user_id(&pool, body.user_id).await? {
-        MembershipRepository::update_status(pool.get_ref(), membership.id, "canceled").await?;
-    }
-
     // Clear any grace period
     UserRepository::clear_grace_period(pool.get_ref(), body.user_id).await?;
 
@@ -315,7 +310,7 @@ pub struct ListMembershipsQuery {
 }
 
 /// GET /v1/admin/memberships
-/// List all memberships with pagination
+/// List all memberships with pagination (sourced from users table)
 pub async fn list_memberships(
     req: HttpRequest,
     _admin: AdminUser,
@@ -326,10 +321,61 @@ pub async fn list_memberships(
 
     let page = query.page.unwrap_or(1).max(1);
     let per_page = query.per_page.unwrap_or(20).min(100);
+    let offset = (page - 1) * per_page;
 
-    let (memberships, total) =
-        MembershipRepository::list_paginated_admin(&pool, page, per_page, query.status.as_deref())
-            .await?;
+    let (memberships, total) = if let Some(ref status) = query.status {
+        let rows = sqlx::query_as::<_, crate::models::AdminMembershipResponse>(
+            r#"
+            SELECT id AS user_id, email AS user_email, stripe_customer_id,
+                   subscription_status AS status,
+                   COALESCE(membership_tier, 'personal') AS tier,
+                   created_at
+            FROM users
+            WHERE subscription_status = $3 AND deleted_at IS NULL
+            ORDER BY created_at DESC
+            LIMIT $1 OFFSET $2
+            "#,
+        )
+        .bind(per_page)
+        .bind(offset)
+        .bind(status)
+        .fetch_all(pool.get_ref())
+        .await?;
+
+        let total: (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM users WHERE subscription_status = $1 AND deleted_at IS NULL",
+        )
+        .bind(status)
+        .fetch_one(pool.get_ref())
+        .await?;
+
+        (rows, total.0)
+    } else {
+        let rows = sqlx::query_as::<_, crate::models::AdminMembershipResponse>(
+            r#"
+            SELECT id AS user_id, email AS user_email, stripe_customer_id,
+                   subscription_status AS status,
+                   COALESCE(membership_tier, 'personal') AS tier,
+                   created_at
+            FROM users
+            WHERE subscription_status != 'none' AND deleted_at IS NULL
+            ORDER BY created_at DESC
+            LIMIT $1 OFFSET $2
+            "#,
+        )
+        .bind(per_page)
+        .bind(offset)
+        .fetch_all(pool.get_ref())
+        .await?;
+
+        let total: (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM users WHERE subscription_status != 'none' AND deleted_at IS NULL",
+        )
+        .fetch_one(pool.get_ref())
+        .await?;
+
+        (rows, total.0)
+    };
 
     Ok(paginated(memberships, total, page, per_page, request_id))
 }
@@ -1051,8 +1097,6 @@ pub async fn get_system_health(
 pub struct UpdateStripeConfigRequest {
     pub secret_key: Option<String>,
     pub webhook_secret: Option<String>,
-    pub price_id_personal: Option<String>,
-    pub price_id_business: Option<String>,
 }
 
 /// GET /v1/admin/stripe
@@ -1070,8 +1114,6 @@ pub async fn get_stripe_config(
 
     let response = if db.secret_key.is_some()
         || db.webhook_secret.is_some()
-        || db.price_id_personal.is_some()
-        || db.price_id_business.is_some()
     {
         match StripeConfigResponse::from_db(&db, &stripe_key_set) {
             Ok(resp) => resp,
@@ -1107,8 +1149,6 @@ pub async fn update_stripe_config(
     // Treat empty strings the same as None — user left the field blank
     let secret_key_plain = body.secret_key.as_deref().filter(|s| !s.is_empty());
     let webhook_secret_plain = body.webhook_secret.as_deref().filter(|s| !s.is_empty());
-    let price_id_personal = body.price_id_personal.as_deref().filter(|s| !s.is_empty());
-    let price_id_business = body.price_id_business.as_deref().filter(|s| !s.is_empty());
 
     // Encrypt secrets before storing
     let (secret_key_enc, secret_key_nonce, key_version) = match secret_key_plain {
@@ -1132,8 +1172,6 @@ pub async fn update_stripe_config(
         secret_key_nonce,
         webhook_secret_enc,
         webhook_secret_nonce,
-        price_id_personal,
-        price_id_business,
         admin.0.sub,
         key_version,
     )
@@ -1156,8 +1194,6 @@ pub async fn update_stripe_config(
             "fields_updated": {
                 "secret_key": secret_key_plain.is_some(),
                 "webhook_secret": webhook_secret_plain.is_some(),
-                "price_id_personal": price_id_personal.is_some(),
-                "price_id_business": price_id_business.is_some(),
             }
         }));
     AuditLogRepository::create(&pool, audit_log).await?;

@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
+use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::errors::AppError;
@@ -13,11 +14,72 @@ pub struct StripeConfig {
     pub secret_key_nonce: Option<Vec<u8>>,
     pub webhook_secret: Option<Vec<u8>>,
     pub webhook_secret_nonce: Option<Vec<u8>>,
-    pub price_id_personal: Option<String>,
-    pub price_id_business: Option<String>,
     pub key_version: i16,
     pub updated_at: DateTime<Utc>,
     pub updated_by: Option<Uuid>,
+}
+
+// --- Stripe API response structs ---
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StripeProductResponse {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub active: bool,
+    pub metadata: HashMap<String, String>,
+    pub created: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StripePriceResponse {
+    pub id: String,
+    pub product_id: String,
+    pub unit_amount: Option<i64>,
+    pub currency: String,
+    pub recurring_interval: Option<String>,
+    pub active: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StripeSubscriptionItemResponse {
+    pub price_id: String,
+    pub product_id: String,
+    pub quantity: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StripeSubscriptionResponse {
+    pub id: String,
+    pub status: String,
+    pub current_period_start: i64,
+    pub current_period_end: i64,
+    pub cancel_at_period_end: bool,
+    pub items: Vec<StripeSubscriptionItemResponse>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StripeInvoiceResponse {
+    pub id: String,
+    pub customer_id: Option<String>,
+    pub amount_paid: i64,
+    pub currency: String,
+    pub status: Option<String>,
+    pub invoice_pdf: Option<String>,
+    pub hosted_invoice_url: Option<String>,
+    pub created: i64,
+    pub description: Option<String>,
+    pub number: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StripeWebhookEndpointResponse {
+    pub id: String,
+    pub url: String,
+    pub enabled_events: Vec<String>,
+    pub status: String,
+    /// Only present on creation
+    pub secret: Option<String>,
 }
 
 /// Encrypt plaintext with the current key. Returns (ciphertext, nonce, key_version).
@@ -52,8 +114,6 @@ pub fn mask_secret(s: &str) -> String {
 pub struct StripeConfigResponse {
     pub secret_key_masked: Option<String>,
     pub webhook_secret_masked: Option<String>,
-    pub price_id_personal: Option<String>,
-    pub price_id_business: Option<String>,
     pub has_secret_key: bool,
     pub has_webhook_secret: bool,
     pub updated_at: Option<DateTime<Utc>>,
@@ -79,8 +139,6 @@ impl StripeConfigResponse {
         Ok(Self {
             secret_key_masked: secret_key_plain.as_deref().map(mask_secret),
             webhook_secret_masked: webhook_secret_plain.as_deref().map(mask_secret),
-            price_id_personal: config.price_id_personal.clone(),
-            price_id_business: config.price_id_business.clone(),
             has_secret_key: config.secret_key.is_some(),
             has_webhook_secret: config.webhook_secret.is_some(),
             updated_at: Some(config.updated_at),
@@ -94,14 +152,10 @@ impl StripeConfigResponse {
         use std::env;
         let secret_key = env::var("STRIPE_SECRET_KEY").ok().filter(|s| !s.is_empty());
         let webhook_secret = env::var("STRIPE_WEBHOOK_SECRET").ok().filter(|s| !s.is_empty());
-        let price_id_personal = env::var("STRIPE_PRICE_ID").ok().filter(|s| !s.is_empty());
-        let price_id_business = env::var("STRIPE_BUSINESS_PRICE_ID").ok().filter(|s| !s.is_empty());
 
         Self {
             secret_key_masked: secret_key.as_deref().map(mask_secret),
             webhook_secret_masked: webhook_secret.as_deref().map(mask_secret),
-            price_id_personal,
-            price_id_business,
             has_secret_key: secret_key.is_some(),
             has_webhook_secret: webhook_secret.is_some(),
             updated_at: None,
@@ -189,8 +243,6 @@ mod tests {
             secret_key_nonce: Some(sk_nonce),
             webhook_secret: Some(wh_ct),
             webhook_secret_nonce: Some(wh_nonce),
-            price_id_personal: Some("price_123".to_string()),
-            price_id_business: None,
             key_version: 1,
             updated_at: Utc::now(),
             updated_by: None,
@@ -199,8 +251,6 @@ mod tests {
         let resp = StripeConfigResponse::from_db(&config, &ks).unwrap();
         assert_eq!(resp.secret_key_masked.as_deref(), Some("***1234"));
         assert_eq!(resp.webhook_secret_masked.as_deref(), Some("***5678"));
-        assert_eq!(resp.price_id_personal.as_deref(), Some("price_123"));
-        assert!(resp.price_id_business.is_none());
         assert!(resp.has_secret_key);
         assert!(resp.has_webhook_secret);
         assert_eq!(resp.source, "database");
@@ -215,8 +265,6 @@ mod tests {
             secret_key_nonce: None,
             webhook_secret: None,
             webhook_secret_nonce: None,
-            price_id_personal: None,
-            price_id_business: None,
             key_version: 1,
             updated_at: Utc::now(),
             updated_by: None,
@@ -287,8 +335,6 @@ mod tests {
             secret_key_nonce: Some(sk_nonce),
             webhook_secret: None,
             webhook_secret_nonce: None,
-            price_id_personal: None,
-            price_id_business: None,
             key_version: 1,
             updated_at: Utc::now(),
             updated_by: None,
@@ -317,8 +363,6 @@ mod tests {
             secret_key_nonce: Some(sk_nonce),
             webhook_secret: None,
             webhook_secret_nonce: None,
-            price_id_personal: None,
-            price_id_business: None,
             key_version: 1,
             updated_at: Utc::now(),
             updated_by: None,

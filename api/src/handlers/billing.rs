@@ -6,14 +6,13 @@ use actix_web::{web, HttpRequest, HttpResponse};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use std::sync::Arc;
-use uuid::Uuid;
 
 use crate::errors::AppError;
 use crate::middleware::AuthenticatedUser;
-use crate::models::{InvoiceResponse, RateLimitConfig};
-use crate::repositories::{InvoiceRepository, RateLimitRepository};
+use crate::models::RateLimitConfig;
+use crate::repositories::{RateLimitRepository, UserRepository};
 use crate::responses::{get_request_id, success};
-use crate::services::{InvoiceService, StripeService};
+use crate::services::StripeService;
 use crate::middleware::extract_client_ip;
 
 
@@ -68,47 +67,64 @@ pub async fn create_setup_intent(
 }
 
 /// GET /v1/billing/invoices
-/// List all invoices for the authenticated user
+/// List all invoices for the authenticated user from Stripe
 pub async fn list_invoices(
     req: HttpRequest,
     user: AuthenticatedUser,
     pool: web::Data<PgPool>,
+    stripe: web::Data<Arc<StripeService>>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
 
-    let invoices = InvoiceRepository::find_by_user_id(&pool, user.0.sub).await?;
-    let response: Vec<InvoiceResponse> = invoices.into_iter().map(InvoiceResponse::from).collect();
+    let db_user = UserRepository::find_by_id(&pool, user.0.sub)
+        .await?
+        .ok_or(AppError::not_found("User"))?;
 
-    Ok(success(response, request_id))
+    let invoices = if let Some(ref customer_id) = db_user.stripe_customer_id {
+        stripe.list_customer_invoices(customer_id, None).await?
+    } else {
+        Vec::new()
+    };
+
+    Ok(success(invoices, request_id))
 }
 
 /// GET /v1/billing/invoices/{invoice_id}/download
-/// Download a PDF invoice for the authenticated user
+/// Redirect to the Stripe-hosted PDF for an invoice
 pub async fn download_invoice(
+    _req: HttpRequest,
     user: AuthenticatedUser,
     pool: web::Data<PgPool>,
-    invoice_service: web::Data<Arc<InvoiceService>>,
-    path: web::Path<Uuid>,
+    stripe: web::Data<Arc<StripeService>>,
+    path: web::Path<String>,
 ) -> Result<HttpResponse, AppError> {
     let invoice_id = path.into_inner();
 
-    let invoice = InvoiceRepository::find_by_id_and_user(&pool, invoice_id, user.0.sub)
+    let db_user = UserRepository::find_by_id(&pool, user.0.sub)
         .await?
-        .ok_or_else(|| AppError::not_found("Invoice"))?;
+        .ok_or(AppError::not_found("User"))?;
 
-    let pdf_path = invoice
-        .pdf_storage_path
-        .ok_or_else(|| AppError::not_found("Invoice PDF"))?;
+    let customer_id = db_user
+        .stripe_customer_id
+        .ok_or(AppError::not_found("No billing account found"))?;
 
-    let bytes = invoice_service.read_invoice_pdf(&pdf_path).await?;
+    let invoice = stripe.get_invoice(&invoice_id).await?;
 
-    let filename = format!("{}.pdf", invoice.invoice_number);
+    // Verify the invoice belongs to this user's Stripe customer
+    let invoice_customer = invoice
+        .customer_id
+        .as_deref()
+        .ok_or(AppError::not_found("Invoice"))?;
 
-    Ok(HttpResponse::Ok()
-        .content_type("application/pdf")
-        .insert_header((
-            "Content-Disposition",
-            format!("attachment; filename=\"{filename}\""),
-        ))
-        .body(bytes))
+    if invoice_customer != customer_id {
+        return Err(AppError::not_found("Invoice"));
+    }
+
+    let pdf_url = invoice
+        .invoice_pdf
+        .ok_or(AppError::not_found("Invoice PDF"))?;
+
+    Ok(HttpResponse::Found()
+        .insert_header(("Location", pdf_url))
+        .finish())
 }

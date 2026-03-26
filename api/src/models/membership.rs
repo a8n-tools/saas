@@ -50,49 +50,6 @@ impl From<String> for StripeSubscriptionStatus {
     }
 }
 
-/// Membership database model (maps to subscriptions table)
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
-pub struct Membership {
-    pub id: Uuid,
-    pub user_id: Uuid,
-    pub stripe_subscription_id: String,
-    pub stripe_price_id: String,
-    pub status: String,
-    pub current_period_start: DateTime<Utc>,
-    pub current_period_end: DateTime<Utc>,
-    pub cancel_at_period_end: bool,
-    pub canceled_at: Option<DateTime<Utc>>,
-    pub amount: i32,
-    pub currency: String,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-}
-
-impl Membership {
-    /// Get status as enum
-    pub fn status_enum(&self) -> StripeSubscriptionStatus {
-        StripeSubscriptionStatus::from(self.status.clone())
-    }
-
-    /// Check if membership is active
-    pub fn is_active(&self) -> bool {
-        self.status == "active"
-    }
-}
-
-/// Data for creating a new membership
-#[derive(Debug, Clone)]
-pub struct CreateMembership {
-    pub user_id: Uuid,
-    pub stripe_subscription_id: String,
-    pub stripe_price_id: String,
-    pub status: String,
-    pub current_period_start: DateTime<Utc>,
-    pub current_period_end: DateTime<Utc>,
-    pub amount: i32,
-    pub currency: String,
-}
-
 /// Membership response for API
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MembershipResponse {
@@ -104,19 +61,14 @@ pub struct MembershipResponse {
     pub grace_period_end: Option<DateTime<Utc>>,
 }
 
-/// Admin membership response (includes user email and tier from users table)
+/// Admin membership response (sourced from users table, Stripe data fetched on demand)
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct AdminMembershipResponse {
-    pub id: Uuid,
     pub user_id: Uuid,
     pub user_email: String,
-    pub stripe_subscription_id: String,
+    pub stripe_customer_id: Option<String>,
     pub status: String,
     pub tier: String,
-    pub amount: i32,
-    pub current_period_start: DateTime<Utc>,
-    pub current_period_end: DateTime<Utc>,
-    pub cancel_at_period_end: bool,
     pub created_at: DateTime<Utc>,
 }
 
@@ -153,64 +105,9 @@ impl From<String> for PaymentStatus {
     }
 }
 
-/// Payment history database model
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
-pub struct PaymentHistory {
-    pub id: Uuid,
-    pub user_id: Uuid,
-    pub subscription_id: Option<Uuid>,
-    pub stripe_payment_intent_id: Option<String>,
-    pub stripe_invoice_id: Option<String>,
-    pub amount: i32,
-    pub currency: String,
-    pub status: String,
-    pub failure_reason: Option<String>,
-    pub refunded_at: Option<DateTime<Utc>>,
-    pub refund_amount: Option<i32>,
-    pub created_at: DateTime<Utc>,
-}
-
-/// Data for creating a new payment record
-#[derive(Debug, Clone)]
-pub struct CreatePayment {
-    pub user_id: Uuid,
-    pub subscription_id: Option<Uuid>,
-    pub stripe_payment_intent_id: Option<String>,
-    pub stripe_invoice_id: Option<String>,
-    pub amount: i32,
-    pub currency: String,
-    pub status: PaymentStatus,
-    pub failure_reason: Option<String>,
-}
-
-/// Payment response for API
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PaymentResponse {
-    pub id: Uuid,
-    pub amount: i32,
-    pub currency: String,
-    pub status: String,
-    pub created_at: DateTime<Utc>,
-}
-
-impl From<PaymentHistory> for PaymentResponse {
-    fn from(payment: PaymentHistory) -> Self {
-        Self {
-            id: payment.id,
-            amount: payment.amount,
-            currency: payment.currency,
-            status: payment.status,
-            created_at: payment.created_at,
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::Utc;
-
-    // -- StripeSubscriptionStatus --
 
     #[test]
     fn stripe_status_as_str() {
@@ -230,8 +127,6 @@ mod tests {
         assert_eq!(StripeSubscriptionStatus::from("unknown".to_string()), StripeSubscriptionStatus::Incomplete);
     }
 
-    // -- PaymentStatus --
-
     #[test]
     fn payment_status_as_str() {
         assert_eq!(PaymentStatus::Succeeded.as_str(), "succeeded");
@@ -245,73 +140,5 @@ mod tests {
         assert_eq!(PaymentStatus::from("succeeded".to_string()), PaymentStatus::Succeeded);
         assert_eq!(PaymentStatus::from("failed".to_string()), PaymentStatus::Failed);
         assert_eq!(PaymentStatus::from("unknown".to_string()), PaymentStatus::Pending);
-    }
-
-    // -- Membership --
-
-    #[test]
-    fn membership_is_active() {
-        let m = Membership {
-            id: Uuid::new_v4(),
-            user_id: Uuid::new_v4(),
-            stripe_subscription_id: "sub_123".to_string(),
-            stripe_price_id: "price_123".to_string(),
-            status: "active".to_string(),
-            current_period_start: Utc::now(),
-            current_period_end: Utc::now(),
-            cancel_at_period_end: false,
-            canceled_at: None,
-            amount: 300,
-            currency: "usd".to_string(),
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
-        };
-        assert!(m.is_active());
-        assert_eq!(m.status_enum(), StripeSubscriptionStatus::Active);
-    }
-
-    #[test]
-    fn membership_not_active() {
-        let m = Membership {
-            id: Uuid::new_v4(),
-            user_id: Uuid::new_v4(),
-            stripe_subscription_id: "sub_123".to_string(),
-            stripe_price_id: "price_123".to_string(),
-            status: "canceled".to_string(),
-            current_period_start: Utc::now(),
-            current_period_end: Utc::now(),
-            cancel_at_period_end: false,
-            canceled_at: Some(Utc::now()),
-            amount: 300,
-            currency: "usd".to_string(),
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
-        };
-        assert!(!m.is_active());
-    }
-
-    // -- PaymentResponse from PaymentHistory --
-
-    #[test]
-    fn payment_response_from_history() {
-        let payment = PaymentHistory {
-            id: Uuid::new_v4(),
-            user_id: Uuid::new_v4(),
-            subscription_id: None,
-            stripe_payment_intent_id: None,
-            stripe_invoice_id: None,
-            amount: 300,
-            currency: "usd".to_string(),
-            status: "succeeded".to_string(),
-            failure_reason: None,
-            refunded_at: None,
-            refund_amount: None,
-            created_at: Utc::now(),
-        };
-        let id = payment.id;
-        let response = PaymentResponse::from(payment);
-        assert_eq!(response.id, id);
-        assert_eq!(response.amount, 300);
-        assert_eq!(response.currency, "usd");
     }
 }

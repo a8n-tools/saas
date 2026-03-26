@@ -1,27 +1,7 @@
 import { apiClient } from './client'
-import { config } from '@/config'
-import type { Invoice } from '@/types'
-
-const API_BASE_URL = config.apiUrl + '/v1'
+import type { StripeInvoice } from '@/types'
 
 export const billingApi = {
-  listInvoices: (): Promise<Invoice[]> =>
+  listInvoices: (): Promise<StripeInvoice[]> =>
     apiClient.get('/billing/invoices'),
-
-  downloadInvoice: async (invoiceId: string, invoiceNumber: string): Promise<void> => {
-    const response = await fetch(
-      `${API_BASE_URL}/billing/invoices/${invoiceId}/download`,
-      { credentials: 'include' }
-    )
-    if (!response.ok) throw new Error('Failed to download invoice')
-    const blob = await response.blob()
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${invoiceNumber}.pdf`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-  },
 }

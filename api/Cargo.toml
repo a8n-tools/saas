@@ -32,7 +32,6 @@ tera = "1"
 lazy_static = "1.4"
 url = "2"
 urlencoding = "2"
-printpdf = "0.5"
 
 [dependencies.tokio]
 version = "1"

@@ -208,3 +208,42 @@ export interface AdminStats {
   monthly_revenue: number
   past_due_count: number
 }
+
+// Stripe types
+export interface StripeProduct {
+  id: string
+  name: string
+  description: string | null
+  active: boolean
+  metadata: Record<string, string>
+  created: number
+}
+
+export interface StripePrice {
+  id: string
+  product_id: string
+  unit_amount: number | null
+  currency: string
+  recurring_interval: string | null
+  active: boolean
+}
+
+export interface StripeWebhookEndpoint {
+  id: string
+  url: string
+  enabled_events: string[]
+  status: string
+  secret?: string
+}
+
+export interface StripeInvoice {
+  id: string
+  amount_paid: number
+  currency: string
+  status: string | null
+  invoice_pdf: string | null
+  hosted_invoice_url: string | null
+  created: number
+  description: string | null
+  number: string | null
+}

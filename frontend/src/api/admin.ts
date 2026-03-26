@@ -6,6 +6,9 @@ import type {
   AdminNotification,
   PaginatedResponse,
   FeedbackStatus,
+  StripeProduct,
+  StripePrice,
+  StripeWebhookEndpoint,
 } from '@/types'
 
 // Actual stats response from API
@@ -24,16 +27,11 @@ export interface AdminUser extends User {
 }
 
 export interface AdminMembership {
-  id: string
   user_id: string
   user_email: string
-  stripe_subscription_id: string | null
+  stripe_customer_id: string | null
   status: string
   tier: string
-  amount: number
-  current_period_start: string | null
-  current_period_end: string | null
-  cancel_at_period_end: boolean
   created_at: string
 }
 
@@ -189,8 +187,6 @@ export interface RespondToFeedbackRequest {
 export interface StripeConfigResponse {
   secret_key_masked: string | null
   webhook_secret_masked: string | null
-  price_id_personal: string | null
-  price_id_business: string | null
   has_secret_key: boolean
   has_webhook_secret: boolean
   updated_at: string | null
@@ -200,8 +196,6 @@ export interface StripeConfigResponse {
 export interface UpdateStripeConfigRequest {
   secret_key?: string
   webhook_secret?: string
-  price_id_personal?: string
-  price_id_business?: string
 }
 
 export interface GrantMembershipRequest {
@@ -368,6 +362,39 @@ export const adminApi = {
 
   updateStripeConfig: (data: UpdateStripeConfigRequest): Promise<StripeConfigResponse> =>
     apiClient.put('/admin/stripe', data),
+
+  // Stripe Products
+  listStripeProducts: (): Promise<StripeProduct[]> =>
+    apiClient.get('/admin/stripe/products'),
+
+  createStripeProduct: (data: { name: string; description?: string; metadata?: Record<string, string> }): Promise<StripeProduct> =>
+    apiClient.post('/admin/stripe/products', data),
+
+  updateStripeProduct: (id: string, data: { name?: string; description?: string; metadata?: Record<string, string>; active?: boolean }): Promise<StripeProduct> =>
+    apiClient.put(`/admin/stripe/products/${id}`, data),
+
+  archiveStripeProduct: (id: string): Promise<void> =>
+    apiClient.delete(`/admin/stripe/products/${id}`),
+
+  // Stripe Prices
+  listStripePrices: (productId?: string): Promise<StripePrice[]> =>
+    apiClient.get(`/admin/stripe/prices${productId ? `?product_id=${productId}` : ''}`),
+
+  createStripePrice: (data: { product_id: string; unit_amount: number; currency: string; interval: string }): Promise<StripePrice> =>
+    apiClient.post('/admin/stripe/prices', data),
+
+  archiveStripePrice: (id: string): Promise<void> =>
+    apiClient.delete(`/admin/stripe/prices/${id}`),
+
+  // Stripe Webhooks
+  listStripeWebhooks: (): Promise<StripeWebhookEndpoint[]> =>
+    apiClient.get('/admin/stripe/webhooks'),
+
+  createStripeWebhook: (data: { url: string; enabled_events: string[] }): Promise<StripeWebhookEndpoint> =>
+    apiClient.post('/admin/stripe/webhooks', data),
+
+  deleteStripeWebhook: (id: string): Promise<void> =>
+    apiClient.delete(`/admin/stripe/webhooks/${id}`),
 
   // Health
   getHealth: async (): Promise<{ status: string; database: string; uptime_seconds: number }> => {
