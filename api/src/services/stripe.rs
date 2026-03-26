@@ -168,8 +168,14 @@ impl StripeService {
         let products = stripe::Product::list(&client, &params)
             .await
             .map_err(|e| {
-                tracing::error!(error = %e, "Failed to list Stripe products");
-                AppError::internal("Failed to list products")
+                tracing::error!(
+                    error = %e,
+                    hint = "A product may have a legacy default_price with a non-standard ID \
+                            (expected format: price_...). Remove the default_price from the \
+                            product in the Stripe dashboard.",
+                    "Failed to list Stripe products"
+                );
+                AppError::internal("Failed to load products from Stripe")
             })?;
 
         Ok(products
@@ -312,8 +318,14 @@ impl StripeService {
         }
 
         let prices = stripe::Price::list(&client, &params).await.map_err(|e| {
-            tracing::error!(error = %e, "Failed to list Stripe prices");
-            AppError::internal("Failed to list prices")
+            tracing::error!(
+                error = %e,
+                hint = "A price or its parent product may have a legacy ID that doesn't use \
+                        the price_... format. Remove or archive the legacy price in the \
+                        Stripe dashboard.",
+                "Failed to list Stripe prices"
+            );
+            AppError::internal("Failed to load prices from Stripe")
         })?;
 
         Ok(prices
