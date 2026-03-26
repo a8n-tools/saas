@@ -175,7 +175,7 @@ impl StripeService {
                             product in the Stripe dashboard.",
                     "Failed to list Stripe products"
                 );
-                AppError::internal("Failed to list products: a product has a legacy default_price with an invalid ID. Remove the default_price from the product in the Stripe dashboard.")
+                AppError::internal("Failed to load products from Stripe")
             })?;
 
         Ok(products
@@ -325,7 +325,7 @@ impl StripeService {
                         Stripe dashboard.",
                 "Failed to list Stripe prices"
             );
-            AppError::internal("Failed to list prices: a price has a legacy ID format. Remove or archive the legacy price in the Stripe dashboard.")
+            AppError::internal("Failed to load prices from Stripe")
         })?;
 
         Ok(prices

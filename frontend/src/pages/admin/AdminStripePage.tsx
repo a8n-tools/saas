@@ -221,7 +221,7 @@ function ProductsTab() {
   const [editForm, setEditForm] = useState({ name: '', description: '', tier: '', active: true })
   const [archivingId, setArchivingId] = useState<string | null>(null)
 
-  const { data: products, isLoading } = useQuery({
+  const { data: products, isLoading, isError } = useQuery({
     queryKey: ['admin', 'stripe', 'products'],
     queryFn: adminApi.listStripeProducts,
   })
@@ -290,6 +290,18 @@ function ProductsTab() {
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
+    )
+  }
+
+  if (isError) {
+    return (
+      <Alert variant="destructive">
+        <AlertCircle className="h-4 w-4" />
+        <AlertTitle>Error</AlertTitle>
+        <AlertDescription>
+          Failed to load products from Stripe. Check that your API key is valid and that all products have standard Stripe IDs.
+        </AlertDescription>
+      </Alert>
     )
   }
 
@@ -554,7 +566,7 @@ function PricesTab() {
   })
   const [archivingId, setArchivingId] = useState<string | null>(null)
 
-  const { data: prices, isLoading } = useQuery({
+  const { data: prices, isLoading, isError } = useQuery({
     queryKey: ['admin', 'stripe', 'prices'],
     queryFn: () => adminApi.listStripePrices(),
   })
@@ -603,6 +615,18 @@ function PricesTab() {
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
+    )
+  }
+
+  if (isError) {
+    return (
+      <Alert variant="destructive">
+        <AlertCircle className="h-4 w-4" />
+        <AlertTitle>Error</AlertTitle>
+        <AlertDescription>
+          Failed to load prices from Stripe. Check that your API key is valid and that all prices have standard Stripe IDs.
+        </AlertDescription>
+      </Alert>
     )
   }
 
