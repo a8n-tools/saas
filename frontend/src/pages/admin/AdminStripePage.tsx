@@ -115,16 +115,21 @@ function ApiKeysTab() {
             API Keys
           </CardTitle>
           <CardDescription>
-            Your Stripe secret key authenticates API requests to Stripe. Generate one in the{' '}
+            Your Stripe secret key authenticates API requests to Stripe. Generate a{' '}
             <a
               href="https://dashboard.stripe.com/apikeys"
               target="_blank"
               rel="noopener noreferrer"
               className="underline hover:text-foreground"
             >
-              Stripe Dashboard &rarr; Developers &rarr; API keys
+              restricted key
             </a>
-            . Keys follow the format <code className="font-mono text-xs">sk_(live|test)_...</code> &mdash;
+            {' '}with the following permissions: <strong>Products</strong>,{' '}
+            <strong>Prices</strong>, <strong>Customers</strong>,{' '}
+            <strong>Subscriptions</strong>, <strong>Checkout Sessions</strong>,{' '}
+            and <strong>Webhook Endpoints</strong> set to <em>Write</em>;{' '}
+            <strong>Invoices</strong> set to <em>Read</em>.
+            Keys follow the format <code className="font-mono text-xs">rk_(live|test)_...</code> &mdash;
             the prefix indicates whether this is a live or test key.
             Leave the field blank to keep the existing value.
           </CardDescription>

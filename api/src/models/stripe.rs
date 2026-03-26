@@ -234,6 +234,12 @@ mod tests {
     }
 
     #[test]
+    fn mask_secret_restricted_key() {
+        assert_eq!(mask_secret("rk_live_abcdefgh1234"), "rk_live_***1234");
+        assert_eq!(mask_secret("rk_test_abcdefgh5678"), "rk_test_***5678");
+    }
+
+    #[test]
     fn mask_secret_webhook_secret() {
         assert_eq!(mask_secret("whsec_abcdefgh1234"), "whsec_***1234");
     }
