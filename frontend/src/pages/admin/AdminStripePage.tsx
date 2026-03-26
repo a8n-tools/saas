@@ -44,7 +44,7 @@ import {
 } from 'lucide-react'
 import { adminApi } from '@/api/admin'
 import type { UpdateStripeConfigRequest } from '@/api/admin'
-import type { ApiError, StripeProduct, StripePrice } from '@/types'
+import type { ApiError, StripeProduct } from '@/types'
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 

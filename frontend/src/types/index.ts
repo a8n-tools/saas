@@ -247,3 +247,12 @@ export interface StripeInvoice {
   description: string | null
   number: string | null
 }
+
+export interface StripePaymentResponse {
+  id: string
+  amount: number
+  currency: string
+  status: string | null
+  created: number
+  invoice_pdf: string | null
+}
