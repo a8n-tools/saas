@@ -115,7 +115,18 @@ function ApiKeysTab() {
             API Keys
           </CardTitle>
           <CardDescription>
-            Leave the field blank to keep the existing value. Only fields you type into will be updated.
+            Your Stripe secret key authenticates API requests to Stripe. Generate one in the{' '}
+            <a
+              href="https://dashboard.stripe.com/apikeys"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline hover:text-foreground"
+            >
+              Stripe Dashboard &rarr; Developers &rarr; API keys
+            </a>
+            . Keys follow the format <code className="font-mono text-xs">sk_(live|test)_...</code> &mdash;
+            the prefix indicates whether this is a live or test key.
+            Leave the field blank to keep the existing value.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
@@ -149,7 +160,7 @@ function ApiKeysTab() {
               className="bg-muted"
             />
             <p className="text-xs text-muted-foreground">
-              Auto-populated when you create a webhook endpoint in the Webhooks tab.
+              The signing secret used to verify incoming Stripe webhooks. Auto-populated when you create a webhook endpoint in the Webhooks tab.
             </p>
           </div>
 
