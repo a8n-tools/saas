@@ -40,14 +40,8 @@ describe('membershipStore', () => {
   })
 
   describe('createCheckout', () => {
-    it('returns checkout URL for personal tier', async () => {
-      const url = await useMembershipStore.getState().createCheckout('personal')
-
-      expect(url).toBe('https://checkout.stripe.com/test')
-    })
-
-    it('returns checkout URL for business tier', async () => {
-      const url = await useMembershipStore.getState().createCheckout('business')
+    it('returns checkout URL', async () => {
+      const url = await useMembershipStore.getState().createCheckout()
 
       expect(url).toBe('https://checkout.stripe.com/test')
     })

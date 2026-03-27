@@ -8,13 +8,12 @@ export const mockUser = {
   email_verified: true,
   two_factor_enabled: false,
   membership_status: 'active' as const,
-  membership_tier: 'personal' as const,
   price_locked: false,
   locked_price_id: null,
   locked_price_amount: null,
   created_at: '2024-01-01T00:00:00Z',
   updated_at: '2024-01-01T00:00:00Z',
-  subscription_tier: 'trial_1m' as const,
+  subscription_tier: 'standard' as const,
   trial_ends_at: null,
   lifetime_member: false,
 }
@@ -84,7 +83,7 @@ export const mockAdminMembership = {
   user_email: mockUser.email,
   stripe_customer_id: 'cus_123',
   status: 'active',
-  tier: 'personal',
+  subscription_tier: 'standard',
   created_at: '2024-01-01T00:00:00Z',
 }
 
@@ -197,7 +196,6 @@ export const handlers = [
       id: '123e4567-e89b-12d3-a456-426614174002',
       email: body.email,
       membership_status: 'none' as const,
-      membership_tier: null,
     }
 
     return HttpResponse.json({
@@ -317,7 +315,7 @@ export const handlers = [
         success: true,
         data: {
           message: 'Email verified successfully.',
-          subscription_tier: 'trial_1m',
+          subscription_tier: 'standard',
         },
       })
     }
@@ -399,7 +397,7 @@ export const handlers = [
   http.post(`${API_BASE}/memberships/subscribe`, () => {
     return HttpResponse.json({
       success: true,
-      data: { message: 'Subscribed', membership_status: 'active', membership_tier: 'personal' },
+      data: { message: 'Subscribed', membership_status: 'active' },
     })
   }),
 

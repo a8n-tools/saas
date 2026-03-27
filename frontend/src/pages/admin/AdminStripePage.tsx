@@ -217,8 +217,8 @@ function ProductsTab() {
   const queryClient = useQueryClient()
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [editingProduct, setEditingProduct] = useState<StripeProduct | null>(null)
-  const [createForm, setCreateForm] = useState({ name: '', description: '', tier: 'personal' })
-  const [editForm, setEditForm] = useState({ name: '', description: '', tier: '', active: true })
+  const [createForm, setCreateForm] = useState({ name: '', description: '' })
+  const [editForm, setEditForm] = useState({ name: '', description: '', active: true })
   const [archivingId, setArchivingId] = useState<string | null>(null)
 
   const { data: products, isLoading, isError } = useQuery({
@@ -231,7 +231,7 @@ function ProductsTab() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'stripe', 'products'] })
       setShowCreateDialog(false)
-      setCreateForm({ name: '', description: '', tier: 'personal' })
+      setCreateForm({ name: '', description: '' })
     },
   })
 
@@ -257,7 +257,7 @@ function ProductsTab() {
     createMutation.mutate({
       name: createForm.name,
       description: createForm.description || undefined,
-      metadata: { tier: createForm.tier },
+      metadata: {},
     })
   }
 
@@ -269,7 +269,6 @@ function ProductsTab() {
       data: {
         name: editForm.name,
         description: editForm.description || undefined,
-        metadata: { tier: editForm.tier },
         active: editForm.active,
       },
     })
@@ -279,7 +278,6 @@ function ProductsTab() {
     setEditForm({
       name: product.name,
       description: product.description ?? '',
-      tier: product.metadata?.tier ?? '',
       active: product.active,
     })
     setEditingProduct(product)
@@ -324,7 +322,6 @@ function ProductsTab() {
               <thead>
                 <tr className="border-b bg-muted/50">
                   <th className="px-4 py-3 text-left font-medium">Name</th>
-                  <th className="px-4 py-3 text-left font-medium">Tier</th>
                   <th className="px-4 py-3 text-left font-medium">Status</th>
                   <th className="px-4 py-3 text-left font-medium">Created</th>
                   <th className="px-4 py-3 text-right font-medium">Actions</th>
@@ -333,7 +330,7 @@ function ProductsTab() {
               <tbody>
                 {products?.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
+                    <td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">
                       No products found. Create one to get started.
                     </td>
                   </tr>
@@ -347,15 +344,6 @@ function ProductsTab() {
                           <p className="text-xs text-muted-foreground">{product.description}</p>
                         )}
                       </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      {product.metadata?.tier ? (
-                        <Badge variant="secondary" className="capitalize">
-                          {product.metadata.tier}
-                        </Badge>
-                      ) : (
-                        <span className="text-muted-foreground">--</span>
-                      )}
                     </td>
                     <td className="px-4 py-3">
                       <Badge variant={product.active ? 'default' : 'secondary'}>
@@ -401,7 +389,7 @@ function ProductsTab() {
       <Dialog open={showCreateDialog} onOpenChange={(open) => {
         if (!open) {
           setShowCreateDialog(false)
-          setCreateForm({ name: '', description: '', tier: 'personal' })
+          setCreateForm({ name: '', description: '' })
           createMutation.reset()
         }
       }}>
@@ -430,18 +418,6 @@ function ProductsTab() {
                   onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
                   placeholder="Optional description"
                 />
-              </div>
-              <div className="grid gap-2">
-                <Label>Tier</Label>
-                <Select value={createForm.tier} onValueChange={(v) => setCreateForm({ ...createForm, tier: v })}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="personal">Personal</SelectItem>
-                    <SelectItem value="business">Business</SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
             </div>
             {createMutation.isError && (
@@ -490,18 +466,6 @@ function ProductsTab() {
                   value={editForm.description}
                   onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
                 />
-              </div>
-              <div className="grid gap-2">
-                <Label>Tier</Label>
-                <Select value={editForm.tier} onValueChange={(v) => setEditForm({ ...editForm, tier: v })}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="personal">Personal</SelectItem>
-                    <SelectItem value="business">Business</SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
             </div>
             {updateMutation.isError && (
@@ -596,7 +560,7 @@ function PricesTab() {
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     const amountCents = Math.round(parseFloat(createForm.amount) * 100)
-    if (isNaN(amountCents) || amountCents <= 0) return
+    if (isNaN(amountCents) || amountCents < 0) return
     createMutation.mutate({
       product_id: createForm.product_id,
       unit_amount: amountCents,

@@ -21,7 +21,7 @@ describe('MembershipPage', () => {
   it('renders page heading', () => {
     render(<MembershipPage />)
 
-    expect(screen.getByText('Membership')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Membership' })).toBeInTheDocument()
     expect(screen.getByText('Manage your membership and billing.')).toBeInTheDocument()
   })
 
@@ -47,7 +47,7 @@ describe('MembershipPage', () => {
     expect(screen.getByText('Cancel Now')).toBeInTheDocument()
   })
 
-  it('shows no membership state with tier selection', async () => {
+  it('shows no membership state with subscribe button', async () => {
     useMembershipStore.setState({ membership: null, isLoading: false })
 
     render(<MembershipPage />)
@@ -56,18 +56,7 @@ describe('MembershipPage', () => {
       expect(screen.getByText('No Active Membership')).toBeInTheDocument()
     })
 
-    expect(screen.getByText('Subscribe to Personal')).toBeInTheDocument()
-  })
-
-  it('shows tier selector buttons', async () => {
-    useMembershipStore.setState({ membership: null, isLoading: false })
-
-    render(<MembershipPage />)
-
-    await waitFor(() => {
-      expect(screen.getByText('Personal')).toBeInTheDocument()
-      expect(screen.getByText('Business')).toBeInTheDocument()
-    })
+    expect(screen.getByText('Subscribe')).toBeInTheDocument()
   })
 
   it('shows payment history section', () => {

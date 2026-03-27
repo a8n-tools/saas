@@ -1,7 +1,6 @@
 import { useEffect } from 'react'
 import { useMembershipStore } from '@/stores/membershipStore'
 import { useAuthStore } from '@/stores/authStore'
-import type { MembershipTier } from '@/types'
 
 export function useMembership() {
   const store = useMembershipStore()
@@ -13,8 +12,8 @@ export function useMembership() {
     }
   }, [isAuthenticated])
 
-  const startCheckout = async (tier: MembershipTier = 'personal') => {
-    const checkoutUrl = await store.createCheckout(tier)
+  const startCheckout = async (priceId?: string) => {
+    const checkoutUrl = await store.createCheckout(priceId)
     // Validate URL before redirecting to Stripe checkout
     if (!checkoutUrl.startsWith('https://checkout.stripe.com/')) {
       throw new Error('Invalid checkout URL')
@@ -22,8 +21,8 @@ export function useMembership() {
     window.location.href = checkoutUrl
   }
 
-  const subscribe = async (tier: MembershipTier = 'personal') => {
-    await store.subscribe(tier)
+  const subscribe = async () => {
+    await store.subscribe()
   }
 
   return {
@@ -39,6 +38,6 @@ export function useMembership() {
     isPastDue: store.membership?.status === 'past_due',
     isCanceled: store.membership?.status === 'canceled',
     willCancel: store.membership?.cancel_at_period_end ?? false,
-    tier: user?.membership_tier ?? null,
+    tier: user?.subscription_tier ?? null,
   }
 }

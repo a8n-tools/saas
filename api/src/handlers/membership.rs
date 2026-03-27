@@ -14,13 +14,13 @@ use crate::middleware::{AuthCookies, AuthenticatedUser};
 use crate::models::MembershipResponse;
 use crate::repositories::UserRepository;
 use crate::responses::{get_request_id, success};
-use crate::services::{JwtService, MembershipTier, StripeService};
+use crate::services::{JwtService, StripeService};
 
 /// Request for creating a checkout session
 #[derive(Debug, Deserialize)]
 pub struct CheckoutRequest {
-    #[serde(default)]
-    pub tier: MembershipTier,
+    /// The Stripe price ID to checkout with
+    pub price_id: Option<String>,
 }
 
 /// Response for checkout session creation
@@ -100,7 +100,6 @@ pub async fn create_checkout(
     body: web::Json<CheckoutRequest>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
-    let tier = body.tier;
 
     // Lock the user row to prevent concurrent Stripe customer creation
     let mut tx = pool.begin().await?;
@@ -117,6 +116,19 @@ pub async fn create_checkout(
         return Err(AppError::conflict("You already have an active membership"));
     }
 
+    // Use the provided price_id, or discover the first active price from Stripe
+    let price_id = match &body.price_id {
+        Some(id) => id.clone(),
+        None => {
+            let prices = stripe.list_prices(None).await?;
+            prices
+                .into_iter()
+                .find(|p| p.active)
+                .map(|p| p.id)
+                .ok_or_else(|| AppError::validation("price_id", "No active price configured"))?
+        }
+    };
+
     // Get or create Stripe customer
     let customer_id = match db_user.stripe_customer_id {
         Some(id) => id,
@@ -128,14 +140,14 @@ pub async fn create_checkout(
     };
     tx.commit().await?;
 
-    // Create checkout session for the selected tier
+    // Create checkout session with the price
     let (session_id, checkout_url) = stripe
-        .create_checkout_session(&customer_id, db_user.id, tier)
+        .create_checkout_session(&customer_id, db_user.id, &price_id)
         .await?;
 
     tracing::info!(
         user_id = %db_user.id,
-        tier = %tier.as_str(),
+        price_id = %price_id,
         "Created checkout session for user"
     );
 
@@ -368,43 +380,33 @@ pub struct PaginationQuery {
     pub per_page: Option<i32>,
 }
 
-/// Request for subscribing to a membership tier
-#[derive(Debug, Deserialize)]
-pub struct SubscribeRequest {
-    pub tier: MembershipTier,
-}
-
 /// Response for subscription activation
 #[derive(Debug, Serialize)]
 pub struct SubscribeResponse {
     pub message: String,
     pub membership_status: String,
-    pub membership_tier: String,
 }
 
 /// POST /v1/memberships/subscribe
-/// Subscribe to a membership tier (temporary endpoint for development)
+/// Activate membership (temporary endpoint for development)
 /// In production, this would be triggered by Stripe webhook after successful payment
 pub async fn subscribe(
     req: HttpRequest,
     user: AuthenticatedUser,
     pool: web::Data<PgPool>,
     config: web::Data<Config>,
-    body: web::Json<SubscribeRequest>,
 ) -> Result<HttpResponse, AppError> {
     // Get jwt_service from app data (it's registered as Arc<JwtService>)
     let jwt_service = req
         .app_data::<Arc<JwtService>>()
         .ok_or_else(|| AppError::internal("JWT service not configured"))?;
     let request_id = get_request_id(&req);
-    let tier = body.tier;
 
     // Activate membership in database
-    let updated_user = UserRepository::activate_membership(&pool, user.0.sub, tier.as_str()).await?;
+    let updated_user = UserRepository::activate_membership(&pool, user.0.sub).await?;
 
     tracing::info!(
         user_id = %updated_user.id,
-        tier = %tier.as_str(),
         "User subscribed to membership"
     );
 
@@ -417,9 +419,8 @@ pub async fn subscribe(
 
     // Build response with the cookie
     let response_data = SubscribeResponse {
-        message: format!("Successfully subscribed to {} tier", tier.as_str()),
+        message: "Successfully subscribed".to_string(),
         membership_status: updated_user.membership_status,
-        membership_tier: tier.as_str().to_string(),
     };
 
     Ok(HttpResponse::Ok()

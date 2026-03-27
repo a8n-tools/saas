@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { formatDate, formatCurrency } from '@/lib/utils'
-import type { MembershipTier } from '@/types'
+import type { SubscriptionTier } from '@/types'
 import {
   CreditCard,
   Loader2,
@@ -20,17 +20,19 @@ import {
 } from 'lucide-react'
 
 // Helper to get tier display name
-function getTierName(tier: MembershipTier | null | undefined): string {
-  if (!tier) return 'Personal'
-  return tier === 'business' ? 'Business' : 'Personal'
+function getTierName(tier: SubscriptionTier | string | null | undefined): string {
+  if (!tier) return 'Standard'
+  if (tier === 'lifetime') return 'Lifetime'
+  if (tier === 'early_adopter') return 'Early Adopter'
+  return 'Standard'
 }
 
 // Helper to get tier price
-function getTierPrice(tier: MembershipTier | null | undefined, membership: { price_locked?: boolean, locked_price_amount?: number | null } | null): string {
+function getTierPrice(tier: SubscriptionTier | string | null | undefined, membership: { price_locked?: boolean, locked_price_amount?: number | null } | null): string {
   if (membership?.price_locked && membership?.locked_price_amount) {
     return `$${(membership.locked_price_amount / 100).toFixed(0)}/month`
   }
-  if (tier === 'business') return '$15/month'
+  if (tier === 'lifetime') return 'Free'
   return '$3/month'
 }
 
@@ -46,7 +48,6 @@ export function MembershipPage() {
     tier,
   } = useMembership()
   const [actionLoading, setActionLoading] = useState(false)
-  const [selectedTier, setSelectedTier] = useState<MembershipTier>('personal')
 
   const { data: payments, isLoading: paymentsLoading } = useQuery({
     queryKey: ['payments'],
@@ -56,7 +57,7 @@ export function MembershipPage() {
   const handleSubscribe = async () => {
     setActionLoading(true)
     try {
-      await startCheckout(selectedTier)
+      await startCheckout()
     } catch {
       // Error handled by hook
     } finally {
@@ -162,9 +163,6 @@ export function MembershipPage() {
                   <p className="text-sm text-muted-foreground">Plan</p>
                   <p className="font-medium">
                     {getTierName(tier)}
-                    {tier === 'business' && (
-                      <Badge variant="secondary" className="ml-2">Business</Badge>
-                    )}
                   </p>
                 </div>
                 <div>
@@ -239,40 +237,13 @@ export function MembershipPage() {
                 </p>
               </div>
 
-              {/* Tier Selection */}
-              <div className="grid gap-4 md:grid-cols-2 mb-6">
-                <button
-                  type="button"
-                  onClick={() => setSelectedTier('personal')}
-                  className={`p-4 rounded-lg border-2 text-left transition-all ${
-                    selectedTier === 'personal'
-                      ? 'border-indigo-500 bg-gradient-to-br from-indigo-500/5 to-primary/5 shadow-md shadow-indigo-500/10'
-                      : 'border-border hover:border-indigo-500/50'
-                  }`}
-                >
-                  <div className="font-semibold">Personal</div>
-                  <div className="text-2xl font-bold mt-1">
-                    <span className="text-gradient bg-gradient-to-r from-primary to-indigo-500">$3</span>
-                    <span className="text-sm font-normal text-muted-foreground">/month</span>
-                  </div>
-                  <div className="text-sm text-muted-foreground mt-1">For individual use</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedTier('business')}
-                  className={`p-4 rounded-lg border-2 text-left transition-all ${
-                    selectedTier === 'business'
-                      ? 'border-teal-500 bg-gradient-to-br from-teal-500/5 to-indigo-500/5 shadow-md shadow-teal-500/10'
-                      : 'border-border hover:border-teal-500/50'
-                  }`}
-                >
-                  <div className="font-semibold">Business</div>
-                  <div className="text-2xl font-bold mt-1">
-                    <span className="text-gradient bg-gradient-to-r from-teal-500 to-indigo-500">$15</span>
-                    <span className="text-sm font-normal text-muted-foreground">/month</span>
-                  </div>
-                  <div className="text-sm text-muted-foreground mt-1">For teams and organizations</div>
-                </button>
+              <div className="p-4 rounded-lg border-2 border-indigo-500 bg-gradient-to-br from-indigo-500/5 to-primary/5 shadow-md shadow-indigo-500/10 mb-6">
+                <div className="font-semibold">Membership</div>
+                <div className="text-2xl font-bold mt-1">
+                  <span className="text-gradient bg-gradient-to-r from-primary to-indigo-500">$3</span>
+                  <span className="text-sm font-normal text-muted-foreground">/month</span>
+                </div>
+                <div className="text-sm text-muted-foreground mt-1">Access all applications</div>
               </div>
 
               <div className="text-center">
@@ -280,7 +251,7 @@ export function MembershipPage() {
                   {actionLoading && (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   )}
-                  Subscribe to {selectedTier === 'business' ? 'Business' : 'Personal'}
+                  Subscribe
                   <ArrowRight className="h-4 w-4" />
                 </Button>
               </div>

@@ -138,23 +138,20 @@ impl UserRepository {
         Ok(())
     }
 
-    /// Update membership status and tier together (for subscription activation)
+    /// Activate membership (set subscription_status to 'active')
     pub async fn activate_membership(
         pool: &PgPool,
         user_id: Uuid,
-        tier: &str,
     ) -> Result<User, AppError> {
         let user = sqlx::query_as::<_, User>(
             r#"
             UPDATE users
             SET subscription_status = 'active',
-                membership_tier = $1,
                 updated_at = NOW()
-            WHERE id = $2 AND deleted_at IS NULL
+            WHERE id = $1 AND deleted_at IS NULL
             RETURNING *
             "#,
         )
-        .bind(tier)
         .bind(user_id)
         .fetch_optional(pool)
         .await?
@@ -468,11 +465,11 @@ impl UserRepository {
     {
         let (lifetime_member, trial_ends_at) = match tier {
             SubscriptionTier::Lifetime => (true, None),
-            SubscriptionTier::Trial3m => {
+            SubscriptionTier::EarlyAdopter => {
                 let ends = chrono::Utc::now() + chrono::Duration::days(90);
                 (false, Some(ends))
             }
-            SubscriptionTier::Trial1m => {
+            SubscriptionTier::Standard => {
                 let ends = chrono::Utc::now() + chrono::Duration::days(30);
                 (false, Some(ends))
             }

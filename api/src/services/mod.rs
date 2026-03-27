@@ -17,6 +17,6 @@ pub use email::EmailService;
 pub use encryption::EncryptionKeySet;
 pub use jwt::{AccessTokenClaims, JwtConfig, JwtService, RefreshTokenClaims, TwoFactorChallengeClaims};
 pub use password::PasswordService;
-pub use stripe::{StripeConfig, StripeService, MembershipTier};
+pub use stripe::{StripeConfig, StripeService};
 pub use totp::TotpService;
 pub use webhook::WebhookService;

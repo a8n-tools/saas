@@ -3,25 +3,22 @@ import type {
   Membership,
   StripePaymentResponse,
   CheckoutSessionResponse,
-  CheckoutRequest,
-  MembershipTier,
 } from '@/types'
 
 export interface SubscribeResponse {
   message: string
   membership_status: string
-  membership_tier: string
 }
 
 export const membershipApi = {
   getCurrent: (): Promise<Membership | null> =>
     apiClient.get('/memberships/me'),
 
-  createCheckout: (tier: MembershipTier = 'personal'): Promise<CheckoutSessionResponse> =>
-    apiClient.post('/memberships/checkout', { tier } as CheckoutRequest),
+  createCheckout: (priceId?: string): Promise<CheckoutSessionResponse> =>
+    apiClient.post('/memberships/checkout', priceId ? { price_id: priceId } : {}),
 
-  subscribe: (tier: MembershipTier = 'personal'): Promise<SubscribeResponse> =>
-    apiClient.post('/memberships/subscribe', { tier }),
+  subscribe: (): Promise<SubscribeResponse> =>
+    apiClient.post('/memberships/subscribe'),
 
   cancel: (): Promise<void> =>
     apiClient.post('/memberships/cancel'),

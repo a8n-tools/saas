@@ -68,7 +68,7 @@ pub struct AdminMembershipResponse {
     pub user_email: String,
     pub stripe_customer_id: Option<String>,
     pub status: String,
-    pub tier: String,
+    pub subscription_tier: String,
     pub created_at: DateTime<Utc>,
 }
 

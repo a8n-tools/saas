@@ -78,7 +78,7 @@ export function CheckoutSuccessPage() {
             <div className="bg-gradient-to-r from-indigo-500/5 via-primary/5 to-teal-500/5 rounded-lg p-4 space-y-2 text-sm border border-border/50">
               <div className="flex items-center justify-center gap-2">
                 <CreditCard className="h-4 w-4 text-indigo-500" />
-                <span className="capitalize font-medium">{user.membership_tier || 'Personal'} Plan</span>
+                <span className="capitalize font-medium">{user.subscription_tier === 'early_adopter' ? 'Early Adopter' : user.subscription_tier === 'lifetime' ? 'Lifetime' : 'Standard'} Plan</span>
               </div>
               <p className="text-muted-foreground">
                 Your price is locked in for life — it will never increase.

@@ -12,17 +12,11 @@ describe('membershipApi', () => {
   })
 
   describe('createCheckout', () => {
-    it('returns checkout URL for personal tier', async () => {
-      const response = await membershipApi.createCheckout('personal')
+    it('returns checkout URL', async () => {
+      const response = await membershipApi.createCheckout()
 
       expect(response.checkout_url).toBe('https://checkout.stripe.com/test')
       expect(response.session_id).toBe('cs_test')
-    })
-
-    it('returns checkout URL for business tier', async () => {
-      const response = await membershipApi.createCheckout('business')
-
-      expect(response.checkout_url).toBe('https://checkout.stripe.com/test')
     })
   })
 
