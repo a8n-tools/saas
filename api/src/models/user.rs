@@ -92,59 +92,24 @@ impl From<&str> for MembershipStatus {
     }
 }
 
-/// Membership tier for users
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum MembershipTier {
-    Personal,
-    Business,
-}
-
-impl MembershipTier {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            MembershipTier::Personal => "personal",
-            MembershipTier::Business => "business",
-        }
-    }
-}
-
-impl From<String> for MembershipTier {
-    fn from(s: String) -> Self {
-        match s.as_str() {
-            "business" => MembershipTier::Business,
-            _ => MembershipTier::Personal,
-        }
-    }
-}
-
-impl From<&str> for MembershipTier {
-    fn from(s: &str) -> Self {
-        match s {
-            "business" => MembershipTier::Business,
-            _ => MembershipTier::Personal,
-        }
-    }
-}
-
 /// Subscription tier assigned at email verification
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SubscriptionTier {
-    /// Permanently free — first 20 verified users
+    /// Permanently free — first 5 verified users
     Lifetime,
-    /// 3-month free trial — users 21-70
-    Trial3m,
+    /// 3-month free trial — users 6-10
+    EarlyAdopter,
     /// 1-month free trial — all subsequent users
-    Trial1m,
+    Standard,
 }
 
 impl SubscriptionTier {
     pub fn as_str(&self) -> &'static str {
         match self {
             SubscriptionTier::Lifetime => "lifetime",
-            SubscriptionTier::Trial3m => "trial_3m",
-            SubscriptionTier::Trial1m => "trial_1m",
+            SubscriptionTier::EarlyAdopter => "early_adopter",
+            SubscriptionTier::Standard => "standard",
         }
     }
 }
@@ -153,8 +118,8 @@ impl From<&str> for SubscriptionTier {
     fn from(s: &str) -> Self {
         match s {
             "lifetime" => SubscriptionTier::Lifetime,
-            "trial_3m" => SubscriptionTier::Trial3m,
-            _ => SubscriptionTier::Trial1m,
+            "early_adopter" => SubscriptionTier::EarlyAdopter,
+            _ => SubscriptionTier::Standard,
         }
     }
 }
@@ -179,7 +144,6 @@ pub struct User {
     #[sqlx(rename = "subscription_status")]
     #[serde(rename = "membership_status")]
     pub membership_status: String,
-    pub membership_tier: Option<String>,
     pub price_locked: bool,
     pub locked_price_id: Option<String>,
     pub locked_price_amount: Option<i32>,
@@ -190,7 +154,7 @@ pub struct User {
     pub two_factor_enabled: bool,
     pub last_login_at: Option<DateTime<Utc>>,
     pub deleted_at: Option<DateTime<Utc>>,
-    /// Tier assigned at email verification: 'lifetime', 'trial_3m', 'trial_1m'
+    /// Tier assigned at email verification: 'lifetime', 'early_adopter', 'standard'
     pub subscription_tier: String,
     /// Null for lifetime members; set for trial members
     pub trial_ends_at: Option<DateTime<Utc>>,
@@ -209,14 +173,6 @@ impl User {
     /// Get the user's membership status as enum
     pub fn membership_status_enum(&self) -> MembershipStatus {
         MembershipStatus::from(self.membership_status.as_str())
-    }
-
-    /// Get the user's membership tier as enum
-    pub fn membership_tier_enum(&self) -> MembershipTier {
-        self.membership_tier
-            .as_ref()
-            .map(|t| MembershipTier::from(t.as_str()))
-            .unwrap_or(MembershipTier::Personal)
     }
 
     /// Check if user is admin
@@ -278,7 +234,6 @@ pub struct UserResponse {
     pub email_verified: bool,
     pub role: String,
     pub membership_status: String,
-    pub membership_tier: Option<String>,
     pub price_locked: bool,
     pub locked_price_amount: Option<i32>,
     pub two_factor_enabled: bool,
@@ -298,7 +253,6 @@ impl From<User> for UserResponse {
             email_verified: user.email_verified,
             role: user.role,
             membership_status: user.membership_status,
-            membership_tier: user.membership_tier,
             price_locked: user.price_locked,
             locked_price_amount: user.locked_price_amount,
             two_factor_enabled: user.two_factor_enabled,
@@ -327,7 +281,6 @@ mod tests {
             stripe_customer_id: None,
             stripe_payment_method_id: None,
             membership_status: "active".to_string(),
-            membership_tier: Some("personal".to_string()),
             price_locked: false,
             locked_price_id: None,
             locked_price_amount: None,
@@ -338,7 +291,7 @@ mod tests {
             updated_at: Utc::now(),
             last_login_at: None,
             deleted_at: None,
-            subscription_tier: "trial_1m".to_string(),
+            subscription_tier: "standard".to_string(),
             trial_ends_at: None,
             lifetime_member: false,
             subscription_override_by: None,
@@ -395,21 +348,6 @@ mod tests {
         assert_eq!(MembershipStatus::from("unknown".to_string()), MembershipStatus::None);
     }
 
-    // -- MembershipTier --
-
-    #[test]
-    fn membership_tier_as_str() {
-        assert_eq!(MembershipTier::Personal.as_str(), "personal");
-        assert_eq!(MembershipTier::Business.as_str(), "business");
-    }
-
-    #[test]
-    fn membership_tier_from_string() {
-        assert_eq!(MembershipTier::from("business".to_string()), MembershipTier::Business);
-        assert_eq!(MembershipTier::from("personal".to_string()), MembershipTier::Personal);
-        assert_eq!(MembershipTier::from("unknown".to_string()), MembershipTier::Personal);
-    }
-
     // -- User methods --
 
     #[test]
@@ -426,20 +364,6 @@ mod tests {
     fn user_membership_status_enum() {
         let user = test_user();
         assert_eq!(user.membership_status_enum(), MembershipStatus::Active);
-    }
-
-    #[test]
-    fn user_membership_tier_enum() {
-        let user = test_user();
-        assert_eq!(user.membership_tier_enum(), MembershipTier::Personal);
-
-        let mut biz = test_user();
-        biz.membership_tier = Some("business".to_string());
-        assert_eq!(biz.membership_tier_enum(), MembershipTier::Business);
-
-        let mut none = test_user();
-        none.membership_tier = None;
-        assert_eq!(none.membership_tier_enum(), MembershipTier::Personal);
     }
 
     #[test]
@@ -491,16 +415,16 @@ mod tests {
     #[test]
     fn subscription_tier_as_str() {
         assert_eq!(SubscriptionTier::Lifetime.as_str(), "lifetime");
-        assert_eq!(SubscriptionTier::Trial3m.as_str(), "trial_3m");
-        assert_eq!(SubscriptionTier::Trial1m.as_str(), "trial_1m");
+        assert_eq!(SubscriptionTier::EarlyAdopter.as_str(), "early_adopter");
+        assert_eq!(SubscriptionTier::Standard.as_str(), "standard");
     }
 
     #[test]
     fn subscription_tier_from_str() {
         assert_eq!(SubscriptionTier::from("lifetime"), SubscriptionTier::Lifetime);
-        assert_eq!(SubscriptionTier::from("trial_3m"), SubscriptionTier::Trial3m);
-        assert_eq!(SubscriptionTier::from("trial_1m"), SubscriptionTier::Trial1m);
-        assert_eq!(SubscriptionTier::from("unknown"), SubscriptionTier::Trial1m);
+        assert_eq!(SubscriptionTier::from("early_adopter"), SubscriptionTier::EarlyAdopter);
+        assert_eq!(SubscriptionTier::from("standard"), SubscriptionTier::Standard);
+        assert_eq!(SubscriptionTier::from("unknown"), SubscriptionTier::Standard);
     }
 
     fn user_with_tier(lifetime_member: bool, trial_ends_at: Option<DateTime<Utc>>, subscription_tier: &str) -> User {
@@ -533,27 +457,27 @@ mod tests {
     #[test]
     fn access_allowed_for_active_trial() {
         let future = Utc::now() + chrono::Duration::days(10);
-        let user = user_with_tier(false, Some(future), "trial_1m");
+        let user = user_with_tier(false, Some(future), "standard");
         assert!(user.is_access_allowed());
     }
 
     #[test]
     fn access_denied_for_expired_trial() {
         let past = Utc::now() - chrono::Duration::days(1);
-        let user = user_with_tier(false, Some(past), "trial_1m");
+        let user = user_with_tier(false, Some(past), "standard");
         assert!(!user.is_access_allowed());
     }
 
     #[test]
     fn access_allowed_for_active_stripe_subscription() {
-        let mut user = user_with_tier(false, None, "trial_1m");
+        let mut user = user_with_tier(false, None, "standard");
         user.membership_status = "active".to_string();
         assert!(user.is_access_allowed());
     }
 
     #[test]
     fn access_denied_for_no_membership_no_trial() {
-        let user = user_with_tier(false, None, "trial_1m");
+        let user = user_with_tier(false, None, "standard");
         assert!(!user.is_access_allowed());
     }
 
@@ -561,33 +485,33 @@ mod tests {
 
     fn tier_for_count(verified_count: i64) -> SubscriptionTier {
         match verified_count {
-            0..=19 => SubscriptionTier::Lifetime,
-            20..=69 => SubscriptionTier::Trial3m,
-            _ => SubscriptionTier::Trial1m,
+            0..=4 => SubscriptionTier::Lifetime,
+            5..=9 => SubscriptionTier::EarlyAdopter,
+            _ => SubscriptionTier::Standard,
         }
     }
 
     #[test]
-    fn tier_boundary_20th_user_is_last_lifetime() {
-        // count = 19 means 19 already verified; this user is the 20th (index 19)
-        assert_eq!(tier_for_count(19), SubscriptionTier::Lifetime);
+    fn tier_boundary_5th_user_is_last_lifetime() {
+        // count = 4 means 4 already verified; this user is the 5th
+        assert_eq!(tier_for_count(4), SubscriptionTier::Lifetime);
     }
 
     #[test]
-    fn tier_boundary_21st_user_is_first_trial_3m() {
-        // count = 20 means 20 already verified; this user is the 21st
-        assert_eq!(tier_for_count(20), SubscriptionTier::Trial3m);
+    fn tier_boundary_6th_user_is_first_early_adopter() {
+        // count = 5 means 5 already verified; this user is the 6th
+        assert_eq!(tier_for_count(5), SubscriptionTier::EarlyAdopter);
     }
 
     #[test]
-    fn tier_boundary_70th_user_is_last_trial_3m() {
-        // count = 69 means 69 already verified; this user is the 70th
-        assert_eq!(tier_for_count(69), SubscriptionTier::Trial3m);
+    fn tier_boundary_10th_user_is_last_early_adopter() {
+        // count = 9 means 9 already verified; this user is the 10th
+        assert_eq!(tier_for_count(9), SubscriptionTier::EarlyAdopter);
     }
 
     #[test]
-    fn tier_boundary_71st_user_is_first_trial_1m() {
-        // count = 70 means 70 already verified; this user is the 71st
-        assert_eq!(tier_for_count(70), SubscriptionTier::Trial1m);
+    fn tier_boundary_11th_user_is_first_standard() {
+        // count = 10 means 10 already verified; this user is the 11th
+        assert_eq!(tier_for_count(10), SubscriptionTier::Standard);
     }
 }

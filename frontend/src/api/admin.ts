@@ -31,7 +31,7 @@ export interface AdminMembership {
   user_email: string
   stripe_customer_id: string | null
   status: string
-  tier: string
+  subscription_tier: string
   created_at: string
 }
 

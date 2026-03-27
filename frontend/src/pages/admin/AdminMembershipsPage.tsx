@@ -160,7 +160,7 @@ export function AdminMembershipsPage() {
                     </div>
                     <div className="flex items-center gap-4">
                       <Badge variant="outline" className="capitalize">
-                        {membership.tier}
+                        {membership.subscription_tier === 'early_adopter' ? 'Early Adopter' : membership.subscription_tier}
                       </Badge>
                       <MembershipBadge status={membership.status} />
                       <DropdownMenu>

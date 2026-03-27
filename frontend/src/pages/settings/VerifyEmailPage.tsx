@@ -9,8 +9,8 @@ import { AlertCircle, Check, Loader2 } from 'lucide-react'
 
 const TIER_MESSAGES: Record<string, string> = {
   lifetime: "You're one of our founding members — free for life!",
-  trial_3m: 'You get 3 months free — no credit card needed.',
-  trial_1m: 'You get 1 month free — no credit card needed.',
+  early_adopter: 'You get 3 months free — no credit card needed.',
+  standard: 'You get 1 month free — no credit card needed.',
 }
 
 export function VerifyEmailPage() {

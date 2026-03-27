@@ -19,7 +19,7 @@ describe('CheckoutSuccessPage', () => {
     render(<CheckoutSuccessPage />)
 
     await waitFor(() => {
-      expect(screen.getByText(/personal plan/i)).toBeInTheDocument()
+      expect(screen.getByText(/standard plan/i)).toBeInTheDocument()
     })
   })
 

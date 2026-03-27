@@ -11,45 +11,12 @@ use crate::models::stripe::{
 };
 use crate::services::encryption::EncryptionKeySet;
 use hmac::{Hmac, Mac};
-use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
-use std::time::{Duration, Instant};
 use uuid::Uuid;
 
 type HmacSha256 = Hmac<Sha256>;
-
-/// Subscription tier enum
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum MembershipTier {
-    Personal,
-    Business,
-}
-
-impl MembershipTier {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            MembershipTier::Personal => "personal",
-            MembershipTier::Business => "business",
-        }
-    }
-
-    /// Get the amount in cents for this tier
-    pub fn amount_cents(&self) -> i32 {
-        match self {
-            MembershipTier::Personal => 300,   // $3.00
-            MembershipTier::Business => 1500,  // $15.00
-        }
-    }
-}
-
-impl Default for MembershipTier {
-    fn default() -> Self {
-        MembershipTier::Personal
-    }
-}
 
 /// Stripe configuration
 #[derive(Clone)]
@@ -104,21 +71,11 @@ impl StripeConfig {
     }
 }
 
-/// Cached tier resolution entry
-struct TierCacheEntry {
-    tier: MembershipTier,
-    cached_at: Instant,
-}
-
 /// Inner state that can be swapped when admin updates Stripe config.
 struct StripeServiceInner {
     config: StripeConfig,
     client: Arc<stripe::Client>,
-    /// Cache: price_id -> tier (resolved from product metadata)
-    tier_cache: HashMap<String, TierCacheEntry>,
 }
-
-const TIER_CACHE_TTL: Duration = Duration::from_secs(300); // 5 minutes
 
 /// Stripe service for payment operations.
 ///
@@ -135,7 +92,6 @@ impl StripeService {
             inner: RwLock::new(StripeServiceInner {
                 config,
                 client: Arc::new(client),
-                tier_cache: HashMap::new(),
             }),
         }
     }
@@ -147,7 +103,6 @@ impl StripeService {
         let mut inner = self.inner.write().expect("StripeService lock poisoned");
         inner.config = config;
         inner.client = Arc::new(client);
-        inner.tier_cache.clear();
     }
 
     /// Snapshot current config + client for use in an async operation.
@@ -262,9 +217,6 @@ impl StripeService {
                 AppError::internal("Failed to update product")
             })?;
 
-        // Clear tier cache since product metadata may have changed
-        self.clear_tier_cache();
-
         Ok(StripeProductResponse {
             id: product.id.to_string(),
             name: product.name.unwrap_or_default(),
@@ -293,7 +245,6 @@ impl StripeService {
                 AppError::internal("Failed to archive product")
             })?;
 
-        self.clear_tier_cache();
         tracing::info!(product_id = %product_id, "Archived Stripe product");
         Ok(())
     }
@@ -427,7 +378,6 @@ impl StripeService {
                 AppError::internal("Failed to archive price")
             })?;
 
-        self.clear_tier_cache();
         tracing::info!(price_id = %price_id, "Archived Stripe price");
         Ok(())
     }
@@ -723,117 +673,6 @@ impl StripeService {
         Ok(())
     }
 
-    // ─── Tier Resolution ─────────────────────────────────────
-
-    /// Resolve membership tier from a Stripe price ID by looking at the product's metadata.
-    /// Uses an in-memory cache with TTL to avoid hitting Stripe on every call.
-    pub async fn resolve_tier_from_price(
-        &self,
-        price_id: &str,
-    ) -> Result<MembershipTier, AppError> {
-        // Check cache first
-        {
-            let inner = self.inner.read().expect("StripeService lock poisoned");
-            if let Some(entry) = inner.tier_cache.get(price_id) {
-                if entry.cached_at.elapsed() < TIER_CACHE_TTL {
-                    return Ok(entry.tier);
-                }
-            }
-        }
-
-        // Fetch price from Stripe to get product
-        let (_config, client) = self.snapshot();
-
-        let pid: stripe::PriceId = price_id.parse().map_err(|_| {
-            AppError::validation("price_id", "Invalid price ID")
-        })?;
-
-        let price = stripe::Price::retrieve(&client, &pid, &["product"])
-            .await
-            .map_err(|e| {
-                tracing::error!(error = %e, price_id = %price_id, "Failed to retrieve price for tier resolution");
-                AppError::internal("Failed to resolve tier")
-            })?;
-
-        // Get product metadata
-        let tier = match &price.product {
-            Some(stripe::Expandable::Object(product)) => {
-                let metadata = product.metadata.as_ref();
-                match metadata.and_then(|m| m.get("tier")).map(|s| s.as_str()) {
-                    Some("business") => MembershipTier::Business,
-                    _ => MembershipTier::Personal,
-                }
-            }
-            Some(stripe::Expandable::Id(product_id)) => {
-                // Product not expanded, fetch it
-                let product = stripe::Product::retrieve(&client, product_id, &[])
-                    .await
-                    .map_err(|e| {
-                        tracing::error!(error = %e, "Failed to retrieve product for tier resolution");
-                        AppError::internal("Failed to resolve tier")
-                    })?;
-                let metadata = product.metadata.as_ref();
-                match metadata.and_then(|m| m.get("tier")).map(|s| s.as_str()) {
-                    Some("business") => MembershipTier::Business,
-                    _ => MembershipTier::Personal,
-                }
-            }
-            None => MembershipTier::Personal,
-        };
-
-        // Update cache
-        {
-            let mut inner = self.inner.write().expect("StripeService lock poisoned");
-            inner.tier_cache.insert(
-                price_id.to_string(),
-                TierCacheEntry {
-                    tier,
-                    cached_at: Instant::now(),
-                },
-            );
-        }
-
-        Ok(tier)
-    }
-
-    /// Get active prices grouped by tier. Returns a map of tier -> list of prices.
-    pub async fn get_prices_by_tier(
-        &self,
-    ) -> Result<HashMap<MembershipTier, Vec<StripePriceResponse>>, AppError> {
-        let products = self.list_products().await?;
-        let prices = self.list_prices(None).await?;
-
-        // Build product_id -> tier mapping from product metadata
-        let mut product_tier_map: HashMap<String, MembershipTier> = HashMap::new();
-        for product in &products {
-            if product.active {
-                let tier = match product.metadata.get("tier").map(|s| s.as_str()) {
-                    Some("business") => MembershipTier::Business,
-                    Some("personal") => MembershipTier::Personal,
-                    _ => continue, // Skip products without tier metadata
-                };
-                product_tier_map.insert(product.id.clone(), tier);
-            }
-        }
-
-        let mut result: HashMap<MembershipTier, Vec<StripePriceResponse>> = HashMap::new();
-        for price in prices {
-            if price.active {
-                if let Some(tier) = product_tier_map.get(&price.product_id) {
-                    result.entry(*tier).or_default().push(price);
-                }
-            }
-        }
-
-        Ok(result)
-    }
-
-    /// Clear the tier cache (called after product/price changes)
-    fn clear_tier_cache(&self) {
-        let mut inner = self.inner.write().expect("StripeService lock poisoned");
-        inner.tier_cache.clear();
-    }
-
     // ─── Existing Methods (Checkout, Customer, etc.) ─────────
 
     /// Create a Stripe customer linked to a platform user
@@ -869,33 +708,17 @@ impl StripeService {
         Ok(customer.id.to_string())
     }
 
-    /// Create a checkout session for a specific membership tier.
-    /// Discovers the price from Stripe product metadata.
+    /// Create a checkout session with a specific price.
     pub async fn create_checkout_session(
         &self,
         customer_id: &str,
         user_id: Uuid,
-        tier: MembershipTier,
+        price_id: &str,
     ) -> Result<(String, String), AppError> {
         let (config, client) = self.snapshot();
 
-        // Discover price for this tier from Stripe
-        let prices_by_tier = self.get_prices_by_tier().await?;
-        let prices = prices_by_tier.get(&tier).ok_or_else(|| {
-            tracing::error!(tier = %tier.as_str(), "No active price found for tier");
-            AppError::validation("tier", "No active price configured for this tier")
-        })?;
-
-        let price_id = &prices
-            .first()
-            .ok_or_else(|| {
-                AppError::validation("tier", "No active price configured for this tier")
-            })?
-            .id;
-
         let mut metadata = HashMap::new();
         metadata.insert("user_id".to_string(), user_id.to_string());
-        metadata.insert("tier".to_string(), tier.as_str().to_string());
 
         let customer_id: stripe::CustomerId = customer_id.parse()
             .map_err(|_| {
@@ -934,7 +757,7 @@ impl StripeService {
 
         tracing::info!(
             session_id = %session_id,
-            tier = %tier.as_str(),
+            price_id = %price_id,
             "Created Stripe checkout session"
         );
 
@@ -1157,25 +980,6 @@ mod tests {
 
     fn test_service() -> StripeService {
         StripeService::new(test_config())
-    }
-
-    // -- MembershipTier --
-
-    #[test]
-    fn tier_as_str() {
-        assert_eq!(MembershipTier::Personal.as_str(), "personal");
-        assert_eq!(MembershipTier::Business.as_str(), "business");
-    }
-
-    #[test]
-    fn tier_amount_cents() {
-        assert_eq!(MembershipTier::Personal.amount_cents(), 300);
-        assert_eq!(MembershipTier::Business.amount_cents(), 1500);
-    }
-
-    #[test]
-    fn tier_default() {
-        assert_eq!(MembershipTier::default(), MembershipTier::Personal);
     }
 
     // -- Webhook signature verification --

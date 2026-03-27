@@ -9,9 +9,7 @@ export type MembershipStatus =
   | 'incomplete'
   | 'grace_period'
 
-export type MembershipTier = 'personal' | 'business'
-
-export type SubscriptionTier = 'lifetime' | 'trial_3m' | 'trial_1m'
+export type SubscriptionTier = 'lifetime' | 'early_adopter' | 'standard'
 
 export interface User {
   id: string
@@ -20,7 +18,6 @@ export interface User {
   email_verified: boolean
   two_factor_enabled: boolean
   membership_status: MembershipStatus
-  membership_tier: MembershipTier | null
   price_locked: boolean
   locked_price_id: string | null
   locked_price_amount: number | null
@@ -105,7 +102,7 @@ export interface PaymentHistory {
 }
 
 export interface CheckoutRequest {
-  tier: MembershipTier
+  price_id?: string
 }
 
 export interface CheckoutSessionResponse {

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Membership, MembershipTier } from '@/types'
+import type { Membership } from '@/types'
 import { membershipApi } from '@/api'
 import { useAuthStore } from './authStore'
 
@@ -10,8 +10,8 @@ interface MembershipState {
 
   // Actions
   fetchMembership: () => Promise<void>
-  createCheckout: (tier?: MembershipTier) => Promise<string>
-  subscribe: (tier?: MembershipTier) => Promise<void>
+  createCheckout: (priceId?: string) => Promise<string>
+  subscribe: () => Promise<void>
   cancelMembership: () => Promise<void>
   reactivateMembership: () => Promise<void>
   clearError: () => void
@@ -36,10 +36,10 @@ export const useMembershipStore = create<MembershipState>((set) => ({
     }
   },
 
-  createCheckout: async (tier: MembershipTier = 'personal') => {
+  createCheckout: async (priceId?: string) => {
     set({ isLoading: true, error: null })
     try {
-      const response = await membershipApi.createCheckout(tier)
+      const response = await membershipApi.createCheckout(priceId)
       set({ isLoading: false })
       return response.checkout_url
     } catch (err) {
@@ -52,10 +52,10 @@ export const useMembershipStore = create<MembershipState>((set) => ({
     }
   },
 
-  subscribe: async (tier: MembershipTier = 'personal') => {
+  subscribe: async () => {
     set({ isLoading: true, error: null })
     try {
-      await membershipApi.subscribe(tier)
+      await membershipApi.subscribe()
       // Refetch membership to get updated state
       const membership = await membershipApi.getCurrent()
       set({ membership, isLoading: false })

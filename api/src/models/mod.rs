@@ -40,4 +40,4 @@ pub use stripe::{
     StripeWebhookEndpointResponse,
 };
 pub use totp::{RecoveryCode, UserTotp};
-pub use user::{CreateUser, MembershipStatus, MembershipTier, SubscriptionTier, User, UserResponse, UserRole};
+pub use user::{CreateUser, MembershipStatus, SubscriptionTier, User, UserResponse, UserRole};

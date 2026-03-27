@@ -940,9 +940,9 @@ impl AuthService {
         let verified_count = UserRepository::count_verified_users(&mut *tx).await?;
 
         let tier = match verified_count {
-            0..=19 => SubscriptionTier::Lifetime,
-            20..=69 => SubscriptionTier::Trial3m,
-            _ => SubscriptionTier::Trial1m,
+            0..=4 => SubscriptionTier::Lifetime,
+            5..=9 => SubscriptionTier::EarlyAdopter,
+            _ => SubscriptionTier::Standard,
         };
 
         // Mark token as used

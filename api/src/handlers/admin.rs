@@ -328,7 +328,7 @@ pub async fn list_memberships(
             r#"
             SELECT id AS user_id, email AS user_email, stripe_customer_id,
                    subscription_status AS status,
-                   COALESCE(membership_tier, 'personal') AS tier,
+                   COALESCE(subscription_tier, 'standard') AS subscription_tier,
                    created_at
             FROM users
             WHERE subscription_status = $3 AND deleted_at IS NULL
@@ -355,7 +355,7 @@ pub async fn list_memberships(
             r#"
             SELECT id AS user_id, email AS user_email, stripe_customer_id,
                    subscription_status AS status,
-                   COALESCE(membership_tier, 'personal') AS tier,
+                   COALESCE(subscription_tier, 'standard') AS subscription_tier,
                    created_at
             FROM users
             WHERE subscription_status != 'none' AND deleted_at IS NULL
