@@ -36,6 +36,8 @@ pub struct Config {
     pub stripe_encryption_key_prev: Option<[u8; 32]>,
     /// Current Stripe key version (incremented on each rotation)
     pub stripe_key_version: i16,
+    /// Membership tier thresholds
+    pub tier: TierConfig,
 }
 
 /// SMTP TLS mode
@@ -187,6 +189,43 @@ impl AutoBanConfig {
     }
 }
 
+/// Membership tier threshold configuration
+#[derive(Debug, Clone)]
+pub struct TierConfig {
+    /// Number of lifetime slots (first N verified users get lifetime tier)
+    pub lifetime_slots: i64,
+    /// Number of early adopter slots (next N verified users get early adopter tier)
+    pub early_adopter_slots: i64,
+    /// Trial duration in days for early adopter tier
+    pub early_adopter_trial_days: i64,
+    /// Trial duration in days for standard tier
+    pub standard_trial_days: i64,
+}
+
+impl TierConfig {
+    /// Load tier configuration from environment variables
+    pub fn from_env() -> Self {
+        Self {
+            lifetime_slots: env::var("TIER_LIFETIME_SLOTS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(5),
+            early_adopter_slots: env::var("TIER_EARLY_ADOPTER_SLOTS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(5),
+            early_adopter_trial_days: env::var("TIER_EARLY_ADOPTER_TRIAL_DAYS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(90),
+            standard_trial_days: env::var("TIER_STANDARD_TRIAL_DAYS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(30),
+        }
+    }
+}
+
 impl Config {
     /// Load configuration from environment variables
     ///
@@ -235,6 +274,8 @@ impl Config {
             .and_then(|v| v.parse().ok())
             .unwrap_or(1);
 
+        let tier = TierConfig::from_env();
+
         let config = Self {
             database_url,
             host,
@@ -252,6 +293,7 @@ impl Config {
             stripe_encryption_key,
             stripe_encryption_key_prev,
             stripe_key_version,
+            tier,
         };
 
         info!(

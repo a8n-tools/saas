@@ -13,6 +13,7 @@ use crate::models::{
     CreateEmailVerificationToken, CreateMagicLinkToken, CreatePasswordResetToken,
     CreateRefreshToken, CreateUser, SubscriptionTier, User, UserResponse, UserRole,
 };
+use crate::config::TierConfig;
 use crate::repositories::{AuditLogRepository, InviteRepository, TokenRepository, UserRepository};
 use crate::services::{JwtService, PasswordService};
 
@@ -47,14 +48,16 @@ pub struct AuthService {
     pool: PgPool,
     jwt: JwtService,
     password: PasswordService,
+    tier_config: TierConfig,
 }
 
 impl AuthService {
-    pub fn new(pool: PgPool, jwt: JwtService) -> Self {
+    pub fn new(pool: PgPool, jwt: JwtService, tier_config: TierConfig) -> Self {
         Self {
             pool,
             jwt,
             password: PasswordService::new(),
+            tier_config,
         }
     }
 
@@ -939,10 +942,14 @@ impl AuthService {
         // Count currently verified users while holding the lock
         let verified_count = UserRepository::count_verified_users(&mut *tx).await?;
 
-        let tier = match verified_count {
-            0..=4 => SubscriptionTier::Lifetime,
-            5..=9 => SubscriptionTier::EarlyAdopter,
-            _ => SubscriptionTier::Standard,
+        let lifetime_max = self.tier_config.lifetime_slots;
+        let early_adopter_max = lifetime_max + self.tier_config.early_adopter_slots;
+        let tier = if verified_count < lifetime_max {
+            SubscriptionTier::Lifetime
+        } else if verified_count < early_adopter_max {
+            SubscriptionTier::EarlyAdopter
+        } else {
+            SubscriptionTier::Standard
         };
 
         // Mark token as used
@@ -957,7 +964,13 @@ impl AuthService {
         .execute(&mut *tx)
         .await?;
 
-        UserRepository::assign_subscription_tier(&mut *tx, user.id, &tier).await?;
+        UserRepository::assign_subscription_tier(
+            &mut *tx,
+            user.id,
+            &tier,
+            self.tier_config.early_adopter_trial_days,
+            self.tier_config.standard_trial_days,
+        ).await?;
 
         tx.commit().await?;
 

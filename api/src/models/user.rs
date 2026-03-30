@@ -495,35 +495,49 @@ mod tests {
 
     // -- Tier boundary logic (mirrors assign logic in auth service) --
 
-    fn tier_for_count(verified_count: i64) -> SubscriptionTier {
-        match verified_count {
-            0..=4 => SubscriptionTier::Lifetime,
-            5..=9 => SubscriptionTier::EarlyAdopter,
-            _ => SubscriptionTier::Standard,
+    fn tier_for_count(verified_count: i64, lifetime_slots: i64, early_adopter_slots: i64) -> SubscriptionTier {
+        let early_adopter_max = lifetime_slots + early_adopter_slots;
+        if verified_count < lifetime_slots {
+            SubscriptionTier::Lifetime
+        } else if verified_count < early_adopter_max {
+            SubscriptionTier::EarlyAdopter
+        } else {
+            SubscriptionTier::Standard
         }
     }
+
+    // Default thresholds: 5 lifetime slots, 5 early adopter slots
 
     #[test]
     fn tier_boundary_5th_user_is_last_lifetime() {
         // count = 4 means 4 already verified; this user is the 5th
-        assert_eq!(tier_for_count(4), SubscriptionTier::Lifetime);
+        assert_eq!(tier_for_count(4, 5, 5), SubscriptionTier::Lifetime);
     }
 
     #[test]
     fn tier_boundary_6th_user_is_first_early_adopter() {
         // count = 5 means 5 already verified; this user is the 6th
-        assert_eq!(tier_for_count(5), SubscriptionTier::EarlyAdopter);
+        assert_eq!(tier_for_count(5, 5, 5), SubscriptionTier::EarlyAdopter);
     }
 
     #[test]
     fn tier_boundary_10th_user_is_last_early_adopter() {
         // count = 9 means 9 already verified; this user is the 10th
-        assert_eq!(tier_for_count(9), SubscriptionTier::EarlyAdopter);
+        assert_eq!(tier_for_count(9, 5, 5), SubscriptionTier::EarlyAdopter);
     }
 
     #[test]
     fn tier_boundary_11th_user_is_first_standard() {
         // count = 10 means 10 already verified; this user is the 11th
-        assert_eq!(tier_for_count(10), SubscriptionTier::Standard);
+        assert_eq!(tier_for_count(10, 5, 5), SubscriptionTier::Standard);
+    }
+
+    #[test]
+    fn tier_boundary_custom_thresholds() {
+        // 3 lifetime slots, 7 early adopter slots
+        assert_eq!(tier_for_count(2, 3, 7), SubscriptionTier::Lifetime);
+        assert_eq!(tier_for_count(3, 3, 7), SubscriptionTier::EarlyAdopter);
+        assert_eq!(tier_for_count(9, 3, 7), SubscriptionTier::EarlyAdopter);
+        assert_eq!(tier_for_count(10, 3, 7), SubscriptionTier::Standard);
     }
 }

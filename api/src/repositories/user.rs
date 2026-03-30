@@ -459,6 +459,8 @@ impl UserRepository {
         executor: E,
         user_id: Uuid,
         tier: &SubscriptionTier,
+        early_adopter_trial_days: i64,
+        standard_trial_days: i64,
     ) -> Result<(), AppError>
     where
         E: sqlx::Executor<'e, Database = Postgres>,
@@ -466,11 +468,11 @@ impl UserRepository {
         let (lifetime_member, trial_ends_at) = match tier {
             SubscriptionTier::Lifetime | SubscriptionTier::Free => (true, None),
             SubscriptionTier::EarlyAdopter => {
-                let ends = chrono::Utc::now() + chrono::Duration::days(90);
+                let ends = chrono::Utc::now() + chrono::Duration::days(early_adopter_trial_days);
                 (false, Some(ends))
             }
             SubscriptionTier::Standard => {
-                let ends = chrono::Utc::now() + chrono::Duration::days(30);
+                let ends = chrono::Utc::now() + chrono::Duration::days(standard_trial_days);
                 (false, Some(ends))
             }
         };

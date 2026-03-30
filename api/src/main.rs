@@ -117,7 +117,7 @@ async fn main() -> anyhow::Result<()> {
     info!("JWT service initialized");
 
     // Initialize Auth service
-    let auth_service = Arc::new(AuthService::new(pool.clone(), (*jwt_service).clone()));
+    let auth_service = Arc::new(AuthService::new(pool.clone(), (*jwt_service).clone(), config.tier.clone()));
 
     info!("Auth service initialized");
 
