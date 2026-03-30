@@ -459,18 +459,20 @@ impl UserRepository {
         executor: E,
         user_id: Uuid,
         tier: &SubscriptionTier,
+        early_adopter_trial_days: i64,
+        standard_trial_days: i64,
     ) -> Result<(), AppError>
     where
         E: sqlx::Executor<'e, Database = Postgres>,
     {
         let (lifetime_member, trial_ends_at) = match tier {
-            SubscriptionTier::Lifetime => (true, None),
+            SubscriptionTier::Lifetime | SubscriptionTier::Free => (true, None),
             SubscriptionTier::EarlyAdopter => {
-                let ends = chrono::Utc::now() + chrono::Duration::days(90);
+                let ends = chrono::Utc::now() + chrono::Duration::days(early_adopter_trial_days);
                 (false, Some(ends))
             }
             SubscriptionTier::Standard => {
-                let ends = chrono::Utc::now() + chrono::Duration::days(30);
+                let ends = chrono::Utc::now() + chrono::Duration::days(standard_trial_days);
                 (false, Some(ends))
             }
         };
@@ -495,18 +497,28 @@ impl UserRepository {
         Ok(())
     }
 
-    /// Count verified users — used inside a transaction with an advisory lock
+    /// Count users assigned to each tier — used inside a transaction with an advisory lock
     /// to atomically determine which tier the next verified user should receive.
-    pub async fn count_verified_users<'e, E>(executor: E) -> Result<i64, AppError>
+    ///
+    /// Counts are based on how many users have actually been assigned each tier,
+    /// not total verified users. This ensures tier slots are filled correctly even
+    /// if users existed before the tier system was introduced.
+    pub async fn count_tier_assignments<'e, E>(executor: E) -> Result<(i64, i64), AppError>
     where
         E: sqlx::Executor<'e, Database = Postgres>,
     {
-        let row: (i64,) = sqlx::query_as(
-            "SELECT COUNT(*) FROM users WHERE email_verified = true AND deleted_at IS NULL",
+        let row: (i64, i64) = sqlx::query_as(
+            r#"
+            SELECT
+                COUNT(*) FILTER (WHERE subscription_tier = 'lifetime' AND subscription_override_by IS NULL) AS lifetime_count,
+                COUNT(*) FILTER (WHERE subscription_tier = 'early_adopter') AS early_adopter_count
+            FROM users
+            WHERE email_verified = true AND deleted_at IS NULL
+            "#,
         )
         .fetch_one(executor)
         .await?;
-        Ok(row.0)
+        Ok(row)
     }
 
     /// Grant lifetime membership to a user (admin override).
@@ -522,6 +534,35 @@ impl UserRepository {
                 lifetime_member = TRUE,
                 trial_ends_at = NULL,
                 subscription_override_by = $2,
+                subscription_status = 'active',
+                updated_at = NOW()
+            WHERE id = $1 AND deleted_at IS NULL
+            RETURNING *
+            "#,
+        )
+        .bind(user_id)
+        .bind(granted_by)
+        .fetch_optional(pool)
+        .await?
+        .ok_or_else(|| AppError::not_found("User"))?;
+
+        Ok(user)
+    }
+
+    /// Grant free membership to a user (admin override, not tied to signup count).
+    pub async fn grant_free_membership(
+        pool: &PgPool,
+        user_id: Uuid,
+        granted_by: Uuid,
+    ) -> Result<User, AppError> {
+        let user = sqlx::query_as::<_, User>(
+            r#"
+            UPDATE users
+            SET subscription_tier = 'free',
+                lifetime_member = TRUE,
+                trial_ends_at = NULL,
+                subscription_override_by = $2,
+                subscription_status = 'active',
                 updated_at = NOW()
             WHERE id = $1 AND deleted_at IS NULL
             RETURNING *

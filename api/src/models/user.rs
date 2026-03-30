@@ -98,6 +98,8 @@ impl From<&str> for MembershipStatus {
 pub enum SubscriptionTier {
     /// Permanently free — first 5 verified users
     Lifetime,
+    /// Permanently free — admin-granted (not tied to signup count)
+    Free,
     /// 3-month free trial — users 6-10
     EarlyAdopter,
     /// 1-month free trial — all subsequent users
@@ -108,6 +110,7 @@ impl SubscriptionTier {
     pub fn as_str(&self) -> &'static str {
         match self {
             SubscriptionTier::Lifetime => "lifetime",
+            SubscriptionTier::Free => "free",
             SubscriptionTier::EarlyAdopter => "early_adopter",
             SubscriptionTier::Standard => "standard",
         }
@@ -118,6 +121,7 @@ impl From<&str> for SubscriptionTier {
     fn from(s: &str) -> Self {
         match s {
             "lifetime" => SubscriptionTier::Lifetime,
+            "free" => SubscriptionTier::Free,
             "early_adopter" => SubscriptionTier::EarlyAdopter,
             _ => SubscriptionTier::Standard,
         }
@@ -415,6 +419,7 @@ mod tests {
     #[test]
     fn subscription_tier_as_str() {
         assert_eq!(SubscriptionTier::Lifetime.as_str(), "lifetime");
+        assert_eq!(SubscriptionTier::Free.as_str(), "free");
         assert_eq!(SubscriptionTier::EarlyAdopter.as_str(), "early_adopter");
         assert_eq!(SubscriptionTier::Standard.as_str(), "standard");
     }
@@ -422,6 +427,7 @@ mod tests {
     #[test]
     fn subscription_tier_from_str() {
         assert_eq!(SubscriptionTier::from("lifetime"), SubscriptionTier::Lifetime);
+        assert_eq!(SubscriptionTier::from("free"), SubscriptionTier::Free);
         assert_eq!(SubscriptionTier::from("early_adopter"), SubscriptionTier::EarlyAdopter);
         assert_eq!(SubscriptionTier::from("standard"), SubscriptionTier::Standard);
         assert_eq!(SubscriptionTier::from("unknown"), SubscriptionTier::Standard);
@@ -455,6 +461,12 @@ mod tests {
     }
 
     #[test]
+    fn access_allowed_for_free_member() {
+        let user = user_with_tier(true, None, "free");
+        assert!(user.is_access_allowed());
+    }
+
+    #[test]
     fn access_allowed_for_active_trial() {
         let future = Utc::now() + chrono::Duration::days(10);
         let user = user_with_tier(false, Some(future), "standard");
@@ -481,37 +493,58 @@ mod tests {
         assert!(!user.is_access_allowed());
     }
 
-    // -- Tier boundary logic (mirrors assign logic in auth service) --
+    // -- Tier assignment logic (mirrors auth service) --
+    // Tiers are assigned based on per-tier counts, not total user count.
+    // This ensures slots fill correctly even if users existed before the tier system.
 
-    fn tier_for_count(verified_count: i64) -> SubscriptionTier {
-        match verified_count {
-            0..=4 => SubscriptionTier::Lifetime,
-            5..=9 => SubscriptionTier::EarlyAdopter,
-            _ => SubscriptionTier::Standard,
+    fn tier_for_counts(lifetime_count: i64, early_adopter_count: i64, lifetime_slots: i64, early_adopter_slots: i64) -> SubscriptionTier {
+        if lifetime_count < lifetime_slots {
+            SubscriptionTier::Lifetime
+        } else if early_adopter_count < early_adopter_slots {
+            SubscriptionTier::EarlyAdopter
+        } else {
+            SubscriptionTier::Standard
         }
     }
 
+    // Default thresholds: 5 lifetime slots, 5 early adopter slots
+
     #[test]
-    fn tier_boundary_5th_user_is_last_lifetime() {
-        // count = 4 means 4 already verified; this user is the 5th
-        assert_eq!(tier_for_count(4), SubscriptionTier::Lifetime);
+    fn tier_assignment_lifetime_slots_available() {
+        // 4 lifetime assigned, slot still open
+        assert_eq!(tier_for_counts(4, 0, 5, 5), SubscriptionTier::Lifetime);
     }
 
     #[test]
-    fn tier_boundary_6th_user_is_first_early_adopter() {
-        // count = 5 means 5 already verified; this user is the 6th
-        assert_eq!(tier_for_count(5), SubscriptionTier::EarlyAdopter);
+    fn tier_assignment_lifetime_slots_full() {
+        // 5 lifetime assigned, falls through to early adopter
+        assert_eq!(tier_for_counts(5, 0, 5, 5), SubscriptionTier::EarlyAdopter);
     }
 
     #[test]
-    fn tier_boundary_10th_user_is_last_early_adopter() {
-        // count = 9 means 9 already verified; this user is the 10th
-        assert_eq!(tier_for_count(9), SubscriptionTier::EarlyAdopter);
+    fn tier_assignment_early_adopter_slots_filling() {
+        // lifetime full, 4 early adopter assigned
+        assert_eq!(tier_for_counts(5, 4, 5, 5), SubscriptionTier::EarlyAdopter);
     }
 
     #[test]
-    fn tier_boundary_11th_user_is_first_standard() {
-        // count = 10 means 10 already verified; this user is the 11th
-        assert_eq!(tier_for_count(10), SubscriptionTier::Standard);
+    fn tier_assignment_all_slots_full() {
+        // both tiers full
+        assert_eq!(tier_for_counts(5, 5, 5, 5), SubscriptionTier::Standard);
+    }
+
+    #[test]
+    fn tier_assignment_custom_thresholds() {
+        // 3 lifetime slots, 7 early adopter slots
+        assert_eq!(tier_for_counts(2, 0, 3, 7), SubscriptionTier::Lifetime);
+        assert_eq!(tier_for_counts(3, 0, 3, 7), SubscriptionTier::EarlyAdopter);
+        assert_eq!(tier_for_counts(3, 6, 3, 7), SubscriptionTier::EarlyAdopter);
+        assert_eq!(tier_for_counts(3, 7, 3, 7), SubscriptionTier::Standard);
+    }
+
+    #[test]
+    fn tier_assignment_existing_users_dont_consume_slots() {
+        // 100 standard users exist but 0 lifetime assigned — lifetime still available
+        assert_eq!(tier_for_counts(0, 0, 5, 5), SubscriptionTier::Lifetime);
     }
 }

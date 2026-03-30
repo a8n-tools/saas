@@ -13,6 +13,7 @@ use crate::models::{
     CreateEmailVerificationToken, CreateMagicLinkToken, CreatePasswordResetToken,
     CreateRefreshToken, CreateUser, SubscriptionTier, User, UserResponse, UserRole,
 };
+use crate::config::TierConfig;
 use crate::repositories::{AuditLogRepository, InviteRepository, TokenRepository, UserRepository};
 use crate::services::{JwtService, PasswordService};
 
@@ -47,14 +48,16 @@ pub struct AuthService {
     pool: PgPool,
     jwt: JwtService,
     password: PasswordService,
+    tier_config: TierConfig,
 }
 
 impl AuthService {
-    pub fn new(pool: PgPool, jwt: JwtService) -> Self {
+    pub fn new(pool: PgPool, jwt: JwtService, tier_config: TierConfig) -> Self {
         Self {
             pool,
             jwt,
             password: PasswordService::new(),
+            tier_config,
         }
     }
 
@@ -936,13 +939,17 @@ impl AuthService {
             .execute(&mut *tx)
             .await?;
 
-        // Count currently verified users while holding the lock
-        let verified_count = UserRepository::count_verified_users(&mut *tx).await?;
+        // Count how many users have been assigned each tier while holding the lock.
+        // This ensures slots are filled based on actual assignments, not total user count.
+        let (lifetime_count, early_adopter_count) =
+            UserRepository::count_tier_assignments(&mut *tx).await?;
 
-        let tier = match verified_count {
-            0..=4 => SubscriptionTier::Lifetime,
-            5..=9 => SubscriptionTier::EarlyAdopter,
-            _ => SubscriptionTier::Standard,
+        let tier = if lifetime_count < self.tier_config.lifetime_slots {
+            SubscriptionTier::Lifetime
+        } else if early_adopter_count < self.tier_config.early_adopter_slots {
+            SubscriptionTier::EarlyAdopter
+        } else {
+            SubscriptionTier::Standard
         };
 
         // Mark token as used
@@ -957,7 +964,13 @@ impl AuthService {
         .execute(&mut *tx)
         .await?;
 
-        UserRepository::assign_subscription_tier(&mut *tx, user.id, &tier).await?;
+        UserRepository::assign_subscription_tier(
+            &mut *tx,
+            user.id,
+            &tier,
+            self.tier_config.early_adopter_trial_days,
+            self.tier_config.standard_trial_days,
+        ).await?;
 
         tx.commit().await?;
 

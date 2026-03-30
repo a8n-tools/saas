@@ -703,7 +703,7 @@ function PricesTab() {
                   id="price_amount"
                   type="number"
                   step="0.01"
-                  min="0.01"
+                  min="0"
                   required
                   value={createForm.amount}
                   onChange={(e) => setCreateForm({ ...createForm, amount: e.target.value })}
