@@ -939,14 +939,14 @@ impl AuthService {
             .execute(&mut *tx)
             .await?;
 
-        // Count currently verified users while holding the lock
-        let verified_count = UserRepository::count_verified_users(&mut *tx).await?;
+        // Count how many users have been assigned each tier while holding the lock.
+        // This ensures slots are filled based on actual assignments, not total user count.
+        let (lifetime_count, early_adopter_count) =
+            UserRepository::count_tier_assignments(&mut *tx).await?;
 
-        let lifetime_max = self.tier_config.lifetime_slots;
-        let early_adopter_max = lifetime_max + self.tier_config.early_adopter_slots;
-        let tier = if verified_count < lifetime_max {
+        let tier = if lifetime_count < self.tier_config.lifetime_slots {
             SubscriptionTier::Lifetime
-        } else if verified_count < early_adopter_max {
+        } else if early_adopter_count < self.tier_config.early_adopter_slots {
             SubscriptionTier::EarlyAdopter
         } else {
             SubscriptionTier::Standard

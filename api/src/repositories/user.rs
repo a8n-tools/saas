@@ -497,18 +497,28 @@ impl UserRepository {
         Ok(())
     }
 
-    /// Count verified users — used inside a transaction with an advisory lock
+    /// Count users assigned to each tier — used inside a transaction with an advisory lock
     /// to atomically determine which tier the next verified user should receive.
-    pub async fn count_verified_users<'e, E>(executor: E) -> Result<i64, AppError>
+    ///
+    /// Counts are based on how many users have actually been assigned each tier,
+    /// not total verified users. This ensures tier slots are filled correctly even
+    /// if users existed before the tier system was introduced.
+    pub async fn count_tier_assignments<'e, E>(executor: E) -> Result<(i64, i64), AppError>
     where
         E: sqlx::Executor<'e, Database = Postgres>,
     {
-        let row: (i64,) = sqlx::query_as(
-            "SELECT COUNT(*) FROM users WHERE email_verified = true AND deleted_at IS NULL",
+        let row: (i64, i64) = sqlx::query_as(
+            r#"
+            SELECT
+                COUNT(*) FILTER (WHERE subscription_tier = 'lifetime' AND subscription_override_by IS NULL) AS lifetime_count,
+                COUNT(*) FILTER (WHERE subscription_tier = 'early_adopter') AS early_adopter_count
+            FROM users
+            WHERE email_verified = true AND deleted_at IS NULL
+            "#,
         )
         .fetch_one(executor)
         .await?;
-        Ok(row.0)
+        Ok(row)
     }
 
     /// Grant lifetime membership to a user (admin override).
