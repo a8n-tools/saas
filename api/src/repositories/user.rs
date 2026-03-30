@@ -496,6 +496,7 @@ impl UserRepository {
             SET subscription_tier = $1,
                 lifetime_member = $2,
                 trial_ends_at = $3,
+                subscription_status = 'active',
                 updated_at = NOW()
             WHERE id = $4
             "#,
