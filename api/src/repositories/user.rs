@@ -333,6 +333,19 @@ impl UserRepository {
         Ok(())
     }
 
+    /// Set two_factor_enabled flag on a user
+    pub async fn set_two_factor_enabled(pool: &PgPool, user_id: Uuid, enabled: bool) -> Result<(), AppError> {
+        sqlx::query(
+            "UPDATE users SET two_factor_enabled = $2, updated_at = NOW() WHERE id = $1 AND deleted_at IS NULL",
+        )
+        .bind(user_id)
+        .bind(enabled)
+        .execute(pool)
+        .await?;
+
+        Ok(())
+    }
+
     /// Update user role
     pub async fn update_role(pool: &PgPool, user_id: Uuid, role: &str) -> Result<User, AppError> {
         let user = sqlx::query_as::<_, User>(
