@@ -154,7 +154,7 @@ export function AdminMembershipsPage() {
                         <p className="font-medium">{membership.user_email}</p>
                         <p className="text-sm text-muted-foreground">
                           Joined {formatDate(membership.created_at)}
-                          {membership.stripe_customer_id ? ' (Stripe)' : ' (Admin-granted)'}
+                          {membership.subscription_override_by ? ' (Admin-granted)' : membership.stripe_customer_id ? ' (Stripe)' : ''}
                         </p>
                       </div>
                     </div>

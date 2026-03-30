@@ -32,6 +32,7 @@ export interface AdminMembership {
   stripe_customer_id: string | null
   status: string
   subscription_tier: string
+  subscription_override_by: string | null
   created_at: string
 }
 

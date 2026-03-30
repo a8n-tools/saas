@@ -84,6 +84,7 @@ export const mockAdminMembership = {
   stripe_customer_id: 'cus_123',
   status: 'active',
   subscription_tier: 'standard',
+  subscription_override_by: null,
   created_at: '2024-01-01T00:00:00Z',
 }
 

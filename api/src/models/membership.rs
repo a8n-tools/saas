@@ -69,6 +69,7 @@ pub struct AdminMembershipResponse {
     pub stripe_customer_id: Option<String>,
     pub status: String,
     pub subscription_tier: String,
+    pub subscription_override_by: Option<Uuid>,
     pub created_at: DateTime<Utc>,
 }
 
