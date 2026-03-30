@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use crate::errors::AppError;
 use crate::middleware::{extract_client_ip, AuthCookies, AuthenticatedUser};
-use crate::models::{AuditAction, CreateAuditLog, UserResponse};
+use crate::models::{AuditAction, CreateAuditLog, SubscriptionTier, UserResponse};
 use crate::repositories::{AuditLogRepository, TokenRepository, UserRepository};
 use crate::responses::{get_request_id, success, success_no_data};
 use crate::services::{AuthService, EmailService, PasswordService, StripeService, TotpService};
@@ -266,17 +266,38 @@ pub async fn request_email_verification(
 pub async fn confirm_email_verification(
     req: HttpRequest,
     auth_service: web::Data<Arc<AuthService>>,
-    _pool: web::Data<PgPool>,
+    pool: web::Data<PgPool>,
+    stripe: web::Data<Arc<StripeService>>,
     body: web::Json<ConfirmEmailVerificationBody>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
     let ip_address = extract_client_ip(&req);
 
-    let (_user_id, email, tier) = auth_service
+    let (user_id, email, tier) = auth_service
         .confirm_email_verification(body.token.clone(), ip_address)
         .await?;
 
     tracing::info!(email = %email, subscription_tier = %tier.as_str(), "Email verified successfully");
+
+    // Create $0 Stripe subscription for lifetime members so they receive invoices
+    if tier == SubscriptionTier::Lifetime {
+        if let Some(free_price_id) = stripe.free_price_id() {
+            let user = UserRepository::find_by_id(&pool, user_id)
+                .await?
+                .ok_or(AppError::not_found("User"))?;
+            let customer_id = match user.stripe_customer_id {
+                Some(id) => id,
+                None => {
+                    let id = stripe.create_customer(&email, user_id).await?;
+                    UserRepository::update_stripe_customer_id(pool.get_ref(), user_id, &id).await?;
+                    id
+                }
+            };
+            if let Err(e) = stripe.create_free_subscription(&customer_id, &free_price_id).await {
+                tracing::error!(error = %e, user_id = %user_id, "Failed to create $0 subscription for lifetime member");
+            }
+        }
+    }
 
     Ok(success(
         serde_json::json!({

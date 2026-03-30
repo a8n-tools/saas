@@ -245,22 +245,37 @@ pub struct GrantMembershipRequest {
 }
 
 /// POST /v1/admin/memberships/grant
-/// Grant a membership to a user
+/// Grant a free membership to a user (permanent access, no payment required).
+/// Creates a $0 Stripe subscription so the user receives invoices.
 pub async fn grant_membership(
     req: HttpRequest,
     admin: AdminUser,
     pool: web::Data<PgPool>,
+    stripe: web::Data<Arc<StripeService>>,
     body: web::Json<GrantMembershipRequest>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
 
-    // Update user membership status
-    UserRepository::update_membership_status(pool.get_ref(), body.user_id, MembershipStatus::Active)
+    // Grant free tier — sets lifetime_member=true and subscription_status='active'
+    let user = UserRepository::grant_free_membership(pool.get_ref(), body.user_id, admin.0.sub)
         .await?;
 
-    // Lock price if requested
+    // Create $0 Stripe subscription for invoice generation
+    if let Some(free_price_id) = stripe.free_price_id() {
+        let customer_id = match user.stripe_customer_id {
+            Some(id) => id,
+            None => {
+                let id = stripe.create_customer(&user.email, user.id).await?;
+                UserRepository::update_stripe_customer_id(pool.get_ref(), user.id, &id).await?;
+                id
+            }
+        };
+        stripe.create_free_subscription(&customer_id, &free_price_id).await?;
+    }
+
+    // Lock price at $0 if requested
     let price_locked = body.price_locked.unwrap_or(false);
-    let locked_amount = body.locked_price_amount.unwrap_or(300);
+    let locked_amount = body.locked_price_amount.unwrap_or(0);
     if price_locked {
         UserRepository::lock_price(pool.get_ref(), body.user_id, "price_admin_grant", locked_amount).await?;
     }
@@ -269,6 +284,7 @@ pub async fn grant_membership(
         .with_actor(admin.0.sub, &admin.0.email, &admin.0.role)
         .with_resource("user", body.user_id)
         .with_metadata(serde_json::json!({
+            "tier": "free",
             "price_locked": price_locked,
             "locked_price_amount": locked_amount,
         }));
@@ -1206,17 +1222,32 @@ pub async fn update_stripe_config(
 // =============================================================================
 
 /// POST /v1/admin/users/{user_id}/lifetime
-/// Grant lifetime membership to a user
+/// Grant lifetime membership to a user.
+/// Creates a $0 Stripe subscription so the user receives invoices.
 pub async fn grant_lifetime_membership(
     req: HttpRequest,
     admin: AdminUser,
     pool: web::Data<PgPool>,
+    stripe: web::Data<Arc<StripeService>>,
     path: web::Path<uuid::Uuid>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
     let user_id = path.into_inner();
 
     let user = UserRepository::grant_lifetime_membership(&pool, user_id, admin.0.sub).await?;
+
+    // Create $0 Stripe subscription for invoice generation
+    if let Some(free_price_id) = stripe.free_price_id() {
+        let customer_id = match user.stripe_customer_id.clone() {
+            Some(id) => id,
+            None => {
+                let id = stripe.create_customer(&user.email, user.id).await?;
+                UserRepository::update_stripe_customer_id(pool.get_ref(), user.id, &id).await?;
+                id
+            }
+        };
+        stripe.create_free_subscription(&customer_id, &free_price_id).await?;
+    }
 
     AuditLogRepository::create(
         &pool,

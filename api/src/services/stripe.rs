@@ -25,6 +25,8 @@ pub struct StripeConfig {
     pub webhook_secret: String,
     pub success_url: String,
     pub cancel_url: String,
+    /// Stripe Price ID with unit_amount=0 for free/lifetime members
+    pub free_price_id: Option<String>,
 }
 
 impl StripeConfig {
@@ -42,6 +44,7 @@ impl StripeConfig {
                 .unwrap_or_else(|_| format!("{base}/checkout/success")),
             cancel_url: std::env::var("STRIPE_CANCEL_URL")
                 .unwrap_or_else(|_| format!("{base}/pricing?checkout=canceled")),
+            free_price_id: std::env::var("STRIPE_FREE_PRICE_ID").ok(),
         })
     }
 
@@ -67,6 +70,7 @@ impl StripeConfig {
             webhook_secret,
             success_url: env_config.success_url,
             cancel_url: env_config.cancel_url,
+            free_price_id: env_config.free_price_id,
         })
     }
 }
@@ -109,6 +113,11 @@ impl StripeService {
     fn snapshot(&self) -> (StripeConfig, Arc<stripe::Client>) {
         let inner = self.inner.read().expect("StripeService lock poisoned");
         (inner.config.clone(), inner.client.clone())
+    }
+
+    /// Get the configured $0 price ID for free/lifetime subscriptions.
+    pub fn free_price_id(&self) -> Option<String> {
+        self.snapshot().0.free_price_id
     }
 
     // ─── Products ────────────────────────────────────────────
@@ -764,6 +773,47 @@ impl StripeService {
         Ok((session_id, checkout_url))
     }
 
+    /// Create a $0 subscription for a free/lifetime member so they receive invoices.
+    ///
+    /// `price_id` must be a recurring Stripe price with unit_amount = 0.
+    pub async fn create_free_subscription(
+        &self,
+        customer_id: &str,
+        price_id: &str,
+    ) -> Result<String, AppError> {
+        let (_config, client) = self.snapshot();
+
+        let cid: stripe::CustomerId = customer_id.parse().map_err(|_| {
+            AppError::validation("customer_id", "Invalid customer ID")
+        })?;
+
+        let pid: stripe::PriceId = price_id.parse().map_err(|_| {
+            AppError::validation("price_id", "Invalid price ID")
+        })?;
+
+        let mut params = stripe::CreateSubscription::new(cid);
+        params.items = Some(vec![stripe::CreateSubscriptionItems {
+            price: Some(pid.to_string()),
+            quantity: Some(1),
+            ..Default::default()
+        }]);
+
+        let subscription = stripe::Subscription::create(&client, params)
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, "Failed to create free subscription");
+                AppError::internal("Failed to create free subscription")
+            })?;
+
+        tracing::info!(
+            subscription_id = %subscription.id,
+            customer_id = %customer_id,
+            "Created $0 subscription for free member"
+        );
+
+        Ok(subscription.id.to_string())
+    }
+
     /// Cancel a subscription (at period end or immediately)
     pub async fn cancel_subscription(
         &self,
@@ -975,6 +1025,7 @@ mod tests {
             webhook_secret: "whsec_test_secret".to_string(),
             success_url: "http://localhost/checkout/success".to_string(),
             cancel_url: "http://localhost/cancel".to_string(),
+            free_price_id: None,
         }
     }
 

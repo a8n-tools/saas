@@ -23,6 +23,7 @@ import {
 function getTierName(tier: SubscriptionTier | string | null | undefined): string {
   if (!tier) return 'Standard'
   if (tier === 'lifetime') return 'Lifetime'
+  if (tier === 'free') return 'Free'
   if (tier === 'early_adopter') return 'Early Adopter'
   return 'Standard'
 }
@@ -32,7 +33,7 @@ function getTierPrice(tier: SubscriptionTier | string | null | undefined, member
   if (membership?.price_locked && membership?.locked_price_amount) {
     return `$${(membership.locked_price_amount / 100).toFixed(0)}/month`
   }
-  if (tier === 'lifetime') return 'Free'
+  if (tier === 'lifetime' || tier === 'free') return 'Free'
   return '$3/month'
 }
 

@@ -464,7 +464,7 @@ impl UserRepository {
         E: sqlx::Executor<'e, Database = Postgres>,
     {
         let (lifetime_member, trial_ends_at) = match tier {
-            SubscriptionTier::Lifetime => (true, None),
+            SubscriptionTier::Lifetime | SubscriptionTier::Free => (true, None),
             SubscriptionTier::EarlyAdopter => {
                 let ends = chrono::Utc::now() + chrono::Duration::days(90);
                 (false, Some(ends))
@@ -522,6 +522,35 @@ impl UserRepository {
                 lifetime_member = TRUE,
                 trial_ends_at = NULL,
                 subscription_override_by = $2,
+                subscription_status = 'active',
+                updated_at = NOW()
+            WHERE id = $1 AND deleted_at IS NULL
+            RETURNING *
+            "#,
+        )
+        .bind(user_id)
+        .bind(granted_by)
+        .fetch_optional(pool)
+        .await?
+        .ok_or_else(|| AppError::not_found("User"))?;
+
+        Ok(user)
+    }
+
+    /// Grant free membership to a user (admin override, not tied to signup count).
+    pub async fn grant_free_membership(
+        pool: &PgPool,
+        user_id: Uuid,
+        granted_by: Uuid,
+    ) -> Result<User, AppError> {
+        let user = sqlx::query_as::<_, User>(
+            r#"
+            UPDATE users
+            SET subscription_tier = 'free',
+                lifetime_member = TRUE,
+                trial_ends_at = NULL,
+                subscription_override_by = $2,
+                subscription_status = 'active',
                 updated_at = NOW()
             WHERE id = $1 AND deleted_at IS NULL
             RETURNING *

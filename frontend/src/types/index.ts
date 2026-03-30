@@ -9,7 +9,7 @@ export type MembershipStatus =
   | 'incomplete'
   | 'grace_period'
 
-export type SubscriptionTier = 'lifetime' | 'early_adopter' | 'standard'
+export type SubscriptionTier = 'lifetime' | 'free' | 'early_adopter' | 'standard'
 
 export interface User {
   id: string

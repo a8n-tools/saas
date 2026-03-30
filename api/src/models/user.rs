@@ -98,6 +98,8 @@ impl From<&str> for MembershipStatus {
 pub enum SubscriptionTier {
     /// Permanently free — first 5 verified users
     Lifetime,
+    /// Permanently free — admin-granted (not tied to signup count)
+    Free,
     /// 3-month free trial — users 6-10
     EarlyAdopter,
     /// 1-month free trial — all subsequent users
@@ -108,6 +110,7 @@ impl SubscriptionTier {
     pub fn as_str(&self) -> &'static str {
         match self {
             SubscriptionTier::Lifetime => "lifetime",
+            SubscriptionTier::Free => "free",
             SubscriptionTier::EarlyAdopter => "early_adopter",
             SubscriptionTier::Standard => "standard",
         }
@@ -118,6 +121,7 @@ impl From<&str> for SubscriptionTier {
     fn from(s: &str) -> Self {
         match s {
             "lifetime" => SubscriptionTier::Lifetime,
+            "free" => SubscriptionTier::Free,
             "early_adopter" => SubscriptionTier::EarlyAdopter,
             _ => SubscriptionTier::Standard,
         }
@@ -415,6 +419,7 @@ mod tests {
     #[test]
     fn subscription_tier_as_str() {
         assert_eq!(SubscriptionTier::Lifetime.as_str(), "lifetime");
+        assert_eq!(SubscriptionTier::Free.as_str(), "free");
         assert_eq!(SubscriptionTier::EarlyAdopter.as_str(), "early_adopter");
         assert_eq!(SubscriptionTier::Standard.as_str(), "standard");
     }
@@ -422,6 +427,7 @@ mod tests {
     #[test]
     fn subscription_tier_from_str() {
         assert_eq!(SubscriptionTier::from("lifetime"), SubscriptionTier::Lifetime);
+        assert_eq!(SubscriptionTier::from("free"), SubscriptionTier::Free);
         assert_eq!(SubscriptionTier::from("early_adopter"), SubscriptionTier::EarlyAdopter);
         assert_eq!(SubscriptionTier::from("standard"), SubscriptionTier::Standard);
         assert_eq!(SubscriptionTier::from("unknown"), SubscriptionTier::Standard);
@@ -451,6 +457,12 @@ mod tests {
     #[test]
     fn access_allowed_for_lifetime_member() {
         let user = user_with_tier(true, None, "lifetime");
+        assert!(user.is_access_allowed());
+    }
+
+    #[test]
+    fn access_allowed_for_free_member() {
+        let user = user_with_tier(true, None, "free");
         assert!(user.is_access_allowed());
     }
 
