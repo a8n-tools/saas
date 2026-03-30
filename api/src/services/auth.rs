@@ -14,7 +14,7 @@ use crate::models::{
     CreateRefreshToken, CreateUser, SubscriptionTier, User, UserResponse, UserRole,
 };
 use crate::config::TierConfig;
-use crate::repositories::{AuditLogRepository, InviteRepository, TokenRepository, UserRepository};
+use crate::repositories::{AuditLogRepository, InviteRepository, TotpRepository, TokenRepository, UserRepository};
 use crate::services::{JwtService, PasswordService};
 
 /// Authentication tokens returned after login
@@ -136,10 +136,19 @@ impl AuthService {
             return Err(AppError::InvalidCredentials);
         }
 
-        // Check if 2FA is enabled
+        // Check if 2FA is enabled AND actually configured
         if user.two_factor_enabled {
-            let challenge_token = self.jwt.create_2fa_challenge_token(user.id)?;
-            return Ok(LoginResult::TwoFactorRequired { challenge_token });
+            let totp_record = TotpRepository::find_by_user_id(&self.pool, user.id).await?;
+            let has_verified_totp = totp_record.map(|r| r.verified).unwrap_or(false);
+
+            if has_verified_totp {
+                let challenge_token = self.jwt.create_2fa_challenge_token(user.id)?;
+                return Ok(LoginResult::TwoFactorRequired { challenge_token });
+            }
+
+            // Flag is true but no verified TOTP exists — reset the flag so the
+            // frontend can redirect to 2FA setup after login
+            UserRepository::set_two_factor_enabled(&self.pool, user.id, false).await?;
         }
 
         // Create tokens
@@ -395,10 +404,18 @@ impl AuthService {
             }
         };
 
-        // Check if 2FA is enabled
+        // Check if 2FA is enabled AND actually configured
         if user.two_factor_enabled {
-            let challenge_token = self.jwt.create_2fa_challenge_token(user.id)?;
-            return Ok(MagicLinkResult::TwoFactorRequired { challenge_token, is_new_user });
+            let totp_record = TotpRepository::find_by_user_id(&self.pool, user.id).await?;
+            let has_verified_totp = totp_record.map(|r| r.verified).unwrap_or(false);
+
+            if has_verified_totp {
+                let challenge_token = self.jwt.create_2fa_challenge_token(user.id)?;
+                return Ok(MagicLinkResult::TwoFactorRequired { challenge_token, is_new_user });
+            }
+
+            // Flag is true but no verified TOTP exists — reset the flag
+            UserRepository::set_two_factor_enabled(&self.pool, user.id, false).await?;
         }
 
         // Create tokens
