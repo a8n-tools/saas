@@ -306,6 +306,9 @@ pub async fn revoke_membership(
     UserRepository::update_membership_status(pool.get_ref(), body.user_id, MembershipStatus::Canceled)
         .await?;
 
+    // Reset tier to standard so the slot opens back up for the next user
+    UserRepository::reset_subscription_tier(pool.get_ref(), body.user_id).await?;
+
     // Clear any grace period
     UserRepository::clear_grace_period(pool.get_ref(), body.user_id).await?;
 

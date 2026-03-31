@@ -265,6 +265,7 @@ async fn handle_subscription_deleted(
     if let Some(user) = UserRepository::find_by_stripe_customer_id(pool, customer_id).await? {
         let mut tx = pool.begin().await?;
         UserRepository::update_membership_status(&mut *tx, user.id, MembershipStatus::Canceled).await?;
+        UserRepository::reset_subscription_tier(&mut *tx, user.id).await?;
         UserRepository::clear_grace_period(&mut *tx, user.id).await?;
         tx.commit().await?;
 
