@@ -136,6 +136,19 @@ impl TotpRepository {
         tx.commit().await
     }
 
+    /// Find all unused recovery codes for a user (max 8)
+    pub async fn find_all_unused_recovery_codes(
+        pool: &PgPool,
+        user_id: Uuid,
+    ) -> Result<Vec<RecoveryCode>, sqlx::Error> {
+        sqlx::query_as::<_, RecoveryCode>(
+            "SELECT * FROM recovery_codes WHERE user_id = $1 AND used_at IS NULL",
+        )
+        .bind(user_id)
+        .fetch_all(pool)
+        .await
+    }
+
     /// Find an unused recovery code by hash
     pub async fn find_unused_recovery_code(
         pool: &PgPool,
