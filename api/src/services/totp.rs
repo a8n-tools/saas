@@ -1,5 +1,9 @@
 //! TOTP two-factor authentication service
 
+use argon2::{
+    password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
+    Argon2, Params,
+};
 use rand::RngCore;
 use sha2::{Digest, Sha256};
 use sqlx::PgPool;
@@ -112,22 +116,26 @@ impl TotpService {
         self.check_code(&secret, code)
     }
 
-    /// Verify a recovery code (marks it as used if valid)
+    /// Verify a recovery code (marks it as used if valid).
+    /// Supports both legacy unsalted SHA-256 hashes and new Argon2id hashes.
     pub async fn verify_recovery_code(
         &self,
         user_id: Uuid,
         code: &str,
     ) -> Result<bool, AppError> {
         let normalized = code.to_uppercase().replace('-', "");
-        let hash = Self::hash_code(&normalized);
 
-        match TotpRepository::find_unused_recovery_code(&self.pool, user_id, &hash).await? {
-            Some(recovery_code) => {
+        let unused_codes =
+            TotpRepository::find_all_unused_recovery_codes(&self.pool, user_id).await?;
+
+        for recovery_code in unused_codes {
+            if Self::verify_code_against_hash(&normalized, &recovery_code.code_hash)? {
                 TotpRepository::mark_recovery_code_used(&self.pool, recovery_code.id).await?;
-                Ok(true)
+                return Ok(true);
             }
-            None => Ok(false),
         }
+
+        Ok(false)
     }
 
     /// Regenerate recovery codes (requires 2FA to be enabled)
@@ -209,7 +217,7 @@ impl TotpService {
         for _ in 0..8 {
             let code = Self::generate_recovery_code();
             let normalized = code.replace('-', "");
-            let hash = Self::hash_code(&normalized);
+            let hash = Self::hash_code_argon2(&normalized)?;
             codes.push(code);
             hashes.push(hash);
         }
@@ -226,10 +234,46 @@ impl TotpService {
         format!("{}-{}", &hex[..4], &hex[4..])
     }
 
+    /// Legacy unsalted SHA-256 hash (kept for verifying existing codes)
     fn hash_code(code: &str) -> String {
         let mut hasher = Sha256::new();
         hasher.update(code.as_bytes());
         format!("{:x}", hasher.finalize())
+    }
+
+    /// Salted Argon2id hash for new recovery codes
+    fn hash_code_argon2(code: &str) -> Result<String, AppError> {
+        let params = Params::new(19 * 1024, 2, 1, None)
+            .map_err(|e| AppError::internal(format!("Argon2 params error: {}", e)))?;
+        let argon2 = Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, params);
+        let salt = SaltString::generate(&mut OsRng);
+
+        let hash = argon2
+            .hash_password(code.as_bytes(), &salt)
+            .map_err(|e| AppError::internal(format!("Recovery code hashing failed: {}", e)))?;
+
+        Ok(hash.to_string())
+    }
+
+    /// Detect legacy unsalted SHA-256 hashes (64 hex chars)
+    fn is_legacy_hash(hash: &str) -> bool {
+        hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit())
+    }
+
+    /// Verify a code against a stored hash, supporting both legacy SHA-256 and Argon2id
+    fn verify_code_against_hash(code: &str, stored_hash: &str) -> Result<bool, AppError> {
+        if Self::is_legacy_hash(stored_hash) {
+            let computed = Self::hash_code(code);
+            Ok(computed == stored_hash)
+        } else {
+            let parsed = PasswordHash::new(stored_hash)
+                .map_err(|e| AppError::internal(format!("Invalid hash format: {}", e)))?;
+            let params = Params::new(19 * 1024, 2, 1, None)
+                .map_err(|e| AppError::internal(format!("Argon2 params error: {}", e)))?;
+            let argon2 =
+                Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, params);
+            Ok(argon2.verify_password(code.as_bytes(), &parsed).is_ok())
+        }
     }
 }
 
@@ -393,5 +437,53 @@ mod tests {
         assert!(ks.previous.is_none());
         assert!(!ks.needs_reencrypt(1));
         assert!(ks.needs_reencrypt(0));
+    }
+
+    // -- argon2 recovery code hashing --
+
+    #[test]
+    fn hash_code_argon2_produces_phc_string() {
+        let hash = TotpService::hash_code_argon2("ABCD1234").unwrap();
+        assert!(hash.starts_with("$argon2id$"));
+    }
+
+    #[test]
+    fn hash_code_argon2_unique_salts() {
+        let hash1 = TotpService::hash_code_argon2("ABCD1234").unwrap();
+        let hash2 = TotpService::hash_code_argon2("ABCD1234").unwrap();
+        // Same input, different salts => different hashes
+        assert_ne!(hash1, hash2);
+    }
+
+    // -- is_legacy_hash --
+
+    #[test]
+    fn is_legacy_hash_detects_sha256() {
+        let sha256 = TotpService::hash_code("ABCD1234");
+        assert!(TotpService::is_legacy_hash(&sha256));
+    }
+
+    #[test]
+    fn is_legacy_hash_rejects_argon2() {
+        let argon2_hash = TotpService::hash_code_argon2("ABCD1234").unwrap();
+        assert!(!TotpService::is_legacy_hash(&argon2_hash));
+    }
+
+    // -- verify_code_against_hash --
+
+    #[test]
+    fn verify_against_legacy_sha256_hash() {
+        let code = "ABCD1234";
+        let hash = TotpService::hash_code(code);
+        assert!(TotpService::verify_code_against_hash(code, &hash).unwrap());
+        assert!(!TotpService::verify_code_against_hash("WRONG123", &hash).unwrap());
+    }
+
+    #[test]
+    fn verify_against_argon2_hash() {
+        let code = "ABCD1234";
+        let hash = TotpService::hash_code_argon2(code).unwrap();
+        assert!(TotpService::verify_code_against_hash(code, &hash).unwrap());
+        assert!(!TotpService::verify_code_against_hash("WRONG123", &hash).unwrap());
     }
 }
