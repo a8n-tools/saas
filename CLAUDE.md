@@ -153,6 +153,7 @@ Forgejo Actions (`.forgejo/workflows/`). On push to `main`, builds OCI images us
 6. **Cookie domain is set via `COOKIE_DOMAIN` env var** — enables SSO across subdomains
 7. **Validate membership status on every app request** — check JWT claims
 8. **Admin actions require extra logging** — set `is_admin_action = true` in audit logs
+9. **Encryption keys for TOTP and Stripe** — generate with `openssl rand -hex 32`, see [`docs/encryption-key-rotation.md`](docs/encryption-key-rotation.md) for rotation workflow
 
 ## Conventions
 
