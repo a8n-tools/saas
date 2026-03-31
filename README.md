@@ -185,6 +185,19 @@ just build          # Build all Docker images
 just clean          # Stop services and remove volumes
 ```
 
+### Release
+
+To create a new release:
+
+1. Run `just create-release minor` (or `major` for a major version bump)
+   - Ensures the working tree is clean
+   - Switches to `main` and pulls the latest changes
+   - Verifies `api/Cargo.toml`, `frontend/package.json`, and the latest git tag all agree
+   - Creates a `release/vX.Y.0` branch with the version bump commit
+   - Pushes the branch and prints a PR link
+2. Open the PR in the Forgejo web UI and merge it into `main`
+3. Create the release in the Forgejo web UI (**Releases > New Release**), setting the tag (e.g. `v0.8.0`) to target `main`
+
 ### Adding a New API Endpoint
 
 1. Create a handler in `api/src/handlers/`
