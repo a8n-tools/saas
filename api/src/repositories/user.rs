@@ -256,6 +256,33 @@ impl UserRepository {
         Ok(())
     }
 
+    /// Reset subscription tier to standard when a membership is revoked/canceled.
+    /// This frees the lifetime or early_adopter slot so it can be assigned to the next user.
+    pub async fn reset_subscription_tier<'e, E>(
+        executor: E,
+        user_id: Uuid,
+    ) -> Result<(), AppError>
+    where
+        E: sqlx::Executor<'e, Database = Postgres>,
+    {
+        sqlx::query(
+            r#"
+            UPDATE users
+            SET subscription_tier = 'standard',
+                lifetime_member = FALSE,
+                trial_ends_at = NULL,
+                subscription_override_by = NULL,
+                updated_at = NOW()
+            WHERE id = $1
+            "#,
+        )
+        .bind(user_id)
+        .execute(executor)
+        .await?;
+
+        Ok(())
+    }
+
     /// Clear grace period
     pub async fn clear_grace_period<'e, E>(
         executor: E,
