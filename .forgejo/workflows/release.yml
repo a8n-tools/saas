@@ -1,0 +1,122 @@
+---
+
+# Automatically create a git tag and Forgejo release when the version
+# in api/Cargo.toml changes on main.
+name: Create release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - api/Cargo.toml
+
+jobs:
+  release:
+    name: Tag and release
+    runs-on: ${{ vars.RUNS_ON_OPENSUSE_BASE_LATEST }}
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout full history
+        uses: https://code.forgejo.org/actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Extract version from Cargo.toml
+        id: version
+        shell: nu {0}
+        run: |
+          let version = (open api/Cargo.toml | get package.version)
+          print $"Extracted version: ($version)"
+          $"version=($version)\n" | save --append $env.GITHUB_OUTPUT
+
+      - name: Validate semver format
+        shell: nu {0}
+        run: |
+          let version = "${{ steps.version.outputs.version }}"
+          if ($version | parse --regex '^(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)$' | is-empty) {
+            print $"::error::Invalid semver format: ($version)"
+            exit 1
+          }
+          print $"Valid semver: ($version)"
+
+      - name: Check if tag already exists
+        id: tag_check
+        shell: nu {0}
+        run: |
+          let tag = $"v${{ steps.version.outputs.version }}"
+          let exists = (^git tag --list | lines | any {|t| $t == $tag })
+          if $exists {
+            print $"::notice::Tag ($tag) already exists, skipping release"
+          }
+          $"exists=($exists)\n" | save --append $env.GITHUB_OUTPUT
+
+      - name: Verify version is greater than latest tag
+        id: version_check
+        if: steps.tag_check.outputs.exists == 'false'
+        shell: nu {0}
+        run: |
+          let new_version = "${{ steps.version.outputs.version }}"
+          let tags = (^git tag --list | lines | where {|t| $t starts-with "v" })
+          if ($tags | is-empty) {
+            print "No existing tags, first release"
+            $"prev_tag=\n" | save --append $env.GITHUB_OUTPUT
+          } else {
+            let latest = ($tags | sort-by --natural --reverse | first)
+            let latest_version = ($latest | str substring 1..)
+            print $"Latest tag: ($latest), new version: ($new_version)"
+            let new_parts = ($new_version | split row "." | each {|p| $p | into int })
+            let old_parts = ($latest_version | split row "." | each {|p| $p | into int })
+            let is_greater = (
+              ($new_parts.0 > $old_parts.0) or
+              ($new_parts.0 == $old_parts.0 and $new_parts.1 > $old_parts.1) or
+              ($new_parts.0 == $old_parts.0 and $new_parts.1 == $old_parts.1 and $new_parts.2 > $old_parts.2)
+            )
+            if not $is_greater {
+              print $"::error::Version ($new_version) is not greater than ($latest_version)"
+              exit 1
+            }
+            $"prev_tag=($latest)\n" | save --append $env.GITHUB_OUTPUT
+          }
+
+      - name: Build release notes
+        id: notes
+        if: steps.tag_check.outputs.exists == 'false'
+        shell: nu {0}
+        run: |
+          let prev_tag = "${{ steps.version_check.outputs.prev_tag }}"
+          let range = if ($prev_tag | is-empty) { "HEAD" } else { $"($prev_tag)..HEAD" }
+          let notes = (^git log $range --no-merges --pretty=format:"- %s (%h)")
+          print "Release notes:"
+          print $notes
+          $notes | save --force /tmp/release-notes.txt
+
+      - name: Create tag and release
+        if: steps.tag_check.outputs.exists == 'false'
+        shell: nu {0}
+        env:
+          FORGEJO_URL: ${{ forgejo.server_url }}
+          REPO: ${{ forgejo.repository }}
+          TOKEN: ${{ secrets.FORGEJO_TOKEN }}
+        run: |
+          let tag = $"v${{ steps.version.outputs.version }}"
+          let notes = (open /tmp/release-notes.txt)
+          let payload = {
+            tag_name: $tag,
+            name: $tag,
+            body: $notes,
+            draft: false,
+            prerelease: false,
+          }
+          let url = $"($env.FORGEJO_URL)/api/v1/repos/($env.REPO)/releases"
+          print $"Creating release ($tag) at ($url)"
+          let response = (
+            http post
+              --content-type application/json
+              --headers [Authorization $"token ($env.TOKEN)"]
+              $url
+              $payload
+          )
+          print $"Release created: ($response.html_url)"
