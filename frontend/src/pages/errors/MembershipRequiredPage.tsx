@@ -1,9 +1,13 @@
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
+import { StripeGuardButton } from '@/components/StripeGuardButton'
+import { useStripeConfigStore } from '@/stores/stripeConfigStore'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { CreditCard, ArrowLeft } from 'lucide-react'
 
 export function MembershipRequiredPage() {
+  const stripeEnabled = useStripeConfigStore((s) => s.stripeEnabled)
+
   return (
     <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center px-4">
       <Card className="w-full max-w-md">
@@ -22,9 +26,13 @@ export function MembershipRequiredPage() {
             Lock in your price forever.
           </p>
           <div className="flex flex-col gap-4">
-            <Link to="/membership">
-              <Button className="w-full">Subscribe Now</Button>
-            </Link>
+            {stripeEnabled ? (
+              <Link to="/membership">
+                <Button className="w-full">Subscribe Now</Button>
+              </Link>
+            ) : (
+              <StripeGuardButton className="w-full">Subscribe Now</StripeGuardButton>
+            )}
             <Link to="/dashboard">
               <Button variant="outline" className="w-full">
                 <ArrowLeft className="mr-2 h-4 w-4" />

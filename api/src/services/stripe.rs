@@ -115,6 +115,14 @@ impl StripeService {
         (inner.config.clone(), inner.client.clone())
     }
 
+    /// Returns `true` when the service holds a real Stripe secret key
+    /// (i.e. not the placeholder that `from_env` returns when the env var
+    /// is missing).
+    pub fn is_configured(&self) -> bool {
+        let key = &self.inner.read().expect("StripeService lock poisoned").config.secret_key;
+        !key.is_empty() && key != "sk_test_placeholder"
+    }
+
     /// Get the configured $0 price ID for free/lifetime subscriptions.
     pub fn free_price_id(&self) -> Option<String> {
         self.snapshot().0.free_price_id
