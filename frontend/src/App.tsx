@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 import { useEmailConfigStore } from '@/stores/emailConfigStore'
+import { useStripeConfigStore } from '@/stores/stripeConfigStore'
 import { authApi } from '@/api'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
@@ -63,6 +64,7 @@ function SetupGuard({ children }: { children: React.ReactNode }) {
     authApi.setupStatus()
       .then((res) => {
         useEmailConfigStore.getState().setEmailEnabled(res.email_enabled)
+        useStripeConfigStore.getState().setStripeEnabled(res.stripe_enabled)
         setStatus(res.setup_required ? 'setup' : 'ready')
       })
       .catch(() => setStatus('ready'))

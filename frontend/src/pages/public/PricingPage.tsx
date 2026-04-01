@@ -2,6 +2,8 @@ import { Link } from 'react-router-dom'
 import { config } from '@/config'
 import { useAuthStore } from '@/stores/authStore'
 import { Button } from '@/components/ui/button'
+import { StripeGuardButton } from '@/components/StripeGuardButton'
+import { useStripeConfigStore } from '@/stores/stripeConfigStore'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Check } from 'lucide-react'
@@ -28,6 +30,7 @@ const showBusinessPricing = config.showBusinessPricing
 
 export function PricingPage() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  const stripeEnabled = useStripeConfigStore((s) => s.stripeEnabled)
 
   return (
     <div className="py-20">
@@ -64,11 +67,19 @@ export function PricingPage() {
                   </li>
                 ))}
               </ul>
-              <Link to={isAuthenticated ? '/membership' : '/register?tier=personal'} className="mt-8 block">
-                <Button className="w-full" size="lg">
-                  {isAuthenticated ? 'Go to Membership' : 'Get Started'}
-                </Button>
-              </Link>
+              {stripeEnabled ? (
+                <Link to={isAuthenticated ? '/membership' : '/register?tier=personal'} className="mt-8 block">
+                  <Button className="w-full" size="lg">
+                    {isAuthenticated ? 'Go to Membership' : 'Get Started'}
+                  </Button>
+                </Link>
+              ) : (
+                <div className="mt-8">
+                  <StripeGuardButton className="w-full" size="lg">
+                    {isAuthenticated ? 'Go to Membership' : 'Get Started'}
+                  </StripeGuardButton>
+                </div>
+              )}
               <p className="mt-4 text-center text-sm text-muted-foreground">
                 30-day grace period if payment fails
               </p>
@@ -103,11 +114,19 @@ export function PricingPage() {
                     </li>
                   ))}
                 </ul>
-                <Link to={isAuthenticated ? '/membership' : '/register?tier=business'} className="mt-8 block">
-                  <Button className="w-full" size="lg">
-                    {isAuthenticated ? 'Go to Membership' : 'Get Started'}
-                  </Button>
-                </Link>
+                {stripeEnabled ? (
+                  <Link to={isAuthenticated ? '/membership' : '/register?tier=business'} className="mt-8 block">
+                    <Button className="w-full" size="lg">
+                      {isAuthenticated ? 'Go to Membership' : 'Get Started'}
+                    </Button>
+                  </Link>
+                ) : (
+                  <div className="mt-8">
+                    <StripeGuardButton className="w-full" size="lg">
+                      {isAuthenticated ? 'Go to Membership' : 'Get Started'}
+                    </StripeGuardButton>
+                  </div>
+                )}
                 <p className="mt-4 text-center text-sm text-muted-foreground">
                   30-day grace period if payment fails
                 </p>

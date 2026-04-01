@@ -87,6 +87,7 @@ pub struct SetupRequest {
 pub struct SetupStatusResponse {
     pub setup_required: bool,
     pub email_enabled: bool,
+    pub stripe_enabled: bool,
 }
 
 /// Response for successful authentication
@@ -842,6 +843,7 @@ pub async fn setup_status(
     req: HttpRequest,
     pool: web::Data<PgPool>,
     config: web::Data<crate::config::Config>,
+    stripe_service: web::Data<Arc<crate::services::StripeService>>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
     let admin_emails = UserRepository::find_admin_emails(&pool).await?;
@@ -851,6 +853,7 @@ pub async fn setup_status(
         data: Some(SetupStatusResponse {
             setup_required: admin_emails.is_empty(),
             email_enabled: config.email.enabled,
+            stripe_enabled: stripe_service.is_configured(),
         }),
         meta: crate::responses::ResponseMeta::new(request_id),
     }))

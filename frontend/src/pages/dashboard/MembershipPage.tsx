@@ -5,6 +5,7 @@ import { membershipApi } from '@/api'
 import { useAuthStore } from '@/stores/authStore'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { StripeGuardButton } from '@/components/StripeGuardButton'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { formatDate, formatCurrency } from '@/lib/utils'
@@ -194,15 +195,15 @@ export function MembershipPage() {
 
               <div className="flex gap-4 pt-4">
                 {willCancel ? (
-                  <Button onClick={handleReactivate} disabled={actionLoading} className="bg-gradient-to-r from-primary to-indigo-500 text-white border-0">
+                  <StripeGuardButton onClick={handleReactivate} disabled={actionLoading} className="bg-gradient-to-r from-primary to-indigo-500 text-white border-0">
                     {actionLoading && (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     )}
                     Reactivate Membership
-                  </Button>
+                  </StripeGuardButton>
                 ) : (
                   <>
-                    <Button
+                    <StripeGuardButton
                       variant="outline"
                       onClick={handleCancel}
                       disabled={actionLoading}
@@ -211,8 +212,8 @@ export function MembershipPage() {
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       )}
                       Cancel Membership
-                    </Button>
-                    <Button
+                    </StripeGuardButton>
+                    <StripeGuardButton
                       variant="destructive"
                       onClick={handleCancelNow}
                       disabled={actionLoading}
@@ -221,7 +222,7 @@ export function MembershipPage() {
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       )}
                       Cancel Now
-                    </Button>
+                    </StripeGuardButton>
                   </>
                 )}
               </div>
@@ -248,13 +249,13 @@ export function MembershipPage() {
               </div>
 
               <div className="text-center">
-                <Button onClick={handleSubscribe} disabled={actionLoading} size="lg" className="gap-2 bg-gradient-to-r from-primary to-indigo-500 text-white border-0 shadow-lg shadow-primary/20">
+                <StripeGuardButton onClick={handleSubscribe} disabled={actionLoading} size="lg" className="gap-2 bg-gradient-to-r from-primary to-indigo-500 text-white border-0 shadow-lg shadow-primary/20">
                   {actionLoading && (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   )}
                   Subscribe
                   <ArrowRight className="h-4 w-4" />
-                </Button>
+                </StripeGuardButton>
               </div>
             </div>
           )}
