@@ -35,7 +35,7 @@ services:
       APP_PORT: 4000
       RUST_LOG: ${RUST_LOG:-debug}
       # CORS_ORIGIN: http://localhost:5173
-      CORS_ORIGIN: https://app.a8n.run
+      CORS_ORIGIN: https://${USER}-app.a8n.run
       ENVIRONMENT: development
       JWT_SECRET: ${JWT_SECRET:-s3cr3tK3yAtL34st32Ch4r4ct3rsL0ng!}
       COOKIE_DOMAIN: .a8n.run
@@ -47,7 +47,7 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       EMAIL_ENABLED: ${EMAIL_ENABLED:-false}
       # BASE_URL: ${BASE_URL:-http://localhost:5173}
-      BASE_URL: ${BASE_URL:-http://app.a8n.run}
+      BASE_URL: ${BASE_URL:-https://${USER}-app.a8n.run}
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       STRIPE_PRICE_ID: ${STRIPE_PRICE_ID:-}
@@ -66,13 +66,13 @@ services:
       postgres:
         condition: service_healthy
     labels:
-      traefik.enable: true
-      traefik.docker.network: network-traefik-public
-      traefik.http.routers.api-saas.rule: Host(`api.a8n.run`)
-      traefik.http.routers.api-saas.service: api-saas@docker
-      traefik.http.routers.api-saas.entrypoints: web-secure
-      traefik.http.routers.api-saas.tls.certresolver: cert-cloudflare
-      traefik.http.services.api-saas.loadbalancer.server.port: 4000
+      - "traefik.enable=true"
+      - "traefik.docker.network=network-traefik-public"
+      - "traefik.http.routers.api-saas-${USER}.rule=Host(`api.a8n.run`) || Host(`${USER}-api.a8n.run`)"
+      - "traefik.http.routers.api-saas-${USER}.service=api-saas-${USER}@docker"
+      - "traefik.http.routers.api-saas-${USER}.entrypoints=web-secure"
+      - "traefik.http.routers.api-saas-${USER}.tls.certresolver=cert-cloudflare"
+      - "traefik.http.services.api-saas-${USER}.loadbalancer.server.port=4000"
 
   # React Frontend
   frontend:
@@ -85,7 +85,7 @@ services:
       # Use Docker service name for internal proxy requests
       # TODO: Once port 443 is working through Traefik, this is not needed.
       # VITE_API_URL: http://api.a8n.run:4000
-      VITE_API_URL: https://api.a8n.run
+      VITE_API_URL: https://${USER}-api.a8n.run
       VITE_STRIPE_PUBLISHABLE_KEY: ${VITE_STRIPE_PUBLISHABLE_KEY:-}
     networks:
       - network-traefik-public
@@ -100,13 +100,13 @@ services:
       - ./frontend/postcss.config.js:/app/postcss.config.js:ro
       - ./frontend/vitest.config.ts:/app/vitest.config.ts:ro
     labels:
-      traefik.enable: true
-      traefik.docker.network: network-traefik-public
-      traefik.http.routers.frontend-saas.rule: Host(`app.a8n.run`)
-      traefik.http.routers.frontend-saas.service: frontend-saas@docker
-      traefik.http.routers.frontend-saas.entrypoints: web-secure
-      traefik.http.routers.frontend-saas.tls.certresolver: cert-cloudflare
-      traefik.http.services.frontend-saas.loadbalancer.server.port: 5173
+      - "traefik.enable=true"
+      - "traefik.docker.network=network-traefik-public"
+      - "traefik.http.routers.frontend-saas-${USER}.rule=Host(`app.a8n.run`) || Host(`${USER}-app.a8n.run`)"
+      - "traefik.http.routers.frontend-saas-${USER}.service=frontend-saas-${USER}@docker"
+      - "traefik.http.routers.frontend-saas-${USER}.entrypoints=web-secure"
+      - "traefik.http.routers.frontend-saas-${USER}.tls.certresolver=cert-cloudflare"
+      - "traefik.http.services.frontend-saas-${USER}.loadbalancer.server.port=5173"
 
 
 volumes:
