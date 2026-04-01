@@ -1,9 +1,14 @@
 import { useQuery } from '@tanstack/react-query'
 import { applicationApi } from '@/api'
+import { useAuthStore } from '@/stores/authStore'
+import { hasActiveMembership } from '@/lib/utils'
 
 export function useApplications() {
+  const user = useAuthStore((s) => s.user)
+  const isMember = hasActiveMembership(user)
+
   const query = useQuery({
-    queryKey: ['applications'],
+    queryKey: ['applications', { isMember }],
     queryFn: () => applicationApi.list(),
   })
 

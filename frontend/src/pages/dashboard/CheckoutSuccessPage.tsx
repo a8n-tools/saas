@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/authStore'
 import { authApi } from '@/api'
 import { Card, CardContent } from '@/components/ui/card'
@@ -8,6 +9,7 @@ import { CheckCircle, AppWindow, CreditCard, ArrowRight } from 'lucide-react'
 
 export function CheckoutSuccessPage() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { user } = useAuthStore()
   const [countdown, setCountdown] = useState(10)
   const [ready, setReady] = useState(false)
@@ -16,6 +18,8 @@ export function CheckoutSuccessPage() {
   // The old JWT still has membership_status: "none" even though the webhook
   // has already updated the DB. The refresh endpoint sets a new cookie but
   // doesn't return user data, so we fetch /users/me after.
+  // Also invalidate cached application data so the next page sees the
+  // updated is_accessible flags from the fresh JWT.
   useEffect(() => {
     let cancelled = false
     const refresh = async () => {
@@ -25,6 +29,7 @@ export function CheckoutSuccessPage() {
         const user = await authApi.me()
         if (!cancelled) {
           useAuthStore.getState().setUser(user)
+          queryClient.removeQueries({ queryKey: ['applications'] })
           setReady(true)
         }
       } catch {
@@ -33,7 +38,7 @@ export function CheckoutSuccessPage() {
     }
     refresh()
     return () => { cancelled = true }
-  }, [])
+  }, [queryClient])
 
   // Auto-redirect countdown (only starts after token is refreshed)
   useEffect(() => {
