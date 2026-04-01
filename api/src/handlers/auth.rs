@@ -86,6 +86,7 @@ pub struct SetupRequest {
 #[derive(Debug, Serialize)]
 pub struct SetupStatusResponse {
     pub setup_required: bool,
+    pub email_enabled: bool,
 }
 
 /// Response for successful authentication
@@ -840,6 +841,7 @@ pub async fn auth_redirect(
 pub async fn setup_status(
     req: HttpRequest,
     pool: web::Data<PgPool>,
+    config: web::Data<crate::config::Config>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
     let admin_emails = UserRepository::find_admin_emails(&pool).await?;
@@ -848,6 +850,7 @@ pub async fn setup_status(
         success: true,
         data: Some(SetupStatusResponse {
             setup_required: admin_emails.is_empty(),
+            email_enabled: config.email.enabled,
         }),
         meta: crate::responses::ResponseMeta::new(request_id),
     }))

@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { EmailGuardButton } from '@/components/EmailGuardButton'
 import { Badge } from '@/components/ui/badge'
 import {
   Dialog,
@@ -192,7 +193,7 @@ export function SettingsPage() {
                         {verifySuccess && (
                           <p className="text-sm text-teal-600 dark:text-teal-400">{verifySuccess}</p>
                         )}
-                        <Button
+                        <EmailGuardButton
                           size="sm"
                           variant="outline"
                           disabled={verifyLoading}
@@ -214,7 +215,7 @@ export function SettingsPage() {
                           {verifyLoading && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
                           <Mail className="mr-2 h-3 w-3" />
                           Verify Email
-                        </Button>
+                        </EmailGuardButton>
                       </>
                     ) : (
                       <p className="text-xs text-muted-foreground">
@@ -296,10 +297,10 @@ export function SettingsPage() {
               )}
             </div>
 
-            <Button type="submit" disabled={emailLoading} className="bg-gradient-to-r from-primary to-teal-500 text-white border-0">
+            <EmailGuardButton type="submit" disabled={emailLoading} requiresEmail={!!user?.email_verified} className="bg-gradient-to-r from-primary to-teal-500 text-white border-0">
               {emailLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Change Email
-            </Button>
+            </EmailGuardButton>
           </form>
         </CardContent>
       </Card>
