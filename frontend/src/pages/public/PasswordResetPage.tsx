@@ -9,6 +9,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { EmailGuardButton } from '@/components/EmailGuardButton'
+import { useEmailConfigStore } from '@/stores/emailConfigStore'
 import { AlertCircle, Loader2, KeyRound, CheckCircle } from 'lucide-react'
 
 const resetSchema = z.object({
@@ -18,6 +20,7 @@ const resetSchema = z.object({
 type ResetFormData = z.infer<typeof resetSchema>
 
 export function PasswordResetPage() {
+  const emailEnabled = useEmailConfigStore((s) => s.emailEnabled)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
@@ -87,6 +90,12 @@ export function PasswordResetPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            {!emailEnabled && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>Email is not configured. Password resets are unavailable.</AlertDescription>
+              </Alert>
+            )}
             {error && (
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
@@ -107,10 +116,10 @@ export function PasswordResetPage() {
               )}
             </div>
 
-            <Button type="submit" className="w-full" disabled={isLoading}>
+            <EmailGuardButton type="submit" className="w-full" disabled={isLoading}>
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Send Reset Link
-            </Button>
+            </EmailGuardButton>
           </form>
 
           <p className="mt-6 text-center text-sm text-muted-foreground">

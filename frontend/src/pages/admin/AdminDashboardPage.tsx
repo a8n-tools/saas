@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Users, CreditCard, AlertTriangle, AlertCircle, TrendingUp, Loader2, Activity } from 'lucide-react'
+import { Users, CreditCard, AlertTriangle, AlertCircle, TrendingUp, Loader2, Activity, Mail } from 'lucide-react'
 import { adminApi, type AdminAuditLog } from '@/api/admin'
+import { useEmailConfigStore } from '@/stores/emailConfigStore'
 import { formatRelativeTime } from '@/lib/utils'
 import type { ApiError } from '@/types'
 
@@ -12,6 +13,7 @@ function getErrorMessage(error: unknown): string {
 }
 
 export function AdminDashboardPage() {
+  const emailEnabled = useEmailConfigStore((s) => s.emailEnabled)
   const { data: stats, isLoading: statsLoading, isError: statsError, error: statsErrorData } = useQuery({
     queryKey: ['admin', 'stats'],
     queryFn: adminApi.getStats,
@@ -34,6 +36,16 @@ export function AdminDashboardPage() {
           Overview of your platform.
         </p>
       </div>
+
+      {!emailEnabled && (
+        <Alert>
+          <Mail className="h-4 w-4" />
+          <AlertTitle>Email is not configured</AlertTitle>
+          <AlertDescription>
+            Features that require sending email (invitations, password resets, magic links, email verification) are disabled. Configure SMTP settings to enable them.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {statsError && (
         <Alert variant="destructive">

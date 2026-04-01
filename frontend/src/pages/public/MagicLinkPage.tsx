@@ -11,6 +11,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { EmailGuardButton } from '@/components/EmailGuardButton'
+import { useEmailConfigStore } from '@/stores/emailConfigStore'
 import { AlertCircle, Loader2, Mail, CheckCircle } from 'lucide-react'
 
 const magicLinkSchema = z.object({
@@ -20,6 +22,7 @@ const magicLinkSchema = z.object({
 type MagicLinkFormData = z.infer<typeof magicLinkSchema>
 
 export function MagicLinkPage() {
+  const emailEnabled = useEmailConfigStore((s) => s.emailEnabled)
   const [searchParams] = useSearchParams()
   const token = searchParams.get('token')
   const [isLoading, setIsLoading] = useState(false)
@@ -97,6 +100,12 @@ export function MagicLinkPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            {!emailEnabled && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>Email is not configured. Magic links are unavailable.</AlertDescription>
+              </Alert>
+            )}
             {error && (
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
@@ -117,10 +126,10 @@ export function MagicLinkPage() {
               )}
             </div>
 
-            <Button type="submit" className="w-full" disabled={isLoading}>
+            <EmailGuardButton type="submit" className="w-full" disabled={isLoading}>
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Send Magic Link
-            </Button>
+            </EmailGuardButton>
           </form>
 
           <p className="mt-6 text-center text-sm text-muted-foreground">
