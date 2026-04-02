@@ -3,11 +3,11 @@ import { Sidebar } from './Sidebar'
 import { useAuthStore } from '@/stores/authStore'
 import { useThemeStore } from '@/stores/themeStore'
 import { Button } from '@/components/ui/button'
-import { LogOut, Moon, Sun, User, ArrowLeft } from 'lucide-react'
+import { Contrast, LogOut, Moon, Sun, User, ArrowLeft } from 'lucide-react'
 
 export function AdminLayout() {
   const { user, logout } = useAuthStore()
-  const { theme, setTheme } = useThemeStore()
+  const { theme, setTheme, highContrast, toggleHighContrast } = useThemeStore()
 
   const toggleTheme = () => {
     setTheme(theme === 'dark' ? 'light' : 'dark')
@@ -37,6 +37,14 @@ export function AdminLayout() {
             <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label="Toggle theme">
               <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
               <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+            </Button>
+            <Button
+              variant={highContrast ? 'secondary' : 'ghost'}
+              size="icon"
+              onClick={toggleHighContrast}
+              aria-label="Toggle high contrast"
+            >
+              <Contrast className="h-4 w-4" />
             </Button>
             <Button variant="ghost" size="sm" onClick={() => logout()}>
               <LogOut className="h-4 w-4" />

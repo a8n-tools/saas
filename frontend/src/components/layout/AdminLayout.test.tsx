@@ -28,4 +28,9 @@ describe('AdminLayout', () => {
     render(<AdminLayout />)
     expect(screen.getByLabelText('Toggle theme')).toBeInTheDocument()
   })
+
+  it('renders high contrast toggle button', () => {
+    render(<AdminLayout />)
+    expect(screen.getByLabelText('Toggle high contrast')).toBeInTheDocument()
+  })
 })
