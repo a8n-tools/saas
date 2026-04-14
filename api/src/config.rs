@@ -224,6 +224,28 @@ impl TierConfig {
                 .unwrap_or(30),
         }
     }
+
+    /// Build a `TierConfig` from the DB row, falling back to env defaults
+    /// for any column that is NULL.
+    pub fn from_db_row(row: &crate::models::tier::TierConfigRow) -> Self {
+        let env = Self::from_env();
+        Self {
+            lifetime_slots: row.lifetime_slots.unwrap_or(env.lifetime_slots),
+            early_adopter_slots: row.early_adopter_slots.unwrap_or(env.early_adopter_slots),
+            early_adopter_trial_days: row
+                .early_adopter_trial_days
+                .unwrap_or(env.early_adopter_trial_days),
+            standard_trial_days: row.standard_trial_days.unwrap_or(env.standard_trial_days),
+        }
+    }
+
+    /// Returns `true` if the DB row has at least one non-NULL override.
+    pub fn has_db_overrides(row: &crate::models::tier::TierConfigRow) -> bool {
+        row.lifetime_slots.is_some()
+            || row.early_adopter_slots.is_some()
+            || row.early_adopter_trial_days.is_some()
+            || row.standard_trial_days.is_some()
+    }
 }
 
 impl Config {

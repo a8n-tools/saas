@@ -7,6 +7,8 @@ use sqlx::PgPool;
 use std::net::IpAddr;
 use uuid::Uuid;
 
+use std::sync::{Arc, RwLock};
+
 use crate::errors::AppError;
 use crate::models::{
     AuditAction, CreateAdminInvite, CreateAuditLog, CreateEmailChangeRequest,
@@ -48,17 +50,23 @@ pub struct AuthService {
     pool: PgPool,
     jwt: JwtService,
     password: PasswordService,
-    tier_config: TierConfig,
+    tier_config: Arc<RwLock<TierConfig>>,
 }
 
 impl AuthService {
-    pub fn new(pool: PgPool, jwt: JwtService, tier_config: TierConfig) -> Self {
+    pub fn new(pool: PgPool, jwt: JwtService, tier_config: Arc<RwLock<TierConfig>>) -> Self {
         Self {
             pool,
             jwt,
             password: PasswordService::new(),
             tier_config,
         }
+    }
+
+    /// Hot-reload the tier configuration (e.g. after admin update).
+    pub fn reload_tier_config(&self, config: TierConfig) {
+        let mut tc = self.tier_config.write().expect("TierConfig lock poisoned");
+        *tc = config;
     }
 
     /// Register a new user
@@ -961,9 +969,12 @@ impl AuthService {
         let (lifetime_count, early_adopter_count) =
             UserRepository::count_tier_assignments(&mut *tx).await?;
 
-        let tier = if lifetime_count < self.tier_config.lifetime_slots {
+        // Snapshot tier config under the lock so values are consistent
+        let tc = self.tier_config.read().expect("TierConfig lock poisoned").clone();
+
+        let tier = if lifetime_count < tc.lifetime_slots {
             SubscriptionTier::Lifetime
-        } else if early_adopter_count < self.tier_config.early_adopter_slots {
+        } else if early_adopter_count < tc.early_adopter_slots {
             SubscriptionTier::EarlyAdopter
         } else {
             SubscriptionTier::Standard
@@ -985,8 +996,8 @@ impl AuthService {
             &mut *tx,
             user.id,
             &tier,
-            self.tier_config.early_adopter_trial_days,
-            self.tier_config.standard_trial_days,
+            tc.early_adopter_trial_days,
+            tc.standard_trial_days,
         ).await?;
 
         tx.commit().await?;

@@ -12,7 +12,7 @@ use tracing_actix_web::TracingLogger;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 use a8n_api::{
-    config::Config,
+    config::{Config, TierConfig},
     middleware::{
         auto_ban::{self, AutoBanService},
         request_id::RequestIdMiddleware,
@@ -116,8 +116,24 @@ async fn main() -> anyhow::Result<()> {
 
     info!("JWT service initialized");
 
+    // Initialize tier config — prefer DB overrides, fall back to env vars
+    let tier_config = {
+        use a8n_api::repositories::TierConfigRepository;
+        match TierConfigRepository::get(&pool).await {
+            Ok(row) if TierConfig::has_db_overrides(&row) => {
+                info!("Tier config initialized from database");
+                TierConfig::from_db_row(&row)
+            }
+            _ => {
+                info!("Tier config initialized from environment variables");
+                config.tier.clone()
+            }
+        }
+    };
+    let tier_config = Arc::new(std::sync::RwLock::new(tier_config));
+
     // Initialize Auth service
-    let auth_service = Arc::new(AuthService::new(pool.clone(), (*jwt_service).clone(), config.tier.clone()));
+    let auth_service = Arc::new(AuthService::new(pool.clone(), (*jwt_service).clone(), tier_config.clone()));
 
     info!("Auth service initialized");
 

@@ -8,6 +8,7 @@ pub mod feedback;
 pub mod membership;
 pub mod rate_limit;
 pub mod stripe;
+pub mod tier;
 pub mod token;
 pub mod totp;
 pub mod user;
@@ -39,5 +40,6 @@ pub use stripe::{
     StripeProductResponse, StripeSubscriptionItemResponse, StripeSubscriptionResponse,
     StripeWebhookEndpointResponse,
 };
+pub use tier::{TierConfigResponse, TierConfigRow};
 pub use totp::{RecoveryCode, UserTotp};
 pub use user::{CreateUser, MembershipStatus, SubscriptionTier, User, UserResponse, UserRole};

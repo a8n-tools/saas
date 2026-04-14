@@ -55,6 +55,7 @@ pub enum AuditAction {
     AdminInviteAccepted,
     AdminInviteRevoked,
     AdminStripeConfigUpdated,
+    AdminTierConfigUpdated,
     AdminKeyRotation,
     UserAccountDeleted,
 }
@@ -106,6 +107,7 @@ impl AuditAction {
             AuditAction::AdminInviteAccepted => "admin_invite_accepted",
             AuditAction::AdminInviteRevoked => "admin_invite_revoked",
             AuditAction::AdminStripeConfigUpdated => "admin_stripe_config_updated",
+            AuditAction::AdminTierConfigUpdated => "admin_tier_config_updated",
             AuditAction::AdminKeyRotation => "admin_key_rotation",
             AuditAction::UserAccountDeleted => "user_account_deleted",
         }
@@ -133,6 +135,7 @@ impl AuditAction {
                 | AuditAction::AdminInviteAccepted
                 | AuditAction::AdminInviteRevoked
                 | AuditAction::AdminStripeConfigUpdated
+                | AuditAction::AdminTierConfigUpdated
                 | AuditAction::AdminKeyRotation
         )
     }

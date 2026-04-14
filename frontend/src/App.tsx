@@ -46,6 +46,7 @@ import { AdminApplicationsPage } from '@/pages/admin/AdminApplicationsPage'
 import { AdminAuditLogsPage } from '@/pages/admin/AdminAuditLogsPage'
 import { AdminFeedbackPage } from '@/pages/admin/AdminFeedbackPage'
 import { AdminStripePage } from '@/pages/admin/AdminStripePage'
+import AdminTierSettingsPage from '@/pages/admin/AdminTierSettingsPage'
 
 // Settings pages (public, token-based)
 import { ConfirmEmailPage } from '@/pages/settings/ConfirmEmailPage'
@@ -218,6 +219,7 @@ export default function App() {
           <Route path="/admin/memberships" element={<AdminMembershipsPage />} />
           <Route path="/admin/applications" element={<AdminApplicationsPage />} />
           <Route path="/admin/stripe" element={<AdminStripePage />} />
+          <Route path="/admin/tier-settings" element={<AdminTierSettingsPage />} />
           <Route path="/admin/feedback" element={<AdminFeedbackPage />} />
           <Route path="/admin/audit-logs" element={<AdminAuditLogsPage />} />
         </Route>

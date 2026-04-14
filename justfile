@@ -196,8 +196,8 @@ create-release bump:
     }
     print $"(ansi green)Pushed ($release_branch)(ansi reset)"
     print $"Create PR:      ($base_url)/compare/main...($release_branch)"
-    print $"After merging, tag main as ($tag) via:"
-    print $"  Create release: ($base_url)/releases/new?tag=($tag)&target=main"
+    print $"After merging, create release ($tag) targeting main:"
+    print $"  ($base_url)/releases/new"
 
 # Cleanup
 # Stop services and remove volumes

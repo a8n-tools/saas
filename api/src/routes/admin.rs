@@ -51,6 +51,9 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route("/invites", web::post().to(handlers::create_admin_invite))
             .route("/invites", web::get().to(handlers::list_admin_invites))
             .route("/invites/{invite_id}", web::delete().to(handlers::revoke_admin_invite))
+            // Tier config
+            .route("/tier-config", web::get().to(handlers::get_tier_config))
+            .route("/tier-config", web::put().to(handlers::update_tier_config))
             // Stripe config
             .route("/stripe", web::get().to(handlers::get_stripe_config))
             .route("/stripe", web::put().to(handlers::update_stripe_config))
