@@ -1118,6 +1118,7 @@ pub async fn get_system_health(
 pub struct UpdateStripeConfigRequest {
     pub secret_key: Option<String>,
     pub webhook_secret: Option<String>,
+    pub app_tag: Option<String>,
 }
 
 /// GET /v1/admin/stripe
@@ -1170,6 +1171,7 @@ pub async fn update_stripe_config(
     // Treat empty strings the same as None — user left the field blank
     let secret_key_plain = body.secret_key.as_deref().filter(|s| !s.is_empty());
     let webhook_secret_plain = body.webhook_secret.as_deref().filter(|s| !s.is_empty());
+    let app_tag = body.app_tag.as_deref().filter(|s| !s.is_empty()).map(|s| s.to_string());
 
     // Encrypt secrets before storing
     let (secret_key_enc, secret_key_nonce, key_version) = match secret_key_plain {
@@ -1195,6 +1197,7 @@ pub async fn update_stripe_config(
         webhook_secret_nonce,
         admin.0.sub,
         key_version,
+        app_tag.clone(),
     )
     .await?;
 
@@ -1215,6 +1218,7 @@ pub async fn update_stripe_config(
             "fields_updated": {
                 "secret_key": secret_key_plain.is_some(),
                 "webhook_secret": webhook_secret_plain.is_some(),
+                "app_tag": app_tag,
             }
         }));
     AuditLogRepository::create(&pool, audit_log).await?;

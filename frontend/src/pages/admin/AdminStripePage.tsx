@@ -72,7 +72,7 @@ const WEBHOOK_EVENTS = [
 
 function ApiKeysTab() {
   const queryClient = useQueryClient()
-  const [form, setForm] = useState<UpdateStripeConfigRequest>({ secret_key: '' })
+  const [form, setForm] = useState<UpdateStripeConfigRequest>({ secret_key: '', app_tag: '' })
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
@@ -85,7 +85,9 @@ function ApiKeysTab() {
     mutationFn: (data: UpdateStripeConfigRequest) => adminApi.updateStripeConfig(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'stripe'] })
-      setForm({ secret_key: '' })
+      queryClient.invalidateQueries({ queryKey: ['admin', 'stripe', 'products'] })
+      queryClient.invalidateQueries({ queryKey: ['admin', 'stripe', 'prices'] })
+      setForm({ secret_key: '', app_tag: '' })
       setSaveSuccess(true)
       setSaveError(null)
       setTimeout(() => setSaveSuccess(false), 4000)
@@ -103,6 +105,7 @@ function ApiKeysTab() {
     setSaveError(null)
     const payload: UpdateStripeConfigRequest = {}
     if (form.secret_key) payload.secret_key = form.secret_key
+    if (form.app_tag) payload.app_tag = form.app_tag
     updateMutation.mutate(payload)
   }
 
@@ -166,6 +169,24 @@ function ApiKeysTab() {
             />
             <p className="text-xs text-muted-foreground">
               The signing secret used to verify incoming Stripe webhooks. Auto-populated when you create a webhook endpoint in the Webhooks tab.
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="app_tag">Application Tag</Label>
+            <Input
+              id="app_tag"
+              type="text"
+              placeholder={config?.app_tag ?? 'a8n-tools'}
+              value={form.app_tag}
+              onChange={(e) => setForm({ ...form, app_tag: e.target.value })}
+              autoComplete="off"
+            />
+            <p className="text-xs text-muted-foreground">
+              Products created through this admin panel are tagged with this value in their
+              Stripe metadata. Only products matching this tag are shown. Change this if you
+              share a Stripe account across multiple applications. Leave blank to keep the
+              current value{config?.app_tag ? ` (${config.app_tag})` : ''}.
             </p>
           </div>
 
