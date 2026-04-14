@@ -34,6 +34,7 @@ const adminItems: SidebarItem[] = [
   { title: 'Memberships', href: '/admin/memberships', icon: CreditCard },
   { title: 'Applications', href: '/admin/applications', icon: AppWindow },
   { title: 'Stripe', href: '/admin/stripe', icon: Banknote },
+  { title: 'Tier Settings', href: '/admin/tier-settings', icon: Settings },
   { title: 'Feedback', href: '/admin/feedback', icon: MessageSquareQuote },
   { title: 'Audit Logs', href: '/admin/audit-logs', icon: FileText },
 ]

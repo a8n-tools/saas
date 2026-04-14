@@ -47,7 +47,8 @@ pub use admin::{
     grant_membership, impersonate_user, key_rotation_status, list_admin_invites, list_all_applications, list_audit_logs,
     list_notifications, list_memberships, list_users, reencrypt_key, revoke_admin_invite, swap_application_order,
     mark_all_notifications_read, mark_notification_read, revoke_membership, send_test_email,
-    update_application, update_stripe_config, update_user_role, update_user_status,
+    update_application, update_stripe_config, update_tier_config, get_tier_config,
+    update_user_role, update_user_status,
 };
 pub use admin_stripe::{
     archive_stripe_price, archive_stripe_product, create_stripe_price, create_stripe_product,

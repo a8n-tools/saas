@@ -1270,6 +1270,141 @@ pub async fn grant_lifetime_membership(
 }
 
 // =============================================================================
+// Tier Configuration
+// =============================================================================
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateTierConfigRequest {
+    pub lifetime_slots: Option<i64>,
+    pub early_adopter_slots: Option<i64>,
+    pub early_adopter_trial_days: Option<i64>,
+    pub standard_trial_days: Option<i64>,
+}
+
+/// GET /v1/admin/tier-config
+pub async fn get_tier_config(
+    req: HttpRequest,
+    _admin: AdminUser,
+    pool: web::Data<PgPool>,
+) -> Result<HttpResponse, AppError> {
+    use crate::config::TierConfig;
+    use crate::models::tier::TierConfigResponse;
+    use crate::repositories::TierConfigRepository;
+
+    let request_id = get_request_id(&req);
+
+    let row = TierConfigRepository::get(&pool).await?;
+    let resolved = TierConfig::from_db_row(&row);
+    let source = if TierConfig::has_db_overrides(&row) {
+        "database"
+    } else {
+        "environment"
+    };
+
+    let (lifetime_used, early_adopter_used) =
+        UserRepository::count_tier_assignments(pool.get_ref()).await?;
+
+    Ok(success(
+        TierConfigResponse {
+            lifetime_slots: resolved.lifetime_slots,
+            early_adopter_slots: resolved.early_adopter_slots,
+            early_adopter_trial_days: resolved.early_adopter_trial_days,
+            standard_trial_days: resolved.standard_trial_days,
+            source,
+            lifetime_slots_used: lifetime_used,
+            early_adopter_slots_used: early_adopter_used,
+            updated_at: row.updated_at,
+            updated_by: row.updated_by,
+        },
+        request_id,
+    ))
+}
+
+/// PUT /v1/admin/tier-config
+pub async fn update_tier_config(
+    req: HttpRequest,
+    admin: AdminUser,
+    pool: web::Data<PgPool>,
+    auth_service: web::Data<Arc<AuthService>>,
+    body: web::Json<UpdateTierConfigRequest>,
+) -> Result<HttpResponse, AppError> {
+    use crate::config::TierConfig;
+    use crate::models::tier::TierConfigResponse;
+    use crate::repositories::TierConfigRepository;
+
+    let request_id = get_request_id(&req);
+
+    // Validate: all provided values must be positive
+    if let Some(v) = body.lifetime_slots {
+        if v < 0 {
+            return Err(AppError::validation("lifetime_slots", "Must be non-negative"));
+        }
+    }
+    if let Some(v) = body.early_adopter_slots {
+        if v < 0 {
+            return Err(AppError::validation("early_adopter_slots", "Must be non-negative"));
+        }
+    }
+    if let Some(v) = body.early_adopter_trial_days {
+        if v < 0 {
+            return Err(AppError::validation("early_adopter_trial_days", "Must be non-negative"));
+        }
+    }
+    if let Some(v) = body.standard_trial_days {
+        if v < 0 {
+            return Err(AppError::validation("standard_trial_days", "Must be non-negative"));
+        }
+    }
+
+    let row = TierConfigRepository::update(
+        &pool,
+        body.lifetime_slots,
+        body.early_adopter_slots,
+        body.early_adopter_trial_days,
+        body.standard_trial_days,
+        admin.0.sub,
+    )
+    .await?;
+
+    // Hot-reload the AuthService with the new tier config
+    let resolved = TierConfig::from_db_row(&row);
+    auth_service.reload_tier_config(resolved.clone());
+    tracing::info!(?resolved, "Tier config updated and hot-reloaded");
+
+    let (lifetime_used, early_adopter_used) =
+        UserRepository::count_tier_assignments(pool.get_ref()).await?;
+
+    AuditLogRepository::create(
+        &pool,
+        CreateAuditLog::new(AuditAction::AdminTierConfigUpdated)
+            .with_actor(admin.0.sub, &admin.0.email, &admin.0.role)
+            .with_metadata(serde_json::json!({
+                "setting": "tier_config",
+                "lifetime_slots": body.lifetime_slots,
+                "early_adopter_slots": body.early_adopter_slots,
+                "early_adopter_trial_days": body.early_adopter_trial_days,
+                "standard_trial_days": body.standard_trial_days,
+            })),
+    )
+    .await?;
+
+    Ok(success(
+        TierConfigResponse {
+            lifetime_slots: TierConfig::from_db_row(&row).lifetime_slots,
+            early_adopter_slots: TierConfig::from_db_row(&row).early_adopter_slots,
+            early_adopter_trial_days: TierConfig::from_db_row(&row).early_adopter_trial_days,
+            standard_trial_days: TierConfig::from_db_row(&row).standard_trial_days,
+            source: "database",
+            lifetime_slots_used: lifetime_used,
+            early_adopter_slots_used: early_adopter_used,
+            updated_at: row.updated_at,
+            updated_by: row.updated_by,
+        },
+        request_id,
+    ))
+}
+
+// =============================================================================
 // Key Health Checks
 // =============================================================================
 

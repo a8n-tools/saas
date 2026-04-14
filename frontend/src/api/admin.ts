@@ -199,6 +199,25 @@ export interface UpdateStripeConfigRequest {
   webhook_secret?: string
 }
 
+export interface TierConfigResponse {
+  lifetime_slots: number
+  early_adopter_slots: number
+  early_adopter_trial_days: number
+  standard_trial_days: number
+  source: 'database' | 'environment'
+  lifetime_slots_used: number
+  early_adopter_slots_used: number
+  updated_at: string
+  updated_by: string | null
+}
+
+export interface UpdateTierConfigRequest {
+  lifetime_slots?: number
+  early_adopter_slots?: number
+  early_adopter_trial_days?: number
+  standard_trial_days?: number
+}
+
 export interface GrantMembershipRequest {
   user_id: string
   price_locked?: boolean
@@ -356,6 +375,13 @@ export const adminApi = {
 
   revokeInvite: (inviteId: string): Promise<void> =>
     apiClient.delete(`/admin/invites/${inviteId}`),
+
+  // Tier config
+  getTierConfig: (): Promise<TierConfigResponse> =>
+    apiClient.get('/admin/tier-config'),
+
+  updateTierConfig: (data: UpdateTierConfigRequest): Promise<TierConfigResponse> =>
+    apiClient.put('/admin/tier-config', data),
 
   // Stripe config
   getStripeConfig: (): Promise<StripeConfigResponse> =>
