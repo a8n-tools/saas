@@ -190,6 +190,7 @@ export interface StripeConfigResponse {
   webhook_secret_masked: string | null
   has_secret_key: boolean
   has_webhook_secret: boolean
+  app_tag: string
   updated_at: string | null
   source: 'database' | 'environment'
 }
@@ -197,6 +198,7 @@ export interface StripeConfigResponse {
 export interface UpdateStripeConfigRequest {
   secret_key?: string
   webhook_secret?: string
+  app_tag?: string
 }
 
 export interface TierConfigResponse {
