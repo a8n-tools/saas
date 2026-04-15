@@ -1,16 +1,11 @@
-block-beta
-    columns 3
-
-    space header1["a8n Tools"] header2["Typical open source"]
-
-    free["-"]
-    cell1["Paid support"]
-    cell2["Community support (free)"]
-
-    paid["-"]
-    cell3["Open source"]
-    cell4["Open core"]
-
-    style header2 fill:#f97316,color:#fff
-    style cell2 fill:#fef3e2,color:#000
-    style cell4 fill:#fef3e2,color:#000
+quadrantChart
+    title Support Model Comparison
+    x-axis "Closed Source" --> "Open Source"
+    y-axis "DIY / Community" --> "Included with Membership"
+    quadrant-1 "Our Goal"
+    quadrant-2 "Idealistic"
+    quadrant-3 "Typical Proprietary"
+    quadrant-4 "Typical Open Source"
+    Typical Open Source: [0.9, 0.2]
+    Business Open Source: [0.4, 0.6]
+    a8n Tools: [0.85, 0.85]
