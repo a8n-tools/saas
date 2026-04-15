@@ -23,7 +23,7 @@ use crate::repositories::{
     NotificationRepository, StripeConfigRepository, TokenRepository, TotpRepository, UserRepository,
 };
 use crate::responses::{get_request_id, created, paginated, success, success_no_data};
-use crate::services::{AuthService, EmailService, EncryptionKeySet, JwtService, PasswordService, StripeConfig, StripeService, TotpService, WebhookService};
+use crate::services::{AuthService, DownloadCache, EmailService, EncryptionKeySet, JwtService, PasswordService, ReleaseCache, StripeConfig, StripeService, TotpService, WebhookService};
 use crate::validation;
 
 // =============================================================================
@@ -447,6 +447,8 @@ pub async fn update_application(
     path: web::Path<uuid::Uuid>,
     body: web::Json<UpdateApplication>,
     webhook_service: web::Data<Arc<WebhookService>>,
+    release_cache: web::Data<Option<Arc<ReleaseCache>>>,
+    download_cache: web::Data<Option<Arc<DownloadCache>>>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
     let app_id = path.into_inner();
@@ -455,7 +457,37 @@ pub async fn update_application(
         .await?
         .ok_or(AppError::not_found("Application"))?;
 
+    // All-or-nothing Forgejo validation on merged values
+    let merged_owner = body.forgejo_owner.as_ref().or(old_app.forgejo_owner.as_ref());
+    let merged_repo = body.forgejo_repo.as_ref().or(old_app.forgejo_repo.as_ref());
+    let merged_tag = body.pinned_release_tag.as_ref().or(old_app.pinned_release_tag.as_ref());
+    let forgejo_any = merged_owner.is_some() || merged_repo.is_some() || merged_tag.is_some();
+    let forgejo_all = merged_owner.is_some() && merged_repo.is_some() && merged_tag.is_some();
+    if forgejo_any && !forgejo_all {
+        return Err(AppError::validation(
+            "forgejo",
+            "forgejo_owner, forgejo_repo, and pinned_release_tag must all be set together",
+        ));
+    }
+
+    // Capture old tag before update for cache invalidation
+    let old_tag = old_app.pinned_release_tag.clone();
+
     let app = ApplicationRepository::update(&pool, app_id, &body).await?;
+
+    // Invalidate caches if the pinned release tag changed
+    if old_tag.is_some() && old_tag != app.pinned_release_tag {
+        if let Some(old_tag_str) = old_tag.as_deref() {
+            if let Some(rc) = release_cache.get_ref().as_ref() {
+                rc.invalidate(app.id, old_tag_str).await;
+            }
+            if let Some(dc) = download_cache.get_ref().as_ref() {
+                if let Err(e) = dc.invalidate_app_tag(app.id, old_tag_str).await {
+                    tracing::warn!(error = %e, "download cache invalidation failed");
+                }
+            }
+        }
+    }
 
     // Notify child app if maintenance mode or active status changed
     let maintenance_changed = old_app.maintenance_mode != app.maintenance_mode;
