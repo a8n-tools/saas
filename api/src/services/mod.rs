@@ -3,6 +3,7 @@
 //! This module contains all business logic organized into services.
 
 pub mod auth;
+pub mod download_limiter;
 pub mod email;
 pub mod encryption;
 pub mod forgejo;
@@ -15,6 +16,7 @@ pub mod webhook;
 
 // Re-export service types
 pub use auth::{AcceptInviteResult, AuthService, AuthTokens, LoginResult, MagicLinkResult};
+pub use download_limiter::{DownloadGuard, DownloadLimiter, LimitDenial};
 pub use email::EmailService;
 pub use encryption::EncryptionKeySet;
 pub use forgejo::{ForgejoClient, ForgejoError};
