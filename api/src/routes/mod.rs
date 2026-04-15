@@ -6,6 +6,7 @@ pub mod admin;
 pub mod application;
 pub mod auth;
 pub mod billing;
+pub mod download;
 pub mod feedback;
 pub mod health;
 pub mod membership;
@@ -22,6 +23,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .configure(health::configure)
             .configure(auth::configure)
             .configure(user::configure)
+            .configure(download::configure)
             .configure(application::configure)
             .configure(billing::configure)
             .configure(feedback::configure)
