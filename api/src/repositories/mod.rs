@@ -4,6 +4,7 @@
 
 pub mod application;
 pub mod audit;
+pub mod download_cache;
 pub mod feedback;
 pub mod invite;
 pub mod notification;
@@ -17,6 +18,7 @@ pub mod user;
 // Re-export repositories
 pub use application::ApplicationRepository;
 pub use audit::AuditLogRepository;
+pub use download_cache::DownloadCacheRepository;
 pub use feedback::FeedbackRepository;
 pub use invite::InviteRepository;
 pub use notification::NotificationRepository;
