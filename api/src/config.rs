@@ -38,6 +38,8 @@ pub struct Config {
     pub stripe_key_version: i16,
     /// Membership tier thresholds
     pub tier: TierConfig,
+    /// Download proxy configuration.
+    pub download: DownloadConfig,
 }
 
 /// SMTP TLS mode
@@ -248,6 +250,49 @@ impl TierConfig {
     }
 }
 
+/// Download proxy configuration.
+#[derive(Debug, Clone)]
+pub struct DownloadConfig {
+    pub forgejo_base_url: Option<String>,
+    pub forgejo_api_token: Option<String>,
+    pub cache_dir: String,
+    pub cache_max_bytes: u64,
+    pub concurrency_per_user: u32,
+    pub daily_limit_per_user: u32,
+    pub release_cache_ttl_secs: u64,
+}
+
+impl DownloadConfig {
+    pub fn from_env() -> Self {
+        Self {
+            forgejo_base_url: env::var("FORGEJO_BASE_URL").ok().filter(|s| !s.is_empty()),
+            forgejo_api_token: env::var("FORGEJO_API_TOKEN").ok().filter(|s| !s.is_empty()),
+            cache_dir: env::var("DOWNLOAD_CACHE_DIR")
+                .unwrap_or_else(|_| "/var/cache/a8n-downloads".to_string()),
+            cache_max_bytes: env::var("DOWNLOAD_CACHE_MAX_BYTES")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(10_737_418_240),
+            concurrency_per_user: env::var("DOWNLOAD_CONCURRENCY_PER_USER")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(2),
+            daily_limit_per_user: env::var("DOWNLOAD_DAILY_LIMIT_PER_USER")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(50),
+            release_cache_ttl_secs: env::var("FORGEJO_RELEASE_CACHE_TTL_SECS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(300),
+        }
+    }
+
+    pub fn enabled(&self) -> bool {
+        self.forgejo_base_url.is_some() && self.forgejo_api_token.is_some()
+    }
+}
+
 impl Config {
     /// Load configuration from environment variables
     ///
@@ -297,6 +342,7 @@ impl Config {
             .unwrap_or(1);
 
         let tier = TierConfig::from_env();
+        let download = DownloadConfig::from_env();
 
         let config = Self {
             database_url,
@@ -316,6 +362,7 @@ impl Config {
             stripe_encryption_key_prev,
             stripe_key_version,
             tier,
+            download,
         };
 
         info!(
@@ -488,6 +535,36 @@ mod tests {
     fn test_load_optional_encryption_key_panics_on_wrong_length() {
         env::set_var("TEST_OPTIONAL_KEY_SHORT", "aabb"); // only 2 bytes
         Config::load_optional_encryption_key("TEST_OPTIONAL_KEY_SHORT");
+    }
+
+    #[test]
+    fn download_config_defaults_when_forgejo_unset() {
+        env::remove_var("FORGEJO_BASE_URL");
+        env::remove_var("FORGEJO_API_TOKEN");
+        env::remove_var("DOWNLOAD_CACHE_DIR");
+        env::remove_var("DOWNLOAD_CACHE_MAX_BYTES");
+        env::remove_var("DOWNLOAD_CONCURRENCY_PER_USER");
+        env::remove_var("DOWNLOAD_DAILY_LIMIT_PER_USER");
+        env::remove_var("FORGEJO_RELEASE_CACHE_TTL_SECS");
+
+        let cfg = DownloadConfig::from_env();
+        assert!(!cfg.enabled());
+        assert_eq!(cfg.cache_dir, "/var/cache/a8n-downloads");
+        assert_eq!(cfg.cache_max_bytes, 10_737_418_240);
+        assert_eq!(cfg.concurrency_per_user, 2);
+        assert_eq!(cfg.daily_limit_per_user, 50);
+        assert_eq!(cfg.release_cache_ttl_secs, 300);
+    }
+
+    #[test]
+    fn download_config_enabled_when_forgejo_set() {
+        env::set_var("FORGEJO_BASE_URL", "https://git.example.com");
+        env::set_var("FORGEJO_API_TOKEN", "test-token");
+        let cfg = DownloadConfig::from_env();
+        assert!(cfg.enabled());
+        assert_eq!(cfg.forgejo_base_url.as_deref(), Some("https://git.example.com"));
+        env::remove_var("FORGEJO_BASE_URL");
+        env::remove_var("FORGEJO_API_TOKEN");
     }
 
     #[test]
