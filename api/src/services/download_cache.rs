@@ -138,7 +138,7 @@ impl DownloadCache {
             return Err(e.into());
         }
 
-        let row = DownloadCacheRepository::upsert(
+        let (row, replaced_sha) = DownloadCacheRepository::upsert(
             &self.pool,
             app_id,
             release_tag,
@@ -147,6 +147,15 @@ impl DownloadCache {
             total,
             &asset.content_type,
         ).await?;
+
+        // If the upsert replaced an existing row with a different SHA, the
+        // old on-disk file may now be orphaned.
+        if let Some(old_sha) = replaced_sha {
+            if !DownloadCacheRepository::sha_referenced(&self.pool, &old_sha).await? {
+                let old_path = self.file_path(&old_sha);
+                let _ = fs::remove_file(&old_path).await;
+            }
+        }
 
         let pool = self.pool.clone();
         let dir = self.cache_dir.clone();

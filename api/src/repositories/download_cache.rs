@@ -29,6 +29,10 @@ impl DownloadCacheRepository {
         Ok(row)
     }
 
+    /// Insert-or-update the cache row. Returns the new row, plus the SHA of
+    /// the row it replaced (only when the upsert hit an existing row and the
+    /// SHA changed). Callers use the replaced SHA to unlink an orphaned
+    /// on-disk blob if nothing else references it.
     pub async fn upsert(
         pool: &PgPool,
         application_id: Uuid,
@@ -37,7 +41,21 @@ impl DownloadCacheRepository {
         content_sha256: &str,
         size_bytes: i64,
         content_type: &str,
-    ) -> Result<DownloadCacheRow, AppError> {
+    ) -> Result<(DownloadCacheRow, Option<String>), AppError> {
+        let mut tx = pool.begin().await?;
+        let prior: Option<(String,)> = sqlx::query_as(
+            r#"
+            SELECT content_sha256 FROM download_cache
+            WHERE application_id = $1 AND release_tag = $2 AND asset_name = $3
+            FOR UPDATE
+            "#,
+        )
+        .bind(application_id)
+        .bind(release_tag)
+        .bind(asset_name)
+        .fetch_optional(&mut *tx)
+        .await?;
+
         let row = sqlx::query_as::<_, DownloadCacheRow>(
             r#"
             INSERT INTO download_cache
@@ -57,19 +75,25 @@ impl DownloadCacheRepository {
         .bind(content_sha256)
         .bind(size_bytes)
         .bind(content_type)
-        .fetch_one(pool)
+        .fetch_one(&mut *tx)
         .await?;
-        Ok(row)
+        tx.commit().await?;
+
+        let replaced = prior.map(|p| p.0).filter(|s| s != content_sha256);
+        Ok((row, replaced))
     }
 
     pub async fn touch(
         pool: &PgPool,
         id: Uuid,
     ) -> Result<(), AppError> {
-        sqlx::query("UPDATE download_cache SET last_accessed_at = NOW() WHERE id = $1")
+        let res = sqlx::query("UPDATE download_cache SET last_accessed_at = NOW() WHERE id = $1")
             .bind(id)
             .execute(pool)
             .await?;
+        if res.rows_affected() == 0 {
+            tracing::warn!(id = %id, "download_cache touch matched no row (concurrently evicted?)");
+        }
         Ok(())
     }
 
