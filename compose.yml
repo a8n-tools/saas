@@ -67,6 +67,13 @@ services:
       SMTP_USERNAME: ${SMTP_USERNAME:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       ADMIN_NOTIFICATION_EMAILS: ${ADMIN_NOTIFICATION_EMAILS:-admin@localhost}
+      FORGEJO_BASE_URL: ${FORGEJO_BASE_URL:-}
+      FORGEJO_API_TOKEN: ${FORGEJO_API_TOKEN:-}
+      DOWNLOAD_CACHE_DIR: /var/cache/a8n-downloads
+      DOWNLOAD_CACHE_MAX_BYTES: ${DOWNLOAD_CACHE_MAX_BYTES:-10737418240}
+      DOWNLOAD_CONCURRENCY_PER_USER: ${DOWNLOAD_CONCURRENCY_PER_USER:-2}
+      DOWNLOAD_DAILY_LIMIT_PER_USER: ${DOWNLOAD_DAILY_LIMIT_PER_USER:-50}
+      FORGEJO_RELEASE_CACHE_TTL_SECS: ${FORGEJO_RELEASE_CACHE_TTL_SECS:-300}
     ports:
       - "18080:4000"
     volumes:
@@ -78,6 +85,7 @@ services:
       - ./api/Cargo.toml:/app/Cargo.toml
       - ./api/Cargo.lock:/app/Cargo.lock
       - a8n-tools-api:/app/target
+      - a8n-tools-downloads:/var/cache/a8n-downloads
     depends_on:
       postgres:
         condition: service_healthy
@@ -127,6 +135,7 @@ services:
 volumes:
   a8n-tools-postgre:
   a8n-tools-api:
+  a8n-tools-downloads:
 
 networks:
   a8n-tools-private:
