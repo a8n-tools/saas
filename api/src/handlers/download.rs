@@ -311,6 +311,87 @@ async fn fetch_release_or_502(
     })
 }
 
+#[cfg(test)]
+mod integration_tests {
+    //! Full-stack happy path: mock Forgejo + real Postgres via `DATABASE_URL`.
+    //! Skipped automatically when `DATABASE_URL` is unset.
+
+    use sqlx::PgPool;
+    use std::sync::Arc;
+    use wiremock::matchers::{method, path as wm_path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    async fn maybe_pool() -> Option<PgPool> {
+        let url = std::env::var("DATABASE_URL").ok()?;
+        PgPool::connect(&url).await.ok()
+    }
+
+    #[actix_rt::test]
+    async fn list_app_downloads_returns_empty_when_not_configured() {
+        let Some(pool) = maybe_pool().await else { return; };
+        let slug = format!("test-noconf-{}", uuid::Uuid::new_v4());
+        sqlx::query(r#"
+            INSERT INTO applications (name, slug, display_name, container_name)
+            VALUES ($1, $1, $1, $1)
+        "#).bind(&slug).execute(&pool).await.unwrap();
+
+        sqlx::query("DELETE FROM applications WHERE slug = $1")
+            .bind(&slug).execute(&pool).await.unwrap();
+    }
+
+    #[actix_rt::test]
+    async fn download_asset_streams_bytes_from_forgejo() {
+        let Some(pool) = maybe_pool().await else { return; };
+
+        let server = MockServer::start().await;
+        let payload: &[u8] = b"hello world";
+        Mock::given(method("GET"))
+            .and(wm_path("/api/v1/repos/a8n/rus/releases/tags/v1.0.0"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "tag_name": "v1.0.0",
+                "assets": [{
+                    "id": 1,
+                    "name": "rus.bin",
+                    "size": payload.len() as i64,
+                    "browser_download_url": format!("{}/download/1", server.uri()),
+                }]
+            })))
+            .mount(&server).await;
+        Mock::given(method("GET"))
+            .and(wm_path("/download/1"))
+            .respond_with(ResponseTemplate::new(200).set_body_bytes(payload))
+            .mount(&server).await;
+
+        let slug = format!("test-dl-{}", uuid::Uuid::new_v4());
+        sqlx::query(r#"
+            INSERT INTO applications
+            (name, slug, display_name, container_name, forgejo_owner, forgejo_repo, pinned_release_tag)
+            VALUES ($1, $1, $1, $1, 'a8n', 'rus', 'v1.0.0')
+        "#).bind(&slug).execute(&pool).await.unwrap();
+
+        let client = Arc::new(crate::services::forgejo::ForgejoClient::new(server.uri(), "tok".into()));
+        let release_cache = crate::services::release_cache::ReleaseCache::new(client.clone(), 60);
+        let tmp = tempfile::tempdir().unwrap();
+        let download_cache = crate::services::download_cache::DownloadCache::new(
+            client,
+            tmp.path(),
+            1024 * 1024,
+            pool.clone(),
+        );
+
+        let app_row: (uuid::Uuid,) = sqlx::query_as("SELECT id FROM applications WHERE slug = $1")
+            .bind(&slug).fetch_one(&pool).await.unwrap();
+        let release = release_cache.get(app_row.0, "a8n", "rus", "v1.0.0").await.unwrap();
+        let row = download_cache.get_or_fetch(app_row.0, "v1.0.0", &release.assets[0]).await.unwrap();
+        assert_eq!(row.size_bytes, payload.len() as i64);
+        let bytes = tokio::fs::read(download_cache.file_path(&row.content_sha256)).await.unwrap();
+        assert_eq!(bytes, payload);
+
+        sqlx::query("DELETE FROM download_cache WHERE application_id = $1").bind(app_row.0).execute(&pool).await.unwrap();
+        sqlx::query("DELETE FROM applications WHERE id = $1").bind(app_row.0).execute(&pool).await.unwrap();
+    }
+}
+
 /// POST /v1/admin/applications/{slug}/downloads/refresh
 pub async fn admin_refresh_release(
     req: HttpRequest,
