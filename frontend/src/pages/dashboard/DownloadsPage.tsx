@@ -4,6 +4,36 @@ import type { AppDownloadGroup } from '@/types'
 import { useAuthStore } from '@/stores/authStore'
 import { hasActiveMembership } from '@/lib/utils'
 import { Link } from 'react-router-dom'
+import { toast } from '@/components/ui/use-toast'
+
+async function handleDownloadClick(e: React.MouseEvent, url: string) {
+  e.preventDefault()
+  try {
+    const res = await fetch(url, { method: 'HEAD', credentials: 'include' })
+    if (res.ok) {
+      window.location.href = url
+      return
+    }
+    if (res.status === 429) {
+      const code = res.headers.get('x-error-code') ?? ''
+      if (code.includes('concurrency')) {
+        toast('You already have downloads in progress, please wait.')
+      } else {
+        const retry = Number(res.headers.get('retry-after') ?? 0)
+        const hours = Math.ceil(retry / 3600)
+        toast(`Daily download limit reached. Try again in ~${hours}h.`)
+      }
+      return
+    }
+    if (res.status === 502) {
+      toast('Download source unavailable. Please try again later.')
+      return
+    }
+    toast('Download failed.')
+  } catch {
+    toast('Download failed.')
+  }
+}
 
 function formatSize(bytes: number): string {
   const mb = bytes / 1_048_576
@@ -43,7 +73,11 @@ export function DownloadsPage() {
                   <div className="text-xs text-muted-foreground">{formatSize(a.size_bytes)}</div>
                 </div>
                 {hasMembership ? (
-                  <a href={a.download_url} className="px-3 py-1 rounded bg-primary text-primary-foreground text-sm">
+                  <a
+                    href={a.download_url}
+                    className="px-3 py-1 rounded bg-primary text-primary-foreground text-sm"
+                    onClick={(e) => handleDownloadClick(e, a.download_url)}
+                  >
                     Download
                   </a>
                 ) : (

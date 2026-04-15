@@ -5,6 +5,7 @@ import { useEmailConfigStore } from '@/stores/emailConfigStore'
 import { useStripeConfigStore } from '@/stores/stripeConfigStore'
 import { authApi } from '@/api'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { Toaster } from '@/components/ui/toaster'
 
 // Layouts
 import { PublicLayout } from '@/components/layout/PublicLayout'
@@ -230,6 +231,7 @@ export default function App() {
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </SetupGuard>
+    <Toaster />
     </TooltipProvider>
   )
 }

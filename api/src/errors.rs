@@ -241,10 +241,13 @@ impl ResponseError for AppError {
                 response.insert_header(("Retry-After", retry_after.to_string()));
             }
             AppError::RateLimitedCoded {
-                retry_after_secs: Some(n),
-                ..
+                code,
+                retry_after_secs,
             } => {
-                response.insert_header(("Retry-After", n.to_string()));
+                response.insert_header(("x-error-code", code.as_str()));
+                if let Some(n) = retry_after_secs {
+                    response.insert_header(("Retry-After", n.to_string()));
+                }
             }
             _ => {}
         }
