@@ -33,6 +33,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route("/applications/{app_id}", web::put().to(handlers::update_application))
             .route("/applications/{app_id}/swap-order", web::put().to(handlers::swap_application_order))
             .route("/applications/{app_id}", web::delete().to(handlers::delete_application))
+            .route("/applications/{slug}/downloads/refresh", web::post().to(handlers::admin_refresh_release))
             // Audit logs
             .route("/audit-logs", web::get().to(handlers::list_audit_logs))
             // Feedback

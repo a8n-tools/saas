@@ -21,7 +21,7 @@ use a8n_api::{
     models::{CreateUser, UserRole},
     repositories::{FeedbackRepository, RateLimitRepository, UserRepository},
     routes,
-    services::{AuthService, EmailService, EncryptionKeySet, JwtConfig, JwtService, PasswordService, StripeConfig, StripeService, TotpService, WebhookService},
+    services::{AuthService, DownloadCache, DownloadLimiter, EmailService, EncryptionKeySet, ForgejoClient, JwtConfig, JwtService, PasswordService, ReleaseCache, StripeConfig, StripeService, TotpService, WebhookService},
 };
 
 #[tokio::main]
@@ -182,6 +182,43 @@ async fn main() -> anyhow::Result<()> {
     let stripe_service = Arc::new(StripeService::new(stripe_config));
 
     info!("Stripe service initialized");
+
+    // Initialize Forgejo download services (optional — degrade gracefully when unconfigured)
+    let forgejo_client = config.download.forgejo_base_url.as_ref().and_then(|base| {
+        config.download.forgejo_api_token.as_ref().map(|token| {
+            Arc::new(ForgejoClient::new(base.clone(), token.clone()))
+        })
+    });
+
+    let release_cache = forgejo_client.clone().map(|c| {
+        Arc::new(ReleaseCache::new(c, config.download.release_cache_ttl_secs))
+    });
+
+    let download_cache = forgejo_client.clone().map(|c| {
+        Arc::new(DownloadCache::new(
+            c,
+            &config.download.cache_dir,
+            config.download.cache_max_bytes,
+            pool.clone(),
+        ))
+    });
+
+    if let Some(cache) = &download_cache {
+        if let Err(e) = cache.ensure_dir().await {
+            tracing::warn!(error = %e, "failed to create download cache dir");
+        }
+    }
+
+    let download_limiter = Arc::new(DownloadLimiter::new(
+        config.download.concurrency_per_user,
+        config.download.daily_limit_per_user,
+    ));
+
+    info!(
+        enabled = config.download.enabled(),
+        cache_dir = %config.download.cache_dir,
+        "Download service initialized"
+    );
 
     // Initialize TOTP service
     let totp_service = Arc::new(TotpService::new(
@@ -356,6 +393,9 @@ async fn main() -> anyhow::Result<()> {
             .app_data(web::Data::new(webhook_service.clone()))
             .app_data(web::Data::new(stripe_key_set.clone()))
             .app_data(web::Data::new(config_data.clone()))
+            .app_data(web::Data::new(download_limiter.clone()))
+            .app_data(web::Data::new(release_cache.clone()))
+            .app_data(web::Data::new(download_cache.clone()))
             // Configure routes
             .configure(routes::configure)
     })

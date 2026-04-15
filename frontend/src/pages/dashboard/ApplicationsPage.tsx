@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { ExternalLink, Loader2, Link2, ArrowRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { getAppGradient, hasActiveMembership } from '@/lib/utils'
+import { AppDownloadsSection } from '@/components/downloads/AppDownloadsSection'
 
 export function ApplicationsPage() {
   const { user } = useAuthStore()
@@ -113,6 +114,7 @@ export function ApplicationsPage() {
                       : 'Not Available'}
                   </Button>
                 )}
+                <AppDownloadsSection slug={app.slug} hasMembership={isMember} />
               </CardContent>
             </Card>
           )

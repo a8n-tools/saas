@@ -4,6 +4,7 @@
 
 pub mod application;
 pub mod audit;
+pub mod download;
 pub mod feedback;
 pub mod membership;
 pub mod rate_limit;
@@ -15,6 +16,10 @@ pub mod user;
 
 // Re-export commonly used types
 pub use application::{Application, ApplicationResponse, CreateApplication, DeleteApplicationRequest, SwapApplicationOrderRequest, UpdateApplication};
+pub use download::{
+    AppDownloadGroup, AppDownloadsResponse, DownloadAsset, DownloadCacheRow, ReleaseAsset,
+    ReleaseMetadata,
+};
 pub use audit::{
     AdminNotification, AuditAction, AuditLog, AuditSeverity, CreateAdminNotification,
     CreateAuditLog, NotificationType,

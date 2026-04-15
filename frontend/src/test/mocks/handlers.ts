@@ -72,8 +72,13 @@ export const mockAdminApplication = {
   subdomain: 'rus',
   container_name: 'rus',
   health_check_url: null,
+  webhook_url: null,
   version: '1.0.0',
   source_code_url: null,
+  forgejo_owner: null,
+  forgejo_repo: null,
+  pinned_release_tag: null,
+  sort_order: 0,
   created_at: '2024-01-01T00:00:00Z',
   updated_at: '2024-01-01T00:00:00Z',
 }
@@ -551,6 +556,19 @@ export const handlers = [
 
   http.put(`${API_BASE}/admin/applications/:appId/swap-order`, () => {
     return HttpResponse.json({ success: true, data: { applications: [mockAdminApplication] } })
+  }),
+
+  http.post(`${API_BASE}/admin/applications/:slug/downloads/refresh`, () => {
+    return HttpResponse.json({
+      success: true,
+      data: {
+        release_tag: 'v1.0.0',
+        assets: [
+          { asset_name: 'app-linux-amd64', size_bytes: 10240, content_type: 'application/octet-stream', download_url: 'https://example.com/app-linux-amd64' },
+          { asset_name: 'app-darwin-amd64', size_bytes: 10752, content_type: 'application/octet-stream', download_url: 'https://example.com/app-darwin-amd64' },
+        ],
+      },
+    })
   }),
 
   http.post(`${API_BASE}/admin/users/:userId/lifetime`, () => {

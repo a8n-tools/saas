@@ -139,20 +139,23 @@ impl ApplicationRepository {
         let app = sqlx::query_as::<_, Application>(
             r#"
             UPDATE applications
-            SET display_name     = COALESCE($1, display_name),
-                description      = COALESCE($2, description),
-                icon_url         = COALESCE($3, icon_url),
-                source_code_url  = COALESCE($4, source_code_url),
-                version          = COALESCE($5, version),
-                subdomain        = COALESCE($6, subdomain),
-                container_name   = COALESCE($7, container_name),
-                health_check_url = COALESCE($8, health_check_url),
-                is_active        = COALESCE($9, is_active),
-                maintenance_mode = COALESCE($10, maintenance_mode),
+            SET display_name        = COALESCE($1, display_name),
+                description         = COALESCE($2, description),
+                icon_url            = COALESCE($3, icon_url),
+                source_code_url     = COALESCE($4, source_code_url),
+                version             = COALESCE($5, version),
+                subdomain           = COALESCE($6, subdomain),
+                container_name      = COALESCE($7, container_name),
+                health_check_url    = COALESCE($8, health_check_url),
+                is_active           = COALESCE($9, is_active),
+                maintenance_mode    = COALESCE($10, maintenance_mode),
                 maintenance_message = COALESCE($11, maintenance_message),
-                webhook_url      = COALESCE($12, webhook_url),
-                updated_at       = NOW()
-            WHERE id = $13
+                webhook_url         = COALESCE($12, webhook_url),
+                forgejo_owner       = COALESCE($13, forgejo_owner),
+                forgejo_repo        = COALESCE($14, forgejo_repo),
+                pinned_release_tag  = COALESCE($15, pinned_release_tag),
+                updated_at          = NOW()
+            WHERE id = $16
             RETURNING *
             "#,
         )
@@ -168,11 +171,28 @@ impl ApplicationRepository {
         .bind(data.maintenance_mode)
         .bind(data.maintenance_message.as_deref())
         .bind(data.webhook_url.as_deref())
+        .bind(data.forgejo_owner.as_deref())
+        .bind(data.forgejo_repo.as_deref())
+        .bind(data.pinned_release_tag.as_deref())
         .bind(app_id)
         .fetch_one(pool)
         .await?;
 
         Ok(app)
+    }
+
+    /// Returns the previously-pinned tag for an application (for cache invalidation).
+    pub async fn get_pinned_tag(
+        pool: &PgPool,
+        app_id: Uuid,
+    ) -> Result<Option<String>, AppError> {
+        let row: Option<(Option<String>,)> = sqlx::query_as(
+            "SELECT pinned_release_tag FROM applications WHERE id = $1",
+        )
+        .bind(app_id)
+        .fetch_optional(pool)
+        .await?;
+        Ok(row.and_then(|r| r.0))
     }
 
     /// Create a new application (admin)

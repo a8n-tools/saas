@@ -52,6 +52,13 @@ services:
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       STRIPE_PRICE_ID: ${STRIPE_PRICE_ID:-}
       STRIPE_BUSINESS_PRICE_ID: ${STRIPE_BUSINESS_PRICE_ID:-}
+      FORGEJO_BASE_URL: ${FORGEJO_BASE_URL:-}
+      FORGEJO_API_TOKEN: ${FORGEJO_API_TOKEN:-}
+      DOWNLOAD_CACHE_DIR: /var/cache/a8n-downloads
+      DOWNLOAD_CACHE_MAX_BYTES: ${DOWNLOAD_CACHE_MAX_BYTES:-10737418240}
+      DOWNLOAD_CONCURRENCY_PER_USER: ${DOWNLOAD_CONCURRENCY_PER_USER:-2}
+      DOWNLOAD_DAILY_LIMIT_PER_USER: ${DOWNLOAD_DAILY_LIMIT_PER_USER:-50}
+      FORGEJO_RELEASE_CACHE_TTL_SECS: ${FORGEJO_RELEASE_CACHE_TTL_SECS:-300}
     volumes:
       - ./api/src:/app/src:ro
       - ./api/migrations:/app/migrations:ro
@@ -59,6 +66,7 @@ services:
       - ./api/Cargo.toml:/app/Cargo.toml:ro
       - ./api/Cargo.lock:/app/Cargo.lock:ro
       - api_target:/app/target
+      - downloads_cache:/var/cache/a8n-downloads
     networks:
       - default # Use default network for internal communication with Postgres
       - network-traefik-public
@@ -114,6 +122,8 @@ volumes:
     name: saas-data-${USER}
   api_target:
     name: saas-api-target-${USER}
+  downloads_cache:
+    name: saas-downloads-cache-${USER}
 
 networks:
   network-traefik-public:

@@ -35,6 +35,15 @@ pub enum AppError {
     #[error("Rate limited, retry after {retry_after} seconds")]
     RateLimited { retry_after: u64 },
 
+    #[error("Rate limited ({code})")]
+    RateLimitedCoded {
+        code: String,
+        retry_after_secs: Option<i64>,
+    },
+
+    #[error("Upstream error: {message}")]
+    Upstream { message: String },
+
     #[error("Internal error: {message}")]
     InternalError { message: String },
 
@@ -54,8 +63,35 @@ impl AppError {
             AppError::NotFound { .. } => "NOT_FOUND",
             AppError::Conflict { .. } => "CONFLICT",
             AppError::RateLimited { .. } => "RATE_LIMITED",
+            AppError::RateLimitedCoded { .. } => "RATE_LIMITED",
+            AppError::Upstream { .. } => "UPSTREAM_ERROR",
             AppError::InternalError { .. } => "INTERNAL_ERROR",
             AppError::DatabaseError { .. } => "DATABASE_ERROR",
+        }
+    }
+
+    /// Get a dynamic error code (may differ from the static `error_code()`
+    /// for variants that carry a code string)
+    pub fn dynamic_error_code(&self) -> String {
+        match self {
+            AppError::RateLimitedCoded { code, .. } => code.clone(),
+            other => other.error_code().to_string(),
+        }
+    }
+
+    /// Create a rate-limited error with a machine-readable code and optional
+    /// Retry-After duration in seconds.
+    pub fn rate_limited(code: &str, retry_after_secs: Option<i64>) -> Self {
+        AppError::RateLimitedCoded {
+            code: code.to_string(),
+            retry_after_secs,
+        }
+    }
+
+    /// Create an upstream (502) error with a friendly message.
+    pub fn upstream(message: impl Into<String>) -> Self {
+        AppError::Upstream {
+            message: message.into(),
         }
     }
 
@@ -124,6 +160,8 @@ impl ResponseError for AppError {
             AppError::NotFound { .. } => StatusCode::NOT_FOUND,
             AppError::Conflict { .. } => StatusCode::CONFLICT,
             AppError::RateLimited { .. } => StatusCode::TOO_MANY_REQUESTS,
+            AppError::RateLimitedCoded { .. } => StatusCode::TOO_MANY_REQUESTS,
+            AppError::Upstream { .. } => StatusCode::BAD_GATEWAY,
             AppError::InternalError { .. } => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::DatabaseError { .. } => StatusCode::INTERNAL_SERVER_ERROR,
         }
@@ -139,6 +177,10 @@ impl ResponseError for AppError {
             AppError::RateLimited { retry_after } => {
                 Some(serde_json::json!({ "retry_after": retry_after }))
             }
+            AppError::RateLimitedCoded {
+                retry_after_secs, ..
+            } => retry_after_secs
+                .map(|n| serde_json::json!({ "retry_after": n })),
             _ => None,
         };
 
@@ -162,6 +204,18 @@ impl ResponseError for AppError {
                     retry_after
                 )
             }
+            AppError::RateLimitedCoded {
+                retry_after_secs, ..
+            } => match retry_after_secs {
+                Some(n) => format!(
+                    "Too many requests. Please wait {} seconds and try again.",
+                    n
+                ),
+                None => "Too many requests. Please try again later.".to_string(),
+            },
+            AppError::Upstream { .. } => {
+                "The upstream service is temporarily unavailable. Please try again shortly.".to_string()
+            }
             AppError::InternalError { .. } | AppError::DatabaseError { .. } => {
                 "An unexpected error occurred. Please try again later.".to_string()
             }
@@ -170,7 +224,7 @@ impl ResponseError for AppError {
         let error_response = ErrorResponse {
             success: false,
             error: ErrorDetails {
-                code: self.error_code().to_string(),
+                code: self.dynamic_error_code(),
                 message: client_message,
                 details,
             },
@@ -182,8 +236,20 @@ impl ResponseError for AppError {
 
         let mut response = HttpResponse::build(self.status_code());
 
-        if let AppError::RateLimited { retry_after } = self {
-            response.insert_header(("Retry-After", retry_after.to_string()));
+        match self {
+            AppError::RateLimited { retry_after } => {
+                response.insert_header(("Retry-After", retry_after.to_string()));
+            }
+            AppError::RateLimitedCoded {
+                code,
+                retry_after_secs,
+            } => {
+                response.insert_header(("x-error-code", code.as_str()));
+                if let Some(n) = retry_after_secs {
+                    response.insert_header(("Retry-After", n.to_string()));
+                }
+            }
+            _ => {}
         }
 
         response.json(error_response)
@@ -374,6 +440,32 @@ mod tests {
         let bytes = rt.block_on(actix_web::body::to_bytes(body)).unwrap();
         let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(json["error"]["details"]["retry_after"], 30);
+    }
+
+    #[test]
+    fn rate_limited_sets_retry_after_header() {
+        let err = AppError::rate_limited("download_daily_limit", Some(3600));
+        let resp = err.error_response();
+        assert_eq!(resp.status().as_u16(), 429);
+        assert_eq!(
+            resp.headers().get("retry-after").and_then(|v| v.to_str().ok()),
+            Some("3600"),
+        );
+    }
+
+    #[test]
+    fn rate_limited_without_retry_after() {
+        let err = AppError::rate_limited("download_concurrency_limit", None);
+        let resp = err.error_response();
+        assert_eq!(resp.status().as_u16(), 429);
+        assert!(resp.headers().get("retry-after").is_none());
+    }
+
+    #[test]
+    fn upstream_error_is_502() {
+        let err = AppError::upstream("forgejo timeout");
+        let resp = err.error_response();
+        assert_eq!(resp.status().as_u16(), 502);
     }
 
     #[test]
