@@ -17,6 +17,8 @@ pub enum ForgejoError {
     NotFound,
     #[error("forgejo upstream error: status {0}")]
     Upstream(u16),
+    #[error("forgejo invalid asset url")]
+    InvalidUrl,
 }
 
 #[derive(Debug, Deserialize)]
@@ -95,10 +97,28 @@ impl ForgejoClient {
     }
 
     /// Stream the bytes of an asset given its browser_download_url.
+    ///
+    /// The URL's host + port must match `base_url`'s to avoid forwarding the
+    /// API token to an arbitrary third-party host (a compromised or misbehaving
+    /// Forgejo instance could return an attacker-controlled download URL).
     pub async fn download_asset(
         &self,
         browser_download_url: &str,
     ) -> Result<impl Stream<Item = Result<Bytes, reqwest::Error>>, ForgejoError> {
+        let base = url::Url::parse(&self.base_url).map_err(|_| ForgejoError::InvalidUrl)?;
+        let target = url::Url::parse(browser_download_url).map_err(|_| ForgejoError::InvalidUrl)?;
+        if target.host_str() != base.host_str()
+            || target.port_or_known_default() != base.port_or_known_default()
+            || target.scheme() != base.scheme()
+        {
+            tracing::warn!(
+                target = %browser_download_url,
+                base = %self.base_url,
+                "forgejo asset URL host mismatch; refusing to forward auth token"
+            );
+            return Err(ForgejoError::InvalidUrl);
+        }
+
         let resp = self
             .http
             .get(browser_download_url)

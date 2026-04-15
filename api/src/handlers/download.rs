@@ -213,35 +213,80 @@ pub async fn download_asset(
                 AppError::internal("Cached file missing")
             })?;
 
-            // Audit: completed (emitted before the response body is fully sent
-            // — this is accurate for "request served from cache"; clients may
-            // abort mid-stream, which our audit log intentionally does not
-            // distinguish).
-            AuditLogRepository::create(
-                &pool,
-                CreateAuditLog::new(AuditAction::DownloadCompleted)
-                    .with_actor(user.0.sub, &user.0.email, &user.0.role)
-                    .with_resource("application", app.id)
-                    .with_ip(ip)
-                    .with_metadata(serde_json::json!({
-                        "slug": slug,
-                        "asset_name": asset_name,
-                        "size_bytes": row.size_bytes,
-                    })),
-            )
-            .await?;
+            // Audit is emitted based on stream outcome: DownloadCompleted on
+            // clean EOF, DownloadFailedUpstream on mid-stream I/O error. The
+            // `emitted` flag ensures exactly-once semantics if the stream is
+            // dropped (client abort) after an error branch already fired.
+            struct AuditCtx {
+                pool: PgPool,
+                user_id: uuid::Uuid,
+                email: String,
+                role: String,
+                ip: Option<ipnetwork::IpNetwork>,
+                app_id: uuid::Uuid,
+                slug: String,
+                asset_name: String,
+                size_bytes: i64,
+                emitted: bool,
+            }
+            let audit = AuditCtx {
+                pool: pool.get_ref().clone(),
+                user_id: user.0.sub,
+                email: user.0.email.clone(),
+                role: user.0.role.clone(),
+                ip,
+                app_id: app.id,
+                slug: slug.clone(),
+                asset_name: asset_name.clone(),
+                size_bytes: row.size_bytes,
+                emitted: false,
+            };
 
             // Attach the DownloadGuard to the stream so it drops only when the
             // stream is fully consumed or dropped — ensuring the concurrency
             // slot stays held for the duration of the streaming response.
             let framed = FramedRead::new(file, BytesCodec::new());
             let stream = futures_util::stream::unfold(
-                (framed, guard),
-                |(mut s, g)| async move {
+                (framed, guard, audit),
+                |(mut s, g, mut a)| async move {
                     match s.next().await {
-                        Some(Ok(b)) => Some((Ok::<_, std::io::Error>(b.freeze()), (s, g))),
-                        Some(Err(e)) => Some((Err(e), (s, g))),
+                        Some(Ok(b)) => Some((Ok::<_, std::io::Error>(b.freeze()), (s, g, a))),
+                        Some(Err(e)) => {
+                            if !a.emitted {
+                                a.emitted = true;
+                                let _ = AuditLogRepository::create(
+                                    &a.pool,
+                                    CreateAuditLog::new(AuditAction::DownloadFailedUpstream)
+                                        .with_actor(a.user_id, &a.email, &a.role)
+                                        .with_resource("application", a.app_id)
+                                        .with_ip(a.ip)
+                                        .with_metadata(serde_json::json!({
+                                            "slug": a.slug,
+                                            "asset_name": a.asset_name,
+                                            "error": e.to_string(),
+                                        })),
+                                )
+                                .await;
+                            }
+                            Some((Err(e), (s, g, a)))
+                        }
                         None => {
+                            if !a.emitted {
+                                a.emitted = true;
+                                let _ = AuditLogRepository::create(
+                                    &a.pool,
+                                    CreateAuditLog::new(AuditAction::DownloadCompleted)
+                                        .with_actor(a.user_id, &a.email, &a.role)
+                                        .with_resource("application", a.app_id)
+                                        .with_ip(a.ip)
+                                        .with_metadata(serde_json::json!({
+                                            "slug": a.slug,
+                                            "asset_name": a.asset_name,
+                                            "size_bytes": a.size_bytes,
+                                        })),
+                                )
+                                .await;
+                            }
                             drop(g);
                             None
                         }

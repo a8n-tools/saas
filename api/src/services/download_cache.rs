@@ -123,28 +123,20 @@ impl DownloadCache {
     ) -> Result<DownloadCacheRow, DownloadCacheError> {
         self.ensure_dir().await?;
 
-        let tmp_name = format!(".tmp-{}", Uuid::new_v4());
-        let tmp_path = self.cache_dir.join(&tmp_name);
-        let mut file = fs::File::create(&tmp_path).await?;
-        let mut hasher = Sha256::new();
-        let mut total: i64 = 0;
+        let tmp_path = self.cache_dir.join(format!(".tmp-{}", Uuid::new_v4()));
+        let (sha, total) = match self.stream_to_tmp(&tmp_path, asset).await {
+            Ok(v) => v,
+            Err(e) => {
+                let _ = fs::remove_file(&tmp_path).await;
+                return Err(e);
+            }
+        };
 
-        let mut stream = self.client.download_asset(&asset.browser_download_url).await?;
-        while let Some(chunk) = stream.next().await {
-            let bytes = chunk.map_err(|e| {
-                DownloadCacheError::Io(std::io::Error::new(std::io::ErrorKind::Other, e))
-            })?;
-            hasher.update(&bytes);
-            file.write_all(&bytes).await?;
-            total += bytes.len() as i64;
-        }
-        file.flush().await?;
-        file.sync_all().await?;
-        drop(file);
-
-        let sha = hex::encode(hasher.finalize());
         let final_path = self.file_path(&sha);
-        fs::rename(&tmp_path, &final_path).await?;
+        if let Err(e) = fs::rename(&tmp_path, &final_path).await {
+            let _ = fs::remove_file(&tmp_path).await;
+            return Err(e.into());
+        }
 
         let row = DownloadCacheRepository::upsert(
             &self.pool,
@@ -166,6 +158,31 @@ impl DownloadCache {
         });
 
         Ok(row)
+    }
+
+    async fn stream_to_tmp(
+        &self,
+        tmp_path: &Path,
+        asset: &ReleaseAsset,
+    ) -> Result<(String, i64), DownloadCacheError> {
+        let mut file = fs::File::create(tmp_path).await?;
+        let mut hasher = Sha256::new();
+        let mut total: i64 = 0;
+
+        let mut stream = self.client.download_asset(&asset.browser_download_url).await?;
+        while let Some(chunk) = stream.next().await {
+            let bytes = chunk.map_err(|e| {
+                DownloadCacheError::Io(std::io::Error::new(std::io::ErrorKind::Other, e))
+            })?;
+            hasher.update(&bytes);
+            file.write_all(&bytes).await?;
+            total += bytes.len() as i64;
+        }
+        file.flush().await?;
+        file.sync_all().await?;
+        drop(file);
+
+        Ok((hex::encode(hasher.finalize()), total))
     }
 
     pub async fn invalidate_app_tag(

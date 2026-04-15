@@ -74,17 +74,22 @@ impl DownloadLimiter {
         }
 
         let today = Utc::now().date_naive();
-        let count = DownloadDailyCountRepository::increment(pool, user_id, today).await?;
+        let count = match DownloadDailyCountRepository::increment(pool, user_id, today).await {
+            Ok(n) => n,
+            Err(e) => {
+                // Increment failed; release the inflight slot we just took.
+                release_slot(&self.inflight, user_id);
+                return Err(e);
+            }
+        };
         if (count as u32) > self.daily_limit {
-            DownloadDailyCountRepository::decrement(pool, user_id, today).await?;
+            // Release the inflight slot BEFORE touching the DB again so a
+            // failing decrement can't leak the slot permanently.
+            release_slot(&self.inflight, user_id);
+            if let Err(e) =
+                DownloadDailyCountRepository::decrement(pool, user_id, today).await
             {
-                let mut m = self.inflight.lock().unwrap();
-                if let Some(n) = m.get_mut(&user_id) {
-                    *n = n.saturating_sub(1);
-                    if *n == 0 {
-                        m.remove(&user_id);
-                    }
-                }
+                tracing::warn!(error = %e, "failed to roll back daily count after exceeding cap");
             }
             let now = Utc::now();
             let tomorrow = (now.date_naive() + chrono::Duration::days(1))
@@ -100,6 +105,16 @@ impl DownloadLimiter {
             inflight: self.inflight.clone(),
             released: false,
         }))
+    }
+}
+
+fn release_slot(inflight: &Arc<Mutex<HashMap<Uuid, u32>>>, user_id: Uuid) {
+    let mut m = inflight.lock().unwrap();
+    if let Some(n) = m.get_mut(&user_id) {
+        *n = n.saturating_sub(1);
+        if *n == 0 {
+            m.remove(&user_id);
+        }
     }
 }
 
