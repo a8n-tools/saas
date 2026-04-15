@@ -614,8 +614,11 @@ export function AdminApplicationsPage() {
                   id="forgejo_owner"
                   value={editForm.forgejo_owner ?? ''}
                   onChange={(e) => setEditForm({ ...editForm, forgejo_owner: e.target.value })}
-                  placeholder="owner"
+                  placeholder="e.g. a8n"
                 />
+                <p className="text-xs text-muted-foreground">
+                  Forgejo user or organization that owns the repo.
+                </p>
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="forgejo_repo">Forgejo Repo</Label>
@@ -623,7 +626,7 @@ export function AdminApplicationsPage() {
                   id="forgejo_repo"
                   value={editForm.forgejo_repo ?? ''}
                   onChange={(e) => setEditForm({ ...editForm, forgejo_repo: e.target.value })}
-                  placeholder="repo"
+                  placeholder="e.g. rus"
                 />
               </div>
               <div className="grid gap-2">

@@ -174,4 +174,7 @@ Forgejo Actions (`.forgejo/workflows/`). On push to `main`, builds OCI images us
 Gated behind `FORGEJO_BASE_URL` + `FORGEJO_API_TOKEN`. Downloads stream from
 Forgejo through the API to logged-in members with active membership. Files are
 cached on disk at `DOWNLOAD_CACHE_DIR` (defaults to the named volume
-`a8n-tools-downloads`). See `docs/superpowers/specs/2026-04-15-forgejo-download-proxy-design.md`.
+`a8n-tools-downloads`). See `docs/forgejo-download-proxy.md` for user + dev
+documentation (config vars, audit actions, caveats). Original design +
+implementation plan: `docs/superpowers/specs/2026-04-15-forgejo-download-proxy-design.md`
+and `docs/superpowers/plans/2026-04-15-forgejo-download-proxy.md`.
