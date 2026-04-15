@@ -39,9 +39,13 @@ pub async fn list_app_downloads(
     req: HttpRequest,
     _user: MemberUser,
     pool: web::Data<PgPool>,
-    release_cache: web::Data<Arc<ReleaseCache>>,
+    release_cache: web::Data<Option<Arc<ReleaseCache>>>,
     path: web::Path<String>,
 ) -> Result<HttpResponse, AppError> {
+    let release_cache = release_cache
+        .get_ref()
+        .as_ref()
+        .ok_or_else(|| AppError::not_found("Downloads"))?;
     let request_id = get_request_id(&req);
     let slug = path.into_inner();
     let app = ApplicationRepository::find_active_by_slug(&pool, &slug)
@@ -82,8 +86,12 @@ pub async fn list_all_downloads(
     req: HttpRequest,
     _user: MemberUser,
     pool: web::Data<PgPool>,
-    release_cache: web::Data<Arc<ReleaseCache>>,
+    release_cache: web::Data<Option<Arc<ReleaseCache>>>,
 ) -> Result<HttpResponse, AppError> {
+    let release_cache = release_cache
+        .get_ref()
+        .as_ref()
+        .ok_or_else(|| AppError::not_found("Downloads"))?;
     let request_id = get_request_id(&req);
     let apps = ApplicationRepository::list_active(&pool).await?;
 
@@ -128,11 +136,19 @@ pub async fn download_asset(
     req: HttpRequest,
     user: MemberUser,
     pool: web::Data<PgPool>,
-    release_cache: web::Data<Arc<ReleaseCache>>,
-    download_cache: web::Data<Arc<DownloadCache>>,
+    release_cache: web::Data<Option<Arc<ReleaseCache>>>,
+    download_cache: web::Data<Option<Arc<DownloadCache>>>,
     limiter: web::Data<Arc<DownloadLimiter>>,
     path: web::Path<(String, String)>,
 ) -> Result<HttpResponse, AppError> {
+    let release_cache = release_cache
+        .get_ref()
+        .as_ref()
+        .ok_or_else(|| AppError::not_found("Downloads"))?;
+    let download_cache = download_cache
+        .get_ref()
+        .as_ref()
+        .ok_or_else(|| AppError::not_found("Downloads"))?;
     let (slug, asset_name) = path.into_inner();
     let ip = extract_client_ip(&req).map(ipnetwork::IpNetwork::from);
 
@@ -300,9 +316,13 @@ pub async fn admin_refresh_release(
     req: HttpRequest,
     _admin: AdminUser,
     pool: web::Data<PgPool>,
-    release_cache: web::Data<Arc<ReleaseCache>>,
+    release_cache: web::Data<Option<Arc<ReleaseCache>>>,
     path: web::Path<String>,
 ) -> Result<HttpResponse, AppError> {
+    let release_cache = release_cache
+        .get_ref()
+        .as_ref()
+        .ok_or_else(|| AppError::not_found("Downloads"))?;
     let request_id = get_request_id(&req);
     let slug = path.into_inner();
     let app = ApplicationRepository::find_by_slug(&pool, &slug)
