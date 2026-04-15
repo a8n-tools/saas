@@ -35,6 +35,7 @@ urlencoding = "2"
 moka = { version = "0.12", features = ["future"] }
 tempfile = "3"
 bytes = "1"
+tokio-util = { version = "0.7", features = ["codec"] }
 
 [dependencies.tokio]
 version = "1"

@@ -38,6 +38,7 @@ dependencies = [
  "tera",
  "thiserror 1.0.69",
  "tokio",
+ "tokio-util",
  "totp-rs",
  "tracing",
  "tracing-actix-web",
