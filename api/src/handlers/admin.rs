@@ -476,8 +476,8 @@ pub async fn update_application(
     let app = ApplicationRepository::update(&pool, app_id, &body).await?;
 
     // Invalidate caches if the pinned release tag changed
-    if old_tag.is_some() && old_tag != app.pinned_release_tag {
-        if let Some(old_tag_str) = old_tag.as_deref() {
+    if let Some(old_tag_str) = old_tag.as_deref() {
+        if old_tag != app.pinned_release_tag {
             if let Some(rc) = release_cache.get_ref().as_ref() {
                 rc.invalidate(app.id, old_tag_str).await;
             }
