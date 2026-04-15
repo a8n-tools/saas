@@ -9,6 +9,7 @@ export GID := `id -g`
 
 # Use the per-user dev compose file
 compose := "docker compose -f compose.dev.yml "
+compose-local := "docker compose -f compose.dev.yml -f compose.dev.local.yml "
 
 # Create .env files from dev/example defaults if they don't exist
 [private]
@@ -18,17 +19,19 @@ ensure-env:
     @test -f frontend/.env || cp frontend/.env.example frontend/.env
 
 # Development
-# Start development environment (foreground)
+# Start development environment on dev-01 via Traefik (foreground)
 dev: ensure-env
     {{ compose }}up --build
 
-# Start development environment (detached)
+# Start development environment on dev-01 via Traefik (detached)
 dev-detach: ensure-env
     {{ compose }}up --build --detach
     @echo ""
     @echo "Services started!"
-    @echo "  Frontend:  http://localhost:5173"
-    @echo "  API:       http://localhost:18080"
+
+# Start development environment with localhost ports (foreground)
+dev-local: ensure-env
+    {{ compose-local }}up --build
 
 # Stop all services
 down:

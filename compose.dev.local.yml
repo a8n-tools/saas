@@ -1,0 +1,30 @@
+---
+# Local development overrides — exposes ports to the host and uses localhost URLs.
+# Usage: just dev-local
+services:
+  api:
+    ports:
+      - "4000:4000"
+    environment:
+      CORS_ORIGIN: http://localhost:5173
+      BASE_URL: http://localhost:5173
+      COOKIE_DOMAIN: ""
+    networks:
+      default: {}
+      network-traefik-public: {}
+    labels: []
+
+  frontend:
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: http://api:4000
+    networks:
+      default: {}
+      network-traefik-public: {}
+    labels: []
+
+# Override the external Traefik network with a local one
+networks:
+  network-traefik-public:
+    external: false

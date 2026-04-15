@@ -48,50 +48,29 @@ export function OurStoryPage() {
             <table className="w-full border-collapse text-sm">
               <thead>
                 <tr>
-                  <th className="border border-border p-3 bg-muted/50" />
-                  <th className="border border-border p-3 bg-muted/50 text-left font-semibold">
-                    Free Community &amp; Support
+                  <th className="border border-border p-3 bg-muted/50 text-left font-semibold text-foreground">
+                    Typical open source
                   </th>
-                  <th className="border border-border p-3 bg-muted/50 text-left font-semibold">
-                    Paid Community &amp; Support
+                  <th className="border border-primary/30 p-3 bg-primary/10 text-left font-semibold text-foreground">
+                    a8n Tools
                   </th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
-                  <td className="border border-border p-3 bg-muted/50 font-semibold whitespace-nowrap">
-                    Free Software &amp; Features
+                  <td className="border border-border p-4 bg-muted text-foreground">
+                    Open core / Open source
                   </td>
-                  <td className="border border-border p-3 bg-orange-500/10">
-                    <span className="font-medium text-foreground">Typical open source</span>
-                    <br />
-                    <span className="text-xs">
-                      Open core with community forums, GitHub issues, and documentation
-                    </span>
-                  </td>
-                  <td className="border border-border p-3 bg-[#b7410e]/10">
-                    <span className="font-medium text-foreground">a8n Tools</span>
-                    <br />
-                    <span className="text-xs">
-                      100% free software with paid membership for community and support
-                    </span>
+                  <td className="border border-primary/30 p-4 bg-primary/10 text-foreground">
+                    Free community support (GitHub issues, forums)
                   </td>
                 </tr>
                 <tr>
-                  <td className="border border-border p-3 bg-muted/50 font-semibold whitespace-nowrap">
-                    Paid Software &amp; Features
+                  <td className="border border-border p-4 bg-muted text-foreground">
+                    Enterprise features / Closed source
                   </td>
-                  <td className="border border-border p-3">
-                    <span className="text-xs text-muted-foreground">
-                      Paid features, self-supported
-                    </span>
-                  </td>
-                  <td className="border border-border p-3 bg-orange-500/10">
-                    <span className="font-medium text-foreground">Typical open source</span>
-                    <br />
-                    <span className="text-xs">
-                      Enterprise edition with SSO, audit logs, SLAs, and priority support
-                    </span>
+                  <td className="border border-primary/30 p-4 bg-primary/10 text-foreground">
+                    Paid support for customers
                   </td>
                 </tr>
               </tbody>
