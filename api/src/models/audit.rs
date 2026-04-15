@@ -58,6 +58,11 @@ pub enum AuditAction {
     AdminTierConfigUpdated,
     AdminKeyRotation,
     UserAccountDeleted,
+    DownloadRequested,
+    DownloadCompleted,
+    DownloadDeniedMembership,
+    DownloadDeniedRateLimit,
+    DownloadFailedUpstream,
 }
 
 impl AuditAction {
@@ -110,6 +115,11 @@ impl AuditAction {
             AuditAction::AdminTierConfigUpdated => "admin_tier_config_updated",
             AuditAction::AdminKeyRotation => "admin_key_rotation",
             AuditAction::UserAccountDeleted => "user_account_deleted",
+            AuditAction::DownloadRequested => "download_requested",
+            AuditAction::DownloadCompleted => "download_completed",
+            AuditAction::DownloadDeniedMembership => "download_denied_membership",
+            AuditAction::DownloadDeniedRateLimit => "download_denied_rate_limit",
+            AuditAction::DownloadFailedUpstream => "download_failed_upstream",
         }
     }
 
@@ -327,6 +337,18 @@ mod tests {
         assert_eq!(AuditAction::AdminUserRoleChanged.as_str(), "admin_user_role_changed");
         assert_eq!(AuditAction::AdminUserDeleted.as_str(), "admin_user_deleted");
         assert_eq!(AuditAction::ApplicationUpdated.as_str(), "application_updated");
+    }
+
+    #[test]
+    fn audit_action_download_variants() {
+        assert_eq!(AuditAction::DownloadRequested.as_str(), "download_requested");
+        assert_eq!(AuditAction::DownloadCompleted.as_str(), "download_completed");
+        assert_eq!(AuditAction::DownloadDeniedMembership.as_str(), "download_denied_membership");
+        assert_eq!(AuditAction::DownloadDeniedRateLimit.as_str(), "download_denied_rate_limit");
+        assert_eq!(AuditAction::DownloadFailedUpstream.as_str(), "download_failed_upstream");
+
+        assert!(!AuditAction::DownloadRequested.is_admin_action());
+        assert!(!AuditAction::DownloadCompleted.is_admin_action());
     }
 
     #[test]
