@@ -34,6 +34,7 @@ url = "2"
 urlencoding = "2"
 moka = { version = "0.12", features = ["future"] }
 tempfile = "3"
+bytes = "1"
 
 [dependencies.tokio]
 version = "1"
@@ -81,7 +82,7 @@ features = ["derive"]
 
 [dependencies.reqwest]
 version = "0.11"
-features = ["json"]
+features = ["json", "stream"]
 
 [dependencies.async-stripe]
 version = "0.37"

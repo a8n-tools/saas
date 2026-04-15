@@ -5,6 +5,7 @@
 pub mod auth;
 pub mod email;
 pub mod encryption;
+pub mod forgejo;
 pub mod jwt;
 pub mod password;
 pub mod stripe;
@@ -15,6 +16,7 @@ pub mod webhook;
 pub use auth::{AcceptInviteResult, AuthService, AuthTokens, LoginResult, MagicLinkResult};
 pub use email::EmailService;
 pub use encryption::EncryptionKeySet;
+pub use forgejo::{ForgejoClient, ForgejoError};
 pub use jwt::{AccessTokenClaims, JwtConfig, JwtService, RefreshTokenClaims, TwoFactorChallengeClaims};
 pub use password::PasswordService;
 pub use stripe::{StripeConfig, StripeService};
