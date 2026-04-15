@@ -77,6 +77,9 @@ export interface AdminApplication {
   webhook_url: string | null
   version: string | null
   source_code_url: string | null
+  forgejo_owner: string | null
+  forgejo_repo: string | null
+  pinned_release_tag: string | null
   sort_order: number
   created_at: string
   updated_at: string
@@ -95,6 +98,9 @@ export interface UpdateApplicationRequest {
   is_active?: boolean
   maintenance_mode?: boolean
   maintenance_message?: string
+  forgejo_owner?: string | null
+  forgejo_repo?: string | null
+  pinned_release_tag?: string | null
 }
 
 export interface CreateApplicationRequest {
