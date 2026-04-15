@@ -5,6 +5,7 @@
 pub mod application;
 pub mod audit;
 pub mod download_cache;
+pub mod download_daily_count;
 pub mod feedback;
 pub mod invite;
 pub mod notification;
@@ -19,6 +20,7 @@ pub mod user;
 pub use application::ApplicationRepository;
 pub use audit::AuditLogRepository;
 pub use download_cache::DownloadCacheRepository;
+pub use download_daily_count::DownloadDailyCountRepository;
 pub use feedback::FeedbackRepository;
 pub use invite::InviteRepository;
 pub use notification::NotificationRepository;
