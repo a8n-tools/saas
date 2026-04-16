@@ -13,8 +13,8 @@ use std::sync::{Arc, OnceLock};
 
 use crate::errors::OciError;
 use crate::middleware::extract_client_ip;
-use crate::models::{AuditAction, CreateAuditLog, User};
-use crate::repositories::{ApplicationRepository, AuditLogRepository, UserRepository};
+use crate::models::{AuditAction, CreateAuditLog, RateLimitConfig, User};
+use crate::repositories::{ApplicationRepository, AuditLogRepository, RateLimitRepository, UserRepository};
 use crate::services::{OciTokenService, PasswordService};
 
 #[derive(Debug, Deserialize)]
@@ -66,6 +66,31 @@ pub async fn issue_token(
     let ip = extract_client_ip(&req).map(IpNetwork::from);
     let (email, password) = parse_basic_auth(&req).ok_or(OciError::Unauthorized)?;
 
+    // Rate-limit by lowercased email, matching the primary-API login endpoint
+    // (5 attempts/min/key). Prevents credential-stuffing attacks that pivot
+    // from /v1/auth/login to the registry's /auth/token.
+    let rate_key = email.to_lowercase();
+    let (_count, exceeded) = RateLimitRepository::check_and_increment(
+        pool.get_ref(),
+        &rate_key,
+        &RateLimitConfig::LOGIN,
+    )
+    .await
+    .map_err(|_| OciError::Internal)?;
+    if exceeded {
+        let retry_after = RateLimitRepository::get_retry_after(
+            pool.get_ref(),
+            &rate_key,
+            &RateLimitConfig::LOGIN,
+        )
+        .await
+        .unwrap_or(60);
+        audit_failed(pool.get_ref(), &email, ip, "rate_limited").await;
+        return Err(OciError::TooManyRequests {
+            retry_after_secs: Some(retry_after as u64),
+        });
+    }
+
     let user = UserRepository::find_by_email(pool.get_ref(), &email)
         .await
         .map_err(|_| OciError::Internal)?;
@@ -87,13 +112,17 @@ pub async fn issue_token(
         return Err(OciError::Unauthorized);
     }
 
-    // Passwordless accounts (magic-link only) cannot use the registry.
+    let password_service = PasswordService::new();
+
+    // Passwordless accounts (magic-link only) cannot use the registry. Still
+    // perform a dummy verify to keep timing indistinguishable from the
+    // password-check branch.
     let Some(password_hash) = user.password_hash.as_ref() else {
+        let _ = password_service.verify(&password, dummy_hash());
         audit_failed(pool.get_ref(), &email, ip, "no_password").await;
         return Err(OciError::Unauthorized);
     };
 
-    let password_service = PasswordService::new();
     let password_ok = password_service
         .verify(&password, password_hash)
         .map_err(|_| OciError::Internal)?;
