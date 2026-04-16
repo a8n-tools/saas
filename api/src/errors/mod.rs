@@ -486,3 +486,6 @@ mod tests {
         assert!(json["error"]["details"].is_null());
     }
 }
+
+pub mod oci;
+pub use oci::OciError;

@@ -151,6 +151,9 @@ export function AdminApplicationsPage() {
       forgejo_owner: app.forgejo_owner ?? '',
       forgejo_repo: app.forgejo_repo ?? '',
       pinned_release_tag: app.pinned_release_tag ?? '',
+      oci_image_owner: app.oci_image_owner ?? '',
+      oci_image_name: app.oci_image_name ?? '',
+      pinned_image_tag: app.pinned_image_tag ?? '',
     })
     setRefreshResult(null)
     setRefreshError('')
@@ -169,15 +172,31 @@ export function AdminApplicationsPage() {
       ? 'forgejo_owner, forgejo_repo, and pinned_release_tag must all be set together'
       : ''
 
+  const ociImageOwner = editForm.oci_image_owner ?? ''
+  const ociImageName = editForm.oci_image_name ?? ''
+  const pinnedImageTag = editForm.pinned_image_tag ?? ''
+
+  const ociValues = [ociImageOwner, ociImageName, pinnedImageTag]
+  const ociAnyFilled = ociValues.some((v) => v !== '')
+  const ociAllFilled = ociValues.every((v) => v !== '')
+  const ociValidationError =
+    ociAnyFilled && !ociAllFilled
+      ? 'oci_image_owner, oci_image_name, and pinned_image_tag must all be set together'
+      : ''
+
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!editingApp) return
     if (forgejoValidationError) return
+    if (ociValidationError) return
     const data: UpdateApplicationRequest = {
       ...editForm,
       forgejo_owner: forgejoOwner || null,
       forgejo_repo: forgejoRepo || null,
       pinned_release_tag: pinnedReleaseTag || null,
+      oci_image_owner: ociImageOwner || null,
+      oci_image_name: ociImageName || null,
+      pinned_image_tag: pinnedImageTag || null,
     }
     editMutation.mutate({ appId: editingApp.id, data })
   }
@@ -662,6 +681,42 @@ export function AdminApplicationsPage() {
                   <AlertDescription>{forgejoValidationError}</AlertDescription>
                 </Alert>
               )}
+              <div className="grid gap-2">
+                <Label htmlFor="oci_image_owner">OCI Image Owner</Label>
+                <Input
+                  id="oci_image_owner"
+                  value={editForm.oci_image_owner ?? ''}
+                  onChange={(e) => setEditForm({ ...editForm, oci_image_owner: e.target.value })}
+                  placeholder="e.g. a8n"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Forgejo container-registry owner (may differ from the release owner).
+                </p>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="oci_image_name">OCI Image Name</Label>
+                <Input
+                  id="oci_image_name"
+                  value={editForm.oci_image_name ?? ''}
+                  onChange={(e) => setEditForm({ ...editForm, oci_image_name: e.target.value })}
+                  placeholder="e.g. rus"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="pinned_image_tag">Pinned Image Tag</Label>
+                <Input
+                  id="pinned_image_tag"
+                  value={editForm.pinned_image_tag ?? ''}
+                  onChange={(e) => setEditForm({ ...editForm, pinned_image_tag: e.target.value })}
+                  placeholder="v1.0.0 or latest"
+                />
+              </div>
+              {ociValidationError && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{ociValidationError}</AlertDescription>
+                </Alert>
+              )}
               {refreshError && (
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
@@ -702,7 +757,7 @@ export function AdminApplicationsPage() {
               <Button type="button" variant="outline" onClick={() => setEditingApp(null)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={editMutation.isPending || !!forgejoValidationError}>
+              <Button type="submit" disabled={editMutation.isPending || !!forgejoValidationError || !!ociValidationError}>
                 {editMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Save Changes
               </Button>

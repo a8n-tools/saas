@@ -21,7 +21,7 @@ use a8n_api::{
     models::{CreateUser, UserRole},
     repositories::{FeedbackRepository, RateLimitRepository, UserRepository},
     routes,
-    services::{AuthService, DownloadCache, DownloadLimiter, EmailService, EncryptionKeySet, ForgejoClient, JwtConfig, JwtService, PasswordService, ReleaseCache, StripeConfig, StripeService, TotpService, WebhookService},
+    services::{AuthService, BlobCache, DownloadCache, DownloadLimiter, EmailService, EncryptionKeySet, ForgejoClient, ForgejoRegistryClient, JwtConfig, JwtService, ManifestCache, OciLimiter, OciTokenService, PasswordService, ReleaseCache, StripeConfig, StripeService, TotpService, WebhookService},
 };
 
 #[tokio::main]
@@ -112,7 +112,7 @@ async fn main() -> anyhow::Result<()> {
         "development-secret-key-min-32-chars-long!".to_string()
     });
     let jwt_config = JwtConfig::from_secret(&jwt_secret, &config.app_name);
-    let jwt_service = Arc::new(JwtService::new(jwt_config));
+    let jwt_service = Arc::new(JwtService::new(jwt_config.clone()));
 
     info!("JWT service initialized");
 
@@ -218,6 +218,44 @@ async fn main() -> anyhow::Result<()> {
         enabled = config.download.enabled(),
         cache_dir = %config.download.cache_dir,
         "Download service initialized"
+    );
+
+    // Initialize OCI registry services (optional — degrade gracefully when Forgejo is unconfigured)
+    let forgejo_registry_client: Option<Arc<ForgejoRegistryClient>> = config.download.forgejo_base_url.as_ref().and_then(|base| {
+        config.download.forgejo_api_token.as_ref().map(|token| {
+            Arc::new(ForgejoRegistryClient::new(base.clone(), token.clone()))
+        })
+    });
+
+    let manifest_cache: Option<Arc<ManifestCache>> = forgejo_registry_client.as_ref().map(|_| {
+        Arc::new(ManifestCache::new(config.oci.manifest_cache_ttl_secs))
+    });
+
+    let blob_cache: Option<Arc<BlobCache>> = forgejo_registry_client.clone().map(|c| {
+        Arc::new(BlobCache::new(
+            c,
+            &config.oci.blob_cache_dir,
+            config.oci.blob_cache_max_bytes,
+            pool.clone(),
+        ))
+    });
+
+    if let Some(bc) = &blob_cache {
+        if let Err(e) = bc.ensure_dir().await {
+            tracing::warn!(error = %e, "failed to create oci blob cache dir");
+        }
+    }
+
+    let oci_limiter = Arc::new(OciLimiter::new(
+        config.oci.concurrent_manifests_per_user,
+        config.oci.pulls_per_user_per_day,
+    ));
+    let oci_token_service = Arc::new(OciTokenService::new(&jwt_config, config.oci.token_ttl_secs));
+
+    info!(
+        enabled = config.oci.enabled,
+        port = config.oci.port,
+        "OCI registry service initialized"
     );
 
     // Initialize TOTP service
@@ -340,8 +378,16 @@ async fn main() -> anyhow::Result<()> {
 
     info!(address = %server_addr, "Starting HTTP server");
 
-    // Start HTTP server
-    HttpServer::new(move || {
+    // Pre-clone OCI handles for the OCI server (primary closure moves the originals)
+    let manifest_cache_oci = manifest_cache.clone();
+    let blob_cache_oci = blob_cache.clone();
+    let oci_limiter_oci = oci_limiter.clone();
+    let oci_token_service_oci = oci_token_service.clone();
+    let forgejo_registry_client_oci = forgejo_registry_client.clone();
+    let pool_oci_server = pool.clone();
+    let cfg_oci_server = config_data.oci.clone();
+
+    let primary = HttpServer::new(move || {
         // Configure CORS
         let domain = cors_domain.clone();
         let cors = Cors::default()
@@ -396,13 +442,67 @@ async fn main() -> anyhow::Result<()> {
             .app_data(web::Data::new(download_limiter.clone()))
             .app_data(web::Data::new(release_cache.clone()))
             .app_data(web::Data::new(download_cache.clone()))
+            .app_data(web::Data::new(manifest_cache.clone()))
+            .app_data(web::Data::new(blob_cache.clone()))
+            .app_data(web::Data::new(oci_limiter.clone()))
+            .app_data(web::Data::new(oci_token_service.clone()))
+            .app_data(web::Data::new(config_data.oci.clone()))
+            .app_data(web::Data::new(forgejo_registry_client.clone()))
             // Configure routes
             .configure(routes::configure)
     })
     .bind(&server_addr)?
     .shutdown_timeout(30)
-    .run()
-    .await?;
+    .run();
+
+    let oci_ready = config.oci.enabled && forgejo_registry_client_oci.is_some();
+    if config.oci.enabled && forgejo_registry_client_oci.is_none() {
+        tracing::warn!(
+            "OCI_REGISTRY_ENABLED=true but FORGEJO_BASE_URL / FORGEJO_API_TOKEN are unset — \
+             OCI registry server will NOT be started"
+        );
+    }
+
+    if oci_ready {
+        let oci_addr = format!("{}:{}", config.host, config.oci.port);
+        let mc = manifest_cache_oci;
+        let bc = blob_cache_oci;
+        let ol = oci_limiter_oci;
+        let ots = oci_token_service_oci;
+        let cfg_oci = cfg_oci_server;
+        let frc = forgejo_registry_client_oci;
+        let pool_oci = pool_oci_server;
+
+        info!(address = %oci_addr, "Starting OCI registry server");
+
+        let oci = HttpServer::new(move || {
+            App::new()
+                .wrap(TracingLogger::default())
+                .wrap(Logger::default())
+                .wrap(SecurityHeaders)
+                .wrap(RequestIdMiddleware)
+                .wrap(a8n_api::middleware::OciWwwAuthenticate { cfg: std::sync::Arc::new(cfg_oci.clone()) })
+                .app_data(web::Data::new(pool_oci.clone()))
+                // Raw Arc for the OciBearerUser extractor
+                .app_data(ots.clone())
+                // web::Data for the issue_token handler
+                .app_data(web::Data::new(ots.clone()))
+                .app_data(web::Data::new(mc.clone()))
+                .app_data(web::Data::new(bc.clone()))
+                .app_data(web::Data::new(ol.clone()))
+                .app_data(web::Data::new(cfg_oci.clone()))
+                .app_data(web::Data::new(frc.clone()))
+                .configure(a8n_api::routes::oci::configure)
+        })
+        .bind(&oci_addr)?
+        .shutdown_timeout(30)
+        .run();
+
+        tokio::try_join!(primary, oci)?;
+    } else {
+        info!("OCI registry server disabled (requires OCI_REGISTRY_ENABLED=true + FORGEJO_BASE_URL + FORGEJO_API_TOKEN)");
+        primary.await?;
+    }
 
     Ok(())
 }

@@ -59,6 +59,17 @@ services:
       DOWNLOAD_CONCURRENCY_PER_USER: ${DOWNLOAD_CONCURRENCY_PER_USER:-2}
       DOWNLOAD_DAILY_LIMIT_PER_USER: ${DOWNLOAD_DAILY_LIMIT_PER_USER:-50}
       FORGEJO_RELEASE_CACHE_TTL_SECS: ${FORGEJO_RELEASE_CACHE_TTL_SECS:-300}
+      OCI_REGISTRY_ENABLED: ${OCI_REGISTRY_ENABLED:-false}
+      OCI_REGISTRY_PORT: ${OCI_REGISTRY_PORT:-18081}
+      OCI_REGISTRY_SERVICE: ${OCI_REGISTRY_SERVICE:-${USER}-oci.a8n.run}
+      OCI_BLOB_CACHE_DIR: /var/cache/a8n-oci
+      OCI_BLOB_CACHE_MAX_BYTES: ${OCI_BLOB_CACHE_MAX_BYTES:-53687091200}
+      OCI_MANIFEST_CACHE_TTL_SECS: ${OCI_MANIFEST_CACHE_TTL_SECS:-300}
+      OCI_CONCURRENT_MANIFESTS_PER_USER: ${OCI_CONCURRENT_MANIFESTS_PER_USER:-2}
+      OCI_PULLS_PER_USER_PER_DAY: ${OCI_PULLS_PER_USER_PER_DAY:-50}
+      OCI_TOKEN_TTL_SECS: ${OCI_TOKEN_TTL_SECS:-900}
+    ports:
+      - "18081:18081"
     volumes:
       - ./api/src:/app/src:ro
       - ./api/migrations:/app/migrations:ro
@@ -67,6 +78,7 @@ services:
       - ./api/Cargo.lock:/app/Cargo.lock:ro
       - api_target:/app/target
       - downloads_cache:/var/cache/a8n-downloads
+      - oci_cache:/var/cache/a8n-oci
     networks:
       - default # Use default network for internal communication with Postgres
       - network-traefik-public
@@ -81,6 +93,11 @@ services:
       - "traefik.http.routers.api-saas-${USER}.entrypoints=web-secure"
       - "traefik.http.routers.api-saas-${USER}.tls.certresolver=cert-cloudflare"
       - "traefik.http.services.api-saas-${USER}.loadbalancer.server.port=4000"
+      - "traefik.http.routers.oci-saas-${USER}.rule=Host(`${USER}-oci.a8n.run`)"
+      - "traefik.http.routers.oci-saas-${USER}.service=oci-saas-${USER}@docker"
+      - "traefik.http.routers.oci-saas-${USER}.entrypoints=web-secure"
+      - "traefik.http.routers.oci-saas-${USER}.tls.certresolver=cert-cloudflare"
+      - "traefik.http.services.oci-saas-${USER}.loadbalancer.server.port=18081"
 
   # React Frontend
   frontend:
@@ -124,6 +141,8 @@ volumes:
     name: saas-api-target-${USER}
   downloads_cache:
     name: saas-downloads-cache-${USER}
+  oci_cache:
+    name: saas-oci-cache-${USER}
 
 networks:
   network-traefik-public:

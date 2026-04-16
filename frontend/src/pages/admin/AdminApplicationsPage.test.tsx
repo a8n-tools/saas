@@ -111,6 +111,55 @@ describe('AdminApplicationsPage', () => {
     expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled()
   })
 
+  it('validates oci fields are all-or-nothing', async () => {
+    const user = userEvent.setup()
+    render(<AdminApplicationsPage />)
+
+    await openEditDialog(user)
+
+    // Fill only oci_image_owner, leaving oci_image_name and pinned_image_tag empty
+    const ociImageOwnerInput = screen.getByLabelText('OCI Image Owner')
+    await user.clear(ociImageOwnerInput)
+    await user.type(ociImageOwnerInput, 'myorg')
+
+    // The inline error should appear and Save button should be disabled
+    await waitFor(() => {
+      expect(
+        screen.getByText('oci_image_owner, oci_image_name, and pinned_image_tag must all be set together')
+      ).toBeInTheDocument()
+    })
+    expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled()
+  })
+
+  it('submits oci fields in the PUT payload when all three are filled', async () => {
+    const user = userEvent.setup()
+    render(<AdminApplicationsPage />)
+
+    await openEditDialog(user)
+
+    // Fill all three OCI fields
+    await user.type(screen.getByLabelText('OCI Image Owner'), 'myorg')
+    await user.type(screen.getByLabelText('OCI Image Name'), 'myimage')
+    await user.type(screen.getByLabelText('Pinned Image Tag'), 'v2.0.0')
+
+    // No validation error should be shown
+    expect(
+      screen.queryByText('oci_image_owner, oci_image_name, and pinned_image_tag must all be set together')
+    ).not.toBeInTheDocument()
+
+    // Save button should be enabled
+    const saveBtn = screen.getByRole('button', { name: /save changes/i })
+    expect(saveBtn).not.toBeDisabled()
+
+    // Click Save — MSW handler accepts any PUT and returns the mock app
+    await user.click(saveBtn)
+
+    // After mutation succeeds, the dialog should close (editingApp set to null)
+    await waitFor(() => {
+      expect(screen.queryByText(/edit rus/i)).not.toBeInTheDocument()
+    })
+  })
+
   it('refresh button calls adminRefresh and shows asset list', async () => {
     const user = userEvent.setup()
     render(<AdminApplicationsPage />)

@@ -63,6 +63,13 @@ pub enum AuditAction {
     DownloadDeniedMembership,
     DownloadDeniedRateLimit,
     DownloadFailedUpstream,
+    OciLoginSucceeded,
+    OciLoginFailed,
+    OciPullRequested,
+    OciPullCompleted,
+    OciPullFailedUpstream,
+    OciPullDeniedRateLimit,
+    OciPullDeniedScope,
 }
 
 impl AuditAction {
@@ -120,6 +127,13 @@ impl AuditAction {
             AuditAction::DownloadDeniedMembership => "download_denied_membership",
             AuditAction::DownloadDeniedRateLimit => "download_denied_rate_limit",
             AuditAction::DownloadFailedUpstream => "download_failed_upstream",
+            AuditAction::OciLoginSucceeded => "oci_login_succeeded",
+            AuditAction::OciLoginFailed => "oci_login_failed",
+            AuditAction::OciPullRequested => "oci_pull_requested",
+            AuditAction::OciPullCompleted => "oci_pull_completed",
+            AuditAction::OciPullFailedUpstream => "oci_pull_failed_upstream",
+            AuditAction::OciPullDeniedRateLimit => "oci_pull_denied_rate_limit",
+            AuditAction::OciPullDeniedScope => "oci_pull_denied_scope",
         }
     }
 
@@ -349,6 +363,21 @@ mod tests {
 
         assert!(!AuditAction::DownloadRequested.is_admin_action());
         assert!(!AuditAction::DownloadCompleted.is_admin_action());
+    }
+
+    #[test]
+    fn audit_action_oci_variants() {
+        assert_eq!(AuditAction::OciLoginSucceeded.as_str(), "oci_login_succeeded");
+        assert_eq!(AuditAction::OciLoginFailed.as_str(), "oci_login_failed");
+        assert_eq!(AuditAction::OciPullRequested.as_str(), "oci_pull_requested");
+        assert_eq!(AuditAction::OciPullCompleted.as_str(), "oci_pull_completed");
+        assert_eq!(AuditAction::OciPullFailedUpstream.as_str(), "oci_pull_failed_upstream");
+        assert_eq!(AuditAction::OciPullDeniedRateLimit.as_str(), "oci_pull_denied_rate_limit");
+        assert_eq!(AuditAction::OciPullDeniedScope.as_str(), "oci_pull_denied_scope");
+
+        assert!(!AuditAction::OciPullRequested.is_admin_action());
+        assert!(!AuditAction::OciLoginFailed.is_admin_action());
+        assert!(!AuditAction::OciPullDeniedScope.is_admin_action());
     }
 
     #[test]
