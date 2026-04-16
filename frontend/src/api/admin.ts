@@ -80,6 +80,9 @@ export interface AdminApplication {
   forgejo_owner: string | null
   forgejo_repo: string | null
   pinned_release_tag: string | null
+  oci_image_owner: string | null
+  oci_image_name: string | null
+  pinned_image_tag: string | null
   sort_order: number
   created_at: string
   updated_at: string
@@ -101,6 +104,9 @@ export interface UpdateApplicationRequest {
   forgejo_owner?: string | null
   forgejo_repo?: string | null
   pinned_release_tag?: string | null
+  oci_image_owner?: string | null
+  oci_image_name?: string | null
+  pinned_image_tag?: string | null
 }
 
 export interface CreateApplicationRequest {
