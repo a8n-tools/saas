@@ -454,4 +454,262 @@ mod integration {
 
         cleanup(&pool, user_id, app_id, &blob_digest).await;
     }
+
+    fn build_app(
+        pool: PgPool,
+        client: Arc<ForgejoRegistryClient>,
+        manifest_cache: Arc<ManifestCache>,
+        blob_cache: Arc<BlobCache>,
+        limiter: Arc<OciLimiter>,
+        token_svc: Arc<OciTokenService>,
+    ) -> App<
+        impl actix_web::dev::ServiceFactory<
+            actix_web::dev::ServiceRequest,
+            Config = (),
+            Response = actix_web::dev::ServiceResponse,
+            Error = actix_web::Error,
+            InitError = (),
+        >,
+    > {
+        App::new()
+            .app_data(web::Data::new(pool))
+            .app_data(web::Data::new(Some(client)))
+            .app_data(web::Data::new(Some(manifest_cache)))
+            .app_data(web::Data::new(Some(blob_cache)))
+            .app_data(web::Data::new(limiter))
+            .app_data(token_svc)
+            .route("/v2/{slug}/manifests/{reference}", web::get().to(get_manifest))
+            .route("/v2/{slug}/blobs/{digest}", web::get().to(get_blob))
+            .route(
+                "/v2/{slug}/blobs/uploads/",
+                web::post().to(crate::handlers::oci_registry::push_not_supported),
+            )
+            .route(
+                "/v2/{slug}/manifests/{reference}",
+                web::put().to(crate::handlers::oci_registry::push_not_supported),
+            )
+    }
+
+    #[actix_rt::test]
+    async fn scope_mismatch_denies() {
+        let Some(pool) = maybe_pool().await else { return; };
+
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path_regex("/v2/.+/manifests/.+"))
+            .respond_with(ResponseTemplate::new(200).set_body_bytes(b"{}".to_vec()))
+            .mount(&server).await;
+
+        let user_id = seed_user(&pool).await;
+        let (app_id, slug) = seed_pullable_app(&pool, "acme", "app", "v1").await;
+
+        let client = Arc::new(ForgejoRegistryClient::new(server.uri(), "tok".into()));
+        let manifest_cache = Arc::new(ManifestCache::new(300));
+        let tmp = tempfile::tempdir().unwrap();
+        let blob_cache = Arc::new(BlobCache::new(
+            client.clone(), tmp.path().to_str().unwrap(), 10_000_000, pool.clone(),
+        ));
+        blob_cache.ensure_dir().await.unwrap();
+        let limiter = Arc::new(OciLimiter::new(2, 100));
+        let jwt_cfg = JwtConfig::from_secret("a-very-long-secret-key-for-tests-12345", "a8n");
+        let token_svc = Arc::new(OciTokenService::new(&jwt_cfg, 900));
+        // Scope for a DIFFERENT slug
+        let wrong_scope = "repository:some-other-slug:pull";
+        let token = token_svc.issue(user_id, wrong_scope).unwrap();
+
+        let app = test::init_service(build_app(
+            pool.clone(), client, manifest_cache, blob_cache, limiter, token_svc,
+        )).await;
+
+        let req = test::TestRequest::get()
+            .uri(&format!("/v2/{}/manifests/v1", slug))
+            .insert_header((header::AUTHORIZATION, format!("Bearer {}", token)))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 403);
+        let body = test::read_body(resp).await;
+        let s = String::from_utf8_lossy(&body);
+        assert!(s.contains("DENIED"), "body should contain DENIED code: {s}");
+
+        cleanup(&pool, user_id, app_id, "").await;
+    }
+
+    #[actix_rt::test]
+    async fn cross_audience_token_rejected() {
+        use crate::services::JwtService;
+        let Some(pool) = maybe_pool().await else { return; };
+
+        let server = MockServer::start().await;
+        let user_id = seed_user(&pool).await;
+        let (app_id, slug) = seed_pullable_app(&pool, "acme", "app", "v1").await;
+
+        let client = Arc::new(ForgejoRegistryClient::new(server.uri(), "tok".into()));
+        let manifest_cache = Arc::new(ManifestCache::new(300));
+        let tmp = tempfile::tempdir().unwrap();
+        let blob_cache = Arc::new(BlobCache::new(
+            client.clone(), tmp.path().to_str().unwrap(), 10_000_000, pool.clone(),
+        ));
+        blob_cache.ensure_dir().await.unwrap();
+        let limiter = Arc::new(OciLimiter::new(2, 100));
+        let jwt_cfg = JwtConfig::from_secret("a-very-long-secret-key-for-tests-12345", "a8n");
+        let token_svc = Arc::new(OciTokenService::new(&jwt_cfg, 900));
+
+        // Issue a primary-API access token (no aud="registry" claim)
+        let user = crate::repositories::UserRepository::find_by_id(&pool, user_id)
+            .await.unwrap().unwrap();
+        let jwt_svc = JwtService::new(jwt_cfg);
+        let api_token = jwt_svc.create_access_token(&user).unwrap();
+
+        let app = test::init_service(build_app(
+            pool.clone(), client, manifest_cache, blob_cache, limiter, token_svc,
+        )).await;
+
+        let req = test::TestRequest::get()
+            .uri(&format!("/v2/{}/manifests/v1", slug))
+            .insert_header((header::AUTHORIZATION, format!("Bearer {}", api_token)))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 401, "cross-audience token must be rejected");
+
+        cleanup(&pool, user_id, app_id, "").await;
+    }
+
+    #[actix_rt::test]
+    async fn push_verbs_return_405() {
+        let Some(pool) = maybe_pool().await else { return; };
+
+        let server = MockServer::start().await;
+        let user_id = seed_user(&pool).await;
+        let (app_id, slug) = seed_pullable_app(&pool, "acme", "app", "v1").await;
+
+        let client = Arc::new(ForgejoRegistryClient::new(server.uri(), "tok".into()));
+        let manifest_cache = Arc::new(ManifestCache::new(300));
+        let tmp = tempfile::tempdir().unwrap();
+        let blob_cache = Arc::new(BlobCache::new(
+            client.clone(), tmp.path().to_str().unwrap(), 10_000_000, pool.clone(),
+        ));
+        blob_cache.ensure_dir().await.unwrap();
+        let limiter = Arc::new(OciLimiter::new(2, 100));
+        let jwt_cfg = JwtConfig::from_secret("a-very-long-secret-key-for-tests-12345", "a8n");
+        let token_svc = Arc::new(OciTokenService::new(&jwt_cfg, 900));
+
+        let app = test::init_service(build_app(
+            pool.clone(), client, manifest_cache, blob_cache, limiter, token_svc,
+        )).await;
+
+        for (method_name, req) in [
+            ("POST uploads", test::TestRequest::post()
+                .uri(&format!("/v2/{}/blobs/uploads/", slug)).to_request()),
+            ("PUT manifest", test::TestRequest::put()
+                .uri(&format!("/v2/{}/manifests/v1", slug)).to_request()),
+        ] {
+            let resp = test::call_service(&app, req).await;
+            assert_eq!(resp.status(), 405, "{method_name} must return 405");
+        }
+
+        cleanup(&pool, user_id, app_id, "").await;
+    }
+
+    #[actix_rt::test]
+    async fn manifest_cache_hit_skips_upstream() {
+        let Some(pool) = maybe_pool().await else { return; };
+
+        let server = MockServer::start().await;
+        let manifest_body = br#"{"mediaType":"application/vnd.oci.image.manifest.v1+json"}"#.to_vec();
+        // Expect exactly ONE upstream hit despite two pulls
+        Mock::given(method("GET"))
+            .and(path_regex("/v2/.+/manifests/.+"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_bytes(manifest_body.clone())
+                    .insert_header("Content-Type", "application/vnd.oci.image.manifest.v1+json")
+                    .insert_header("Docker-Content-Digest", "sha256:cachedman"),
+            )
+            .expect(1)
+            .mount(&server).await;
+
+        let user_id = seed_user(&pool).await;
+        let (app_id, slug) = seed_pullable_app(&pool, "acme", "app", "v1").await;
+
+        let client = Arc::new(ForgejoRegistryClient::new(server.uri(), "tok".into()));
+        let manifest_cache = Arc::new(ManifestCache::new(300));
+        let tmp = tempfile::tempdir().unwrap();
+        let blob_cache = Arc::new(BlobCache::new(
+            client.clone(), tmp.path().to_str().unwrap(), 10_000_000, pool.clone(),
+        ));
+        blob_cache.ensure_dir().await.unwrap();
+        let limiter = Arc::new(OciLimiter::new(2, 100));
+        let jwt_cfg = JwtConfig::from_secret("a-very-long-secret-key-for-tests-12345", "a8n");
+        let token_svc = Arc::new(OciTokenService::new(&jwt_cfg, 900));
+        let token = token_svc.issue(user_id, &format!("repository:{}:pull", slug)).unwrap();
+
+        let app = test::init_service(build_app(
+            pool.clone(), client, manifest_cache, blob_cache, limiter, token_svc,
+        )).await;
+
+        for _ in 0..2 {
+            let req = test::TestRequest::get()
+                .uri(&format!("/v2/{}/manifests/v1", slug))
+                .insert_header((header::AUTHORIZATION, format!("Bearer {}", token)))
+                .to_request();
+            let resp = test::call_service(&app, req).await;
+            assert_eq!(resp.status(), 200);
+        }
+        // wiremock's .expect(1) is verified on server drop — forcing a drop here is awkward.
+        // Instead, verify by counting received requests.
+        let count = server.received_requests().await.unwrap()
+            .iter()
+            .filter(|r| r.url.path().contains("/manifests/"))
+            .count();
+        assert_eq!(count, 1, "manifest cache must serve the 2nd pull without re-fetching");
+
+        cleanup(&pool, user_id, app_id, "").await;
+    }
+
+    #[actix_rt::test]
+    async fn digest_mismatch_returns_502() {
+        let Some(pool) = maybe_pool().await else { return; };
+
+        let server = MockServer::start().await;
+        let wrong_body = b"not-what-the-digest-says".to_vec();
+        Mock::given(method("GET"))
+            .and(path_regex("/v2/.+/blobs/.+"))
+            .respond_with(ResponseTemplate::new(200).set_body_bytes(wrong_body))
+            .mount(&server).await;
+
+        let user_id = seed_user(&pool).await;
+        let (app_id, slug) = seed_pullable_app(&pool, "acme", "app", "v1").await;
+
+        let client = Arc::new(ForgejoRegistryClient::new(server.uri(), "tok".into()));
+        let manifest_cache = Arc::new(ManifestCache::new(300));
+        let tmp = tempfile::tempdir().unwrap();
+        let blob_cache = Arc::new(BlobCache::new(
+            client.clone(), tmp.path().to_str().unwrap(), 10_000_000, pool.clone(),
+        ));
+        blob_cache.ensure_dir().await.unwrap();
+        let limiter = Arc::new(OciLimiter::new(2, 100));
+        let jwt_cfg = JwtConfig::from_secret("a-very-long-secret-key-for-tests-12345", "a8n");
+        let token_svc = Arc::new(OciTokenService::new(&jwt_cfg, 900));
+        let token = token_svc.issue(user_id, &format!("repository:{}:pull", slug)).unwrap();
+
+        let app = test::init_service(build_app(
+            pool.clone(), client, manifest_cache, blob_cache, limiter, token_svc,
+        )).await;
+
+        // A valid-looking digest whose bytes will NOT match upstream.
+        let fake_digest = format!("sha256:{}", "a".repeat(64));
+        let req = test::TestRequest::get()
+            .uri(&format!("/v2/{}/blobs/{}", slug, fake_digest))
+            .insert_header((header::AUTHORIZATION, format!("Bearer {}", token)))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 502, "digest mismatch must return 502");
+
+        // No row should have been inserted for this digest.
+        let row = crate::repositories::OciBlobCacheRepository::find(&pool, &fake_digest)
+            .await.unwrap();
+        assert!(row.is_none(), "no blob cache row should exist on digest mismatch");
+
+        cleanup(&pool, user_id, app_id, &fake_digest).await;
+    }
 }
