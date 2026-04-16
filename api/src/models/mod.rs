@@ -7,6 +7,7 @@ pub mod audit;
 pub mod download;
 pub mod feedback;
 pub mod membership;
+pub mod oci;
 pub mod rate_limit;
 pub mod stripe;
 pub mod tier;
