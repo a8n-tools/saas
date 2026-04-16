@@ -178,3 +178,13 @@ cached on disk at `DOWNLOAD_CACHE_DIR` (defaults to the named volume
 documentation (config vars, audit actions, caveats). Original design +
 implementation plan: `docs/superpowers/specs/2026-04-15-forgejo-download-proxy-design.md`
 and `docs/superpowers/plans/2026-04-15-forgejo-download-proxy.md`.
+
+### OCI registry
+Gated behind `OCI_REGISTRY_ENABLED=true` + `FORGEJO_BASE_URL` + `FORGEJO_API_TOKEN`.
+Second HTTP server at `OCI_REGISTRY_PORT` (default 18081) exposes an OCI-compliant
+read-only registry. Members `docker login` with their a8n credentials and
+`docker pull <registry>/<app-slug>:<pinned-tag>`. Blobs cached on disk at
+`OCI_BLOB_CACHE_DIR` (volume `oci_cache`). See `docs/oci-registry.md` for user +
+dev documentation. Original design + implementation plan:
+`docs/superpowers/specs/2026-04-16-oci-registry-design.md` and
+`docs/superpowers/plans/2026-04-16-oci-registry.md`.
