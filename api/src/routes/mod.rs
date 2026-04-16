@@ -10,6 +10,7 @@ pub mod download;
 pub mod feedback;
 pub mod health;
 pub mod membership;
+pub mod oci;
 pub mod user;
 pub mod webhook;
 
