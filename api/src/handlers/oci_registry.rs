@@ -292,3 +292,166 @@ async fn audit_denied(
         tracing::warn!(?e, "oci pull_denied audit log failed");
     }
 }
+
+#[cfg(test)]
+mod integration {
+    //! Full-stack pull: mock Forgejo registry + real Postgres via DATABASE_URL.
+    //! Skipped automatically when DATABASE_URL is unset.
+
+    use super::*;
+    use actix_web::{http::header, test, App};
+    use sha2::{Digest, Sha256};
+    use wiremock::matchers::{method, path_regex};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    use crate::services::oci_token::OciTokenService;
+    use crate::services::JwtConfig;
+
+    async fn maybe_pool() -> Option<PgPool> {
+        let url = std::env::var("DATABASE_URL").ok()?;
+        PgPool::connect(&url).await.ok()
+    }
+
+    async fn seed_user(pool: &PgPool) -> Uuid {
+        let id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO users (id, email, password_hash, role, subscription_status)
+             VALUES ($1, $2, 'x', 'subscriber', 'active')",
+        )
+        .bind(id)
+        .bind(format!("oci-integ-{}@example.com", id))
+        .execute(pool)
+        .await
+        .unwrap();
+        id
+    }
+
+    async fn seed_pullable_app(pool: &PgPool, owner: &str, name: &str, tag: &str) -> (Uuid, String) {
+        let id = Uuid::new_v4();
+        let slug = format!("app-{}", id.simple());
+        sqlx::query(
+            "INSERT INTO applications
+             (id, name, slug, display_name, container_name, is_active,
+              oci_image_owner, oci_image_name, pinned_image_tag)
+             VALUES ($1, $2, $2, $3, $2, true, $4, $5, $6)",
+        )
+        .bind(id)
+        .bind(&slug)
+        .bind("Test App")
+        .bind(owner)
+        .bind(name)
+        .bind(tag)
+        .execute(pool)
+        .await
+        .unwrap();
+        (id, slug)
+    }
+
+    async fn cleanup(pool: &PgPool, user_id: Uuid, app_id: Uuid, digest: &str) {
+        sqlx::query("DELETE FROM oci_blob_cache WHERE content_digest = $1")
+            .bind(digest).execute(pool).await.ok();
+        sqlx::query("DELETE FROM applications WHERE id = $1")
+            .bind(app_id).execute(pool).await.ok();
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id).execute(pool).await.ok();
+    }
+
+    #[actix_rt::test]
+    async fn happy_path_manifest_and_blob() {
+        let Some(pool) = maybe_pool().await else { return; };
+
+        // Upstream mock
+        let server = MockServer::start().await;
+        let manifest_body = br#"{"mediaType":"application/vnd.oci.image.manifest.v1+json","config":{"digest":"sha256:cfg","size":10},"layers":[]}"#.to_vec();
+        let blob_body = format!("helloworld-{}", Uuid::new_v4()).into_bytes();
+        let blob_digest = format!("sha256:{}", hex::encode(Sha256::digest(&blob_body)));
+
+        Mock::given(method("GET"))
+            .and(path_regex("/v2/.+/manifests/.+"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_bytes(manifest_body.clone())
+                    .insert_header("Content-Type", "application/vnd.oci.image.manifest.v1+json")
+                    .insert_header("Docker-Content-Digest", "sha256:manifestdigest"),
+            )
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path_regex("/v2/.+/blobs/.+"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_bytes(blob_body.clone())
+                    .insert_header("Content-Type", "application/octet-stream"),
+            )
+            .mount(&server)
+            .await;
+
+        // Seed DB
+        let user_id = seed_user(&pool).await;
+        let (app_id, slug) = seed_pullable_app(&pool, "acme", "app", "v1").await;
+
+        // Services
+        let client = Arc::new(ForgejoRegistryClient::new(server.uri(), "tok".into()));
+        let manifest_cache = Arc::new(ManifestCache::new(300));
+        let tmp = tempfile::tempdir().unwrap();
+        let blob_cache = Arc::new(BlobCache::new(
+            client.clone(),
+            tmp.path().to_str().unwrap(),
+            10_000_000,
+            pool.clone(),
+        ));
+        blob_cache.ensure_dir().await.unwrap();
+        let limiter = Arc::new(OciLimiter::new(2, 100));
+
+        // Token
+        let jwt_cfg = JwtConfig::from_secret("a-very-long-secret-key-for-tests-12345", "a8n");
+        let token_svc = Arc::new(OciTokenService::new(&jwt_cfg, 900));
+        let scope = format!("repository:{}:pull", slug);
+        let token = token_svc.issue(user_id, &scope).unwrap();
+
+        // Build in-process App mirroring the OCI App wiring
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(pool.clone()))
+                .app_data(web::Data::new(Some(client.clone())))
+                .app_data(web::Data::new(Some(manifest_cache.clone())))
+                .app_data(web::Data::new(Some(blob_cache.clone())))
+                .app_data(web::Data::new(limiter.clone()))
+                .app_data(token_svc.clone())
+                .route("/v2/{slug}/manifests/{reference}", web::get().to(get_manifest))
+                .route("/v2/{slug}/blobs/{digest}", web::get().to(get_blob)),
+        )
+        .await;
+
+        // Manifest pull
+        let req = test::TestRequest::get()
+            .uri(&format!("/v2/{}/manifests/v1", slug))
+            .insert_header((header::AUTHORIZATION, format!("Bearer {}", token)))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 200, "manifest status");
+        let ct = resp
+            .headers()
+            .get(header::CONTENT_TYPE)
+            .map(|v| v.to_str().unwrap().to_string())
+            .unwrap_or_default();
+        assert!(
+            ct.contains("application/vnd.oci.image.manifest.v1+json"),
+            "unexpected content-type: {ct}"
+        );
+        let body = test::read_body(resp).await;
+        assert_eq!(body.as_ref(), manifest_body.as_slice());
+
+        // Blob pull — request the digest that matches the bytes the mock will return
+        let req = test::TestRequest::get()
+            .uri(&format!("/v2/{}/blobs/{}", slug, blob_digest))
+            .insert_header((header::AUTHORIZATION, format!("Bearer {}", token)))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 200, "blob status");
+        let body = test::read_body(resp).await;
+        assert_eq!(body.as_ref(), blob_body.as_slice());
+
+        cleanup(&pool, user_id, app_id, &blob_digest).await;
+    }
+}
