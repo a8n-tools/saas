@@ -473,6 +473,7 @@ async fn main() -> anyhow::Result<()> {
                 .wrap(Logger::default())
                 .wrap(SecurityHeaders)
                 .wrap(RequestIdMiddleware)
+                .wrap(a8n_api::middleware::OciWwwAuthenticate { cfg: std::sync::Arc::new(cfg_oci.clone()) })
                 .app_data(web::Data::new(pool_oci.clone()))
                 // Raw Arc for the OciBearerUser extractor
                 .app_data(ots.clone())
