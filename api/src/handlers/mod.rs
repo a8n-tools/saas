@@ -10,6 +10,7 @@ pub mod billing;
 pub mod download;
 pub mod feedback;
 pub mod membership;
+pub mod oci_auth;
 pub mod totp;
 pub mod user;
 pub mod webhook;
