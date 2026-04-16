@@ -40,11 +40,12 @@ Applications now have three OCI-related fields in the admin edit form
 - **Pinned Image Tag** — which tag to serve.
 
 When the pinned tag changes, the platform invalidates the in-memory
-manifest cache and schedules a best-effort on-disk orphan sweep.
+manifest cache. On-disk blob cleanup is handled passively by `BlobCache`'s
+async LRU eviction — a dedicated orphan sweep is not implemented.
 
 A manual refresh endpoint exists at
 `POST /v1/admin/applications/{slug}/oci/refresh` — it invalidates the
-manifest cache and warms it by re-fetching the pinned tag.
+manifest cache and warms it by re-fetching + caching the pinned tag.
 
 An application only appears as pullable when owner, name, and tag are
 all set, the app is active, AND the feature flag
@@ -138,8 +139,17 @@ Compose changes (`compose.yml`, `compose.dev.yml`):
 
 - New named volume `oci_cache` → `/var/cache/a8n-oci`
   (prod: `a8n-tools-oci-cache`, dev: `saas-oci-cache-${USER}`).
-- Dev compose exposes `18081:18081` on the host.
+- Dev compose exposes `18081:18081` on the host and wires a Traefik router
+  for `${USER}-registry.a8n.run` → container port `18081`.
 - All nine env vars above are plumbed through to the `api` service.
+
+**Prod compose deployment note.** `compose.yml` is a template — the `api`
+service has `traefik.enable: false` by design. Deployments that want to
+expose the registry must add their own Traefik router (or equivalent
+ingress) that maps the registry hostname to the `api` container on
+`OCI_REGISTRY_PORT` (default `18081`). If the feature flag is enabled
+without a route in place, `docker login` and `docker pull` will simply
+never reach the OCI server.
 
 ### Caveats / known limits
 
@@ -151,10 +161,11 @@ Compose changes (`compose.yml`, `compose.dev.yml`):
   a proxy for admin-curated images, not a general-purpose registry.
 - **Admin-curated pin only.** Members cannot pull arbitrary tags — only
   whatever `pinned_image_tag` the admin has set for the slug.
-- **Orphan sweep is best-effort and currently a no-op.** On pin change
-  the handler spawns a sweep that collects referenced digests — the
-  first version returns an empty set and returns early so LRU eviction
-  handles steady-state disk pressure. Populating the set is a follow-up.
+- **No active orphan sweep.** On pin change we invalidate the in-memory
+  manifest cache. Stale blobs on disk are reclaimed passively by
+  `BlobCache`'s async LRU eviction when `OCI_BLOB_CACHE_MAX_BYTES` is
+  reached. A reachability-based sweep would be additive work if disk
+  pressure becomes a problem.
 - **Password-only login.** Docker's `~/.docker/config.json` Basic-auth
   flow predates 2FA. Members with TOTP enabled still log in with their
   password here — TOTP is enforced on the web UI but not on
