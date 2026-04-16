@@ -11,6 +11,7 @@ pub mod download;
 pub mod feedback;
 pub mod membership;
 pub mod oci_auth;
+pub mod oci_registry;
 pub mod totp;
 pub mod user;
 pub mod webhook;

@@ -20,6 +20,8 @@ use crate::services::oci_token::{OciTokenService, RegistryTokenClaims};
 #[derive(Debug, Clone)]
 pub struct OciBearerUser {
     pub claims: RegistryTokenClaims,
+    pub email: String,
+    pub role: String,
 }
 
 impl OciBearerUser {
@@ -77,7 +79,11 @@ impl FromRequest for OciBearerUser {
                 return Err(OciError::Unauthorized);
             }
 
-            Ok(OciBearerUser { claims })
+            Ok(OciBearerUser {
+                claims,
+                email: user.email.clone(),
+                role: user.role.clone(),
+            })
         })
     }
 }
@@ -102,6 +108,8 @@ mod tests {
                 exp: i64::MAX,
                 iss: "a8n".into(),
             },
+            email: "test@example.com".into(),
+            role: "subscriber".into(),
         };
         assert!(user.assert_scope("my-app").is_ok());
         assert!(matches!(user.assert_scope("other"), Err(OciError::Denied)));
