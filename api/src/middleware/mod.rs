@@ -4,6 +4,7 @@
 
 pub mod auth;
 pub mod auto_ban;
+pub mod oci_auth;
 pub mod request_id;
 pub mod security_headers;
 
@@ -13,4 +14,5 @@ pub use auth::{
     MemberUser, OptionalUser,
 };
 pub use auto_ban::{AutoBanMiddleware, AutoBanService};
+pub use oci_auth::OciBearerUser;
 pub use security_headers::SecurityHeaders;
