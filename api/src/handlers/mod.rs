@@ -3,6 +3,7 @@
 //! This module contains all HTTP request handlers organized by domain.
 
 pub mod admin;
+pub mod admin_oci;
 pub mod admin_stripe;
 pub mod application;
 pub mod auth;
@@ -54,6 +55,7 @@ pub use admin::{
     update_application, update_stripe_config, update_tier_config, get_tier_config,
     update_user_role, update_user_status,
 };
+pub use admin_oci::{refresh_oci};
 pub use admin_stripe::{
     archive_stripe_price, archive_stripe_product, create_stripe_price, create_stripe_product,
     create_stripe_webhook, delete_stripe_webhook, list_stripe_prices, list_stripe_products,
