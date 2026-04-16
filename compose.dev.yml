@@ -93,6 +93,11 @@ services:
       - "traefik.http.routers.api-saas-${USER}.entrypoints=web-secure"
       - "traefik.http.routers.api-saas-${USER}.tls.certresolver=cert-cloudflare"
       - "traefik.http.services.api-saas-${USER}.loadbalancer.server.port=4000"
+      - "traefik.http.routers.oci-saas-${USER}.rule=Host(`${USER}-registry.a8n.run`)"
+      - "traefik.http.routers.oci-saas-${USER}.service=oci-saas-${USER}@docker"
+      - "traefik.http.routers.oci-saas-${USER}.entrypoints=web-secure"
+      - "traefik.http.routers.oci-saas-${USER}.tls.certresolver=cert-cloudflare"
+      - "traefik.http.services.oci-saas-${USER}.loadbalancer.server.port=18081"
 
   # React Frontend
   frontend:

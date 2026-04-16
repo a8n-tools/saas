@@ -88,7 +88,7 @@ impl ForgejoRegistryClient {
         self.validate_host(&parsed)?;
 
         let resp = self.http.get(parsed)
-            .header("Authorization", format!("token {}", self.token))
+            .basic_auth("", Some(&self.token))
             .header("Accept", accept)
             .send()
             .await?;
@@ -128,7 +128,7 @@ impl ForgejoRegistryClient {
         self.validate_host(&parsed)?;
 
         let resp = self.http.get(parsed)
-            .header("Authorization", format!("token {}", self.token))
+            .basic_auth("", Some(&self.token))
             .send()
             .await?;
 

@@ -200,7 +200,8 @@ create-release bump:
     print $"  ($base_url)/releases/new"
 
 # Cleanup
-# Stop services and remove volumes
+# Stop services and remove volumes (including oci + downloads caches)
 clean:
     {{ compose }}down --volumes --remove-orphans
+    -docker volume rm saas-oci-cache-$USER 2>/dev/null
     @echo "Volumes removed. Data has been cleared."
