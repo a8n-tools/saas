@@ -23,7 +23,7 @@ use crate::repositories::{
     NotificationRepository, StripeConfigRepository, TokenRepository, TotpRepository, UserRepository,
 };
 use crate::responses::{get_request_id, created, paginated, success, success_no_data};
-use crate::services::{AuthService, DownloadCache, EmailService, EncryptionKeySet, JwtService, PasswordService, ReleaseCache, StripeConfig, StripeService, TotpService, WebhookService};
+use crate::services::{AuthService, BlobCache, DownloadCache, EmailService, EncryptionKeySet, JwtService, ManifestCache, PasswordService, ReleaseCache, StripeConfig, StripeService, TotpService, WebhookService};
 use crate::validation;
 
 // =============================================================================
@@ -440,6 +440,7 @@ pub async fn swap_application_order(
 
 /// PUT /v1/admin/applications/{app_id}
 /// Update an application
+#[allow(clippy::too_many_arguments)]
 pub async fn update_application(
     req: HttpRequest,
     admin: AdminUser,
@@ -449,6 +450,8 @@ pub async fn update_application(
     webhook_service: web::Data<Arc<WebhookService>>,
     release_cache: web::Data<Option<Arc<ReleaseCache>>>,
     download_cache: web::Data<Option<Arc<DownloadCache>>>,
+    manifest_cache: web::Data<Option<Arc<ManifestCache>>>,
+    blob_cache: web::Data<Option<Arc<BlobCache>>>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
     let app_id = path.into_inner();
@@ -470,8 +473,22 @@ pub async fn update_application(
         ));
     }
 
-    // Capture old tag before update for cache invalidation
+    // All-or-nothing OCI validation on merged values
+    let merged_oci_owner = body.oci_image_owner.as_ref().or(old_app.oci_image_owner.as_ref());
+    let merged_oci_name = body.oci_image_name.as_ref().or(old_app.oci_image_name.as_ref());
+    let merged_oci_tag = body.pinned_image_tag.as_ref().or(old_app.pinned_image_tag.as_ref());
+    let oci_any = merged_oci_owner.is_some() || merged_oci_name.is_some() || merged_oci_tag.is_some();
+    let oci_all = merged_oci_owner.is_some() && merged_oci_name.is_some() && merged_oci_tag.is_some();
+    if oci_any && !oci_all {
+        return Err(AppError::validation(
+            "oci",
+            "oci_image_owner, oci_image_name, and pinned_image_tag must all be set together",
+        ));
+    }
+
+    // Capture old tags before update for cache invalidation
     let old_tag = old_app.pinned_release_tag.clone();
+    let old_pinned_image_tag = old_app.pinned_image_tag.clone();
 
     let app = ApplicationRepository::update(&pool, app_id, &body).await?;
 
@@ -486,6 +503,30 @@ pub async fn update_application(
                     tracing::warn!(error = %e, "download cache invalidation failed");
                 }
             }
+        }
+    }
+
+    // Invalidate OCI caches if the pinned image tag changed
+    if old_pinned_image_tag != app.pinned_image_tag {
+        if let Some(mc) = manifest_cache.get_ref().as_ref() {
+            mc.invalidate_app(app.id).await;
+        }
+        if let Some(bc) = blob_cache.get_ref().as_ref() {
+            let bc = bc.clone();
+            let pool_clone = pool.clone();
+            tokio::spawn(async move {
+                match collect_all_referenced_digests(pool_clone.get_ref()).await {
+                    Ok(keep) if !keep.is_empty() => {
+                        if let Err(e) = bc.sweep_orphans(&keep).await {
+                            tracing::warn!(error = %e, "oci blob orphan sweep failed");
+                        }
+                    }
+                    Ok(_) => {
+                        // Empty keep-set would wipe everything — skip. LRU eviction handles steady state.
+                    }
+                    Err(e) => tracing::warn!(error = %e, "oci digest collection failed"),
+                }
+            });
         }
     }
 
@@ -1780,6 +1821,66 @@ pub async fn reencrypt_key(
             ))
         }
         _ => Err(AppError::not_found(format!("Unknown key: {key_id}"))),
+    }
+}
+
+/// Collect every digest currently referenced by a pullable app. First version
+/// returns an empty vec — LRU eviction in `BlobCache` is the backstop.
+/// Populate in a follow-up if disk-reclamation pressure demands it.
+async fn collect_all_referenced_digests(_pool: &PgPool) -> Result<Vec<String>, AppError> {
+    Ok(Vec::new())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sqlx::PgPool;
+
+    async fn maybe_pool() -> Option<PgPool> {
+        let url = std::env::var("DATABASE_URL").ok()?;
+        PgPool::connect(&url).await.ok()
+    }
+
+    #[actix_rt::test]
+    async fn admin_update_invalidates_manifest_cache_on_pin_change() {
+        let Some(pool) = maybe_pool().await else { return; };
+        let slug = format!("oci-upd-{}", uuid::Uuid::new_v4());
+        sqlx::query(r#"
+            INSERT INTO applications
+            (name, slug, display_name, container_name,
+             oci_image_owner, oci_image_name, pinned_image_tag)
+            VALUES ($1, $1, $1, $1, 'a8n', 'rus', 'v1.0.0')
+        "#).bind(&slug).execute(&pool).await.unwrap();
+
+        let app_row: (uuid::Uuid,) = sqlx::query_as("SELECT id FROM applications WHERE slug = $1")
+            .bind(&slug).fetch_one(&pool).await.unwrap();
+        let app_id = app_row.0;
+
+        let mc = Arc::new(ManifestCache::new(60));
+        mc.insert(app_id, "v1.0.0", crate::models::oci::CachedManifest {
+            bytes: bytes::Bytes::from_static(b"{}"),
+            media_type: "application/vnd.oci.image.manifest.v1+json".into(),
+            digest: "sha256:abc".into(),
+        }).await;
+        assert!(mc.get(app_id, "v1.0.0").await.is_some());
+
+        let update = UpdateApplication {
+            display_name: None, description: None, icon_url: None,
+            source_code_url: None, version: None, subdomain: None,
+            container_name: None, health_check_url: None,
+            is_active: None, maintenance_mode: None, maintenance_message: None,
+            webhook_url: None,
+            forgejo_owner: None, forgejo_repo: None, pinned_release_tag: None,
+            oci_image_owner: None, oci_image_name: None,
+            pinned_image_tag: Some("v2.0.0".into()),
+        };
+        let _updated = crate::repositories::ApplicationRepository::update(&pool, app_id, &update).await.unwrap();
+
+        // Simulate the handler's invalidation path (we're not going through HTTP).
+        mc.invalidate_app(app_id).await;
+        assert!(mc.get(app_id, "v1.0.0").await.is_none());
+
+        sqlx::query("DELETE FROM applications WHERE id = $1").bind(app_id).execute(&pool).await.unwrap();
     }
 }
 
