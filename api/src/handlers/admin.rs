@@ -23,7 +23,7 @@ use crate::repositories::{
     NotificationRepository, StripeConfigRepository, TokenRepository, TotpRepository, UserRepository,
 };
 use crate::responses::{get_request_id, created, paginated, success, success_no_data};
-use crate::services::{AuthService, BlobCache, DownloadCache, EmailService, EncryptionKeySet, JwtService, ManifestCache, PasswordService, ReleaseCache, StripeConfig, StripeService, TotpService, WebhookService};
+use crate::services::{AuthService, DownloadCache, EmailService, EncryptionKeySet, JwtService, ManifestCache, PasswordService, ReleaseCache, StripeConfig, StripeService, TotpService, WebhookService};
 use crate::validation;
 
 // =============================================================================
@@ -451,7 +451,6 @@ pub async fn update_application(
     release_cache: web::Data<Option<Arc<ReleaseCache>>>,
     download_cache: web::Data<Option<Arc<DownloadCache>>>,
     manifest_cache: web::Data<Option<Arc<ManifestCache>>>,
-    blob_cache: web::Data<Option<Arc<BlobCache>>>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
     let app_id = path.into_inner();
@@ -506,27 +505,11 @@ pub async fn update_application(
         }
     }
 
-    // Invalidate OCI caches if the pinned image tag changed
+    // Invalidate OCI manifest cache if the pinned image tag changed.
+    // On-disk blob eviction is handled by BlobCache's async LRU.
     if old_pinned_image_tag != app.pinned_image_tag {
         if let Some(mc) = manifest_cache.get_ref().as_ref() {
             mc.invalidate_app(app.id).await;
-        }
-        if let Some(bc) = blob_cache.get_ref().as_ref() {
-            let bc = bc.clone();
-            let pool_clone = pool.clone();
-            tokio::spawn(async move {
-                match collect_all_referenced_digests(pool_clone.get_ref()).await {
-                    Ok(keep) if !keep.is_empty() => {
-                        if let Err(e) = bc.sweep_orphans(&keep).await {
-                            tracing::warn!(error = %e, "oci blob orphan sweep failed");
-                        }
-                    }
-                    Ok(_) => {
-                        // Empty keep-set would wipe everything — skip. LRU eviction handles steady state.
-                    }
-                    Err(e) => tracing::warn!(error = %e, "oci digest collection failed"),
-                }
-            });
         }
     }
 
@@ -1822,13 +1805,6 @@ pub async fn reencrypt_key(
         }
         _ => Err(AppError::not_found(format!("Unknown key: {key_id}"))),
     }
-}
-
-/// Collect every digest currently referenced by a pullable app. First version
-/// returns an empty vec — LRU eviction in `BlobCache` is the backstop.
-/// Populate in a follow-up if disk-reclamation pressure demands it.
-async fn collect_all_referenced_digests(_pool: &PgPool) -> Result<Vec<String>, AppError> {
-    Ok(Vec::new())
 }
 
 #[cfg(test)]

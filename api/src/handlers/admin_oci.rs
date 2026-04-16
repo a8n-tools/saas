@@ -1,11 +1,13 @@
 //! Admin-only: manually refresh OCI caches for an app.
 
 use actix_web::{web, HttpRequest, HttpResponse};
+use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 use std::sync::Arc;
 
 use crate::errors::AppError;
 use crate::middleware::AdminUser;
+use crate::models::oci::CachedManifest;
 use crate::repositories::ApplicationRepository;
 use crate::responses::{get_request_id, success_no_data};
 use crate::services::{ForgejoRegistryClient, ManifestCache};
@@ -44,12 +46,13 @@ pub async fn refresh_oci(
 
     mc.invalidate_app(app.id).await;
 
-    // Best-effort: re-fetch the pinned tag's manifest to warm the cache.
+    // Best-effort: re-fetch the pinned tag's manifest and insert it into the
+    // cache so the next member pull returns a hit.
     // is_pullable() guarantees these unwraps are safe.
     let owner = app.oci_image_owner.as_deref().unwrap();
     let name = app.oci_image_name.as_deref().unwrap();
     let tag = app.pinned_image_tag.as_deref().unwrap();
-    if let Err(e) = client
+    match client
         .get_manifest(
             owner,
             name,
@@ -58,7 +61,26 @@ pub async fn refresh_oci(
         )
         .await
     {
-        tracing::warn!(error = ?e, slug = %slug, "oci refresh: upstream manifest refetch failed");
+        Ok(mr) => {
+            let digest = if mr.digest.is_empty() {
+                format!("sha256:{}", hex::encode(Sha256::digest(&mr.bytes)))
+            } else {
+                mr.digest
+            };
+            mc.insert(
+                app.id,
+                tag,
+                CachedManifest {
+                    bytes: mr.bytes,
+                    media_type: mr.media_type,
+                    digest,
+                },
+            )
+            .await;
+        }
+        Err(e) => {
+            tracing::warn!(error = ?e, slug = %slug, "oci refresh: upstream manifest refetch failed");
+        }
     }
 
     Ok(success_no_data(request_id))

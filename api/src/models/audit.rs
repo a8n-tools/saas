@@ -69,6 +69,7 @@ pub enum AuditAction {
     OciPullCompleted,
     OciPullFailedUpstream,
     OciPullDeniedRateLimit,
+    OciPullDeniedScope,
 }
 
 impl AuditAction {
@@ -132,6 +133,7 @@ impl AuditAction {
             AuditAction::OciPullCompleted => "oci_pull_completed",
             AuditAction::OciPullFailedUpstream => "oci_pull_failed_upstream",
             AuditAction::OciPullDeniedRateLimit => "oci_pull_denied_rate_limit",
+            AuditAction::OciPullDeniedScope => "oci_pull_denied_scope",
         }
     }
 
@@ -371,9 +373,11 @@ mod tests {
         assert_eq!(AuditAction::OciPullCompleted.as_str(), "oci_pull_completed");
         assert_eq!(AuditAction::OciPullFailedUpstream.as_str(), "oci_pull_failed_upstream");
         assert_eq!(AuditAction::OciPullDeniedRateLimit.as_str(), "oci_pull_denied_rate_limit");
+        assert_eq!(AuditAction::OciPullDeniedScope.as_str(), "oci_pull_denied_scope");
 
         assert!(!AuditAction::OciPullRequested.is_admin_action());
         assert!(!AuditAction::OciLoginFailed.is_admin_action());
+        assert!(!AuditAction::OciPullDeniedScope.is_admin_action());
     }
 
     #[test]

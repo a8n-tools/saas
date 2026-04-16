@@ -42,7 +42,10 @@ pub async fn get_manifest(
     limiter: web::Data<Arc<OciLimiter>>,
 ) -> Result<HttpResponse, OciError> {
     let (slug, reference) = path.into_inner();
-    user.assert_scope(&slug)?;
+    if user.assert_scope(&slug).is_err() {
+        audit_denied_scope(pool.get_ref(), &req, &user, &slug).await;
+        return Err(OciError::Denied);
+    }
 
     let client = client
         .as_ref()
@@ -119,10 +122,25 @@ pub async fn get_manifest(
             .oci_image_name
             .as_deref()
             .ok_or(OciError::NameUnknown)?;
-        let mr = client
-            .get_manifest(owner, name, &reference, &accept)
-            .await
-            .map_err(map_reg_err)?;
+        let mr = match client.get_manifest(owner, name, &reference, &accept).await {
+            Ok(mr) => mr,
+            Err(e) => {
+                let mapped = map_reg_err(&e);
+                if matches!(mapped, OciError::Upstream) {
+                    audit_failed_upstream(
+                        pool.get_ref(),
+                        &req,
+                        &user,
+                        &app.id,
+                        "manifest",
+                        &reference,
+                        &format!("{e:?}"),
+                    )
+                    .await;
+                }
+                return Err(mapped);
+            }
+        };
         let digest = if mr.digest.is_empty() {
             format!("sha256:{}", hex::encode(Sha256::digest(&mr.bytes)))
         } else {
@@ -173,7 +191,10 @@ pub async fn get_blob(
     blob_cache: web::Data<Option<Arc<BlobCache>>>,
 ) -> Result<HttpResponse, OciError> {
     let (slug, digest) = path.into_inner();
-    user.assert_scope(&slug)?;
+    if user.assert_scope(&slug).is_err() {
+        audit_denied_scope(pool.get_ref(), &req, &user, &slug).await;
+        return Err(OciError::Denied);
+    }
     let blob_cache = blob_cache
         .as_ref()
         .as_ref()
@@ -196,14 +217,29 @@ pub async fn get_blob(
         .as_deref()
         .ok_or(OciError::NameUnknown)?;
 
-    let handle = blob_cache
-        .get_or_fetch(owner, name, &digest)
-        .await
-        .map_err(|e| match e {
-            AppError::NotFound { .. } => OciError::BlobUnknown,
-            AppError::ValidationError { .. } => OciError::BlobUnknown,
-            _ => OciError::Upstream,
-        })?;
+    let handle = match blob_cache.get_or_fetch(owner, name, &digest).await {
+        Ok(h) => h,
+        Err(e) => {
+            let mapped = match &e {
+                AppError::NotFound { .. } => OciError::BlobUnknown,
+                AppError::ValidationError { .. } => OciError::BlobUnknown,
+                _ => OciError::Upstream,
+            };
+            if matches!(mapped, OciError::Upstream) {
+                audit_failed_upstream(
+                    pool.get_ref(),
+                    &req,
+                    &user,
+                    &app.id,
+                    "blob",
+                    &digest,
+                    &format!("{e:?}"),
+                )
+                .await;
+            }
+            return Err(mapped);
+        }
+    };
 
     let is_head = req.method() == actix_web::http::Method::HEAD;
     let mut resp = HttpResponse::Ok();
@@ -231,7 +267,7 @@ pub async fn push_not_supported() -> Result<HttpResponse, OciError> {
     Err(OciError::Unsupported)
 }
 
-fn map_reg_err(e: RegistryError) -> OciError {
+fn map_reg_err(e: &RegistryError) -> OciError {
     match e {
         RegistryError::NotFound => OciError::ManifestUnknown,
         _ => OciError::Upstream,
@@ -290,6 +326,47 @@ async fn audit_denied(
         );
     if let Err(e) = AuditLogRepository::create(pool, log).await {
         tracing::warn!(?e, "oci pull_denied audit log failed");
+    }
+}
+
+async fn audit_denied_scope(
+    pool: &PgPool,
+    req: &HttpRequest,
+    user: &OciBearerUser,
+    requested_slug: &str,
+) {
+    let log = CreateAuditLog::new(AuditAction::OciPullDeniedScope)
+        .with_actor(user.claims.sub, &user.email, &user.role)
+        .with_ip(extract_client_ip(req).map(IpNetwork::from))
+        .with_metadata(serde_json::json!({
+            "requested_slug": requested_slug,
+            "token_scope": user.claims.scope,
+        }));
+    if let Err(e) = AuditLogRepository::create(pool, log).await {
+        tracing::warn!(?e, "oci pull_denied_scope audit log failed");
+    }
+}
+
+async fn audit_failed_upstream(
+    pool: &PgPool,
+    req: &HttpRequest,
+    user: &OciBearerUser,
+    app_id: &Uuid,
+    kind: &str,
+    reference: &str,
+    error: &str,
+) {
+    let log = CreateAuditLog::new(AuditAction::OciPullFailedUpstream)
+        .with_actor(user.claims.sub, &user.email, &user.role)
+        .with_ip(extract_client_ip(req).map(IpNetwork::from))
+        .with_resource("application", *app_id)
+        .with_metadata(serde_json::json!({
+            "kind": kind,
+            "reference": reference,
+            "error": error,
+        }));
+    if let Err(e) = AuditLogRepository::create(pool, log).await {
+        tracing::warn!(?e, "oci pull_failed_upstream audit log failed");
     }
 }
 

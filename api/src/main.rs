@@ -455,7 +455,15 @@ async fn main() -> anyhow::Result<()> {
     .shutdown_timeout(30)
     .run();
 
-    if config.oci.enabled {
+    let oci_ready = config.oci.enabled && forgejo_registry_client_oci.is_some();
+    if config.oci.enabled && forgejo_registry_client_oci.is_none() {
+        tracing::warn!(
+            "OCI_REGISTRY_ENABLED=true but FORGEJO_BASE_URL / FORGEJO_API_TOKEN are unset — \
+             OCI registry server will NOT be started"
+        );
+    }
+
+    if oci_ready {
         let oci_addr = format!("{}:{}", config.host, config.oci.port);
         let mc = manifest_cache_oci;
         let bc = blob_cache_oci;
@@ -492,7 +500,7 @@ async fn main() -> anyhow::Result<()> {
 
         tokio::try_join!(primary, oci)?;
     } else {
-        info!("OCI registry server disabled (OCI_REGISTRY_ENABLED!=true)");
+        info!("OCI registry server disabled (requires OCI_REGISTRY_ENABLED=true + FORGEJO_BASE_URL + FORGEJO_API_TOKEN)");
         primary.await?;
     }
 
