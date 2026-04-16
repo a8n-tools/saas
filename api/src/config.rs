@@ -40,6 +40,8 @@ pub struct Config {
     pub tier: TierConfig,
     /// Download proxy configuration.
     pub download: DownloadConfig,
+    /// OCI registry configuration.
+    pub oci: OciConfig,
 }
 
 /// SMTP TLS mode
@@ -293,6 +295,58 @@ impl DownloadConfig {
     }
 }
 
+/// OCI registry configuration.
+#[derive(Debug, Clone)]
+pub struct OciConfig {
+    pub enabled: bool,
+    pub port: u16,
+    pub service: String,
+    pub blob_cache_dir: String,
+    pub blob_cache_max_bytes: u64,
+    pub manifest_cache_ttl_secs: u64,
+    pub concurrent_manifests_per_user: u32,
+    pub pulls_per_user_per_day: u32,
+    pub token_ttl_secs: u64,
+}
+
+impl OciConfig {
+    pub fn from_env() -> Self {
+        Self {
+            enabled: env::var("OCI_REGISTRY_ENABLED")
+                .map(|v| v == "true" || v == "1")
+                .unwrap_or(false),
+            port: env::var("OCI_REGISTRY_PORT")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(18081),
+            service: env::var("OCI_REGISTRY_SERVICE")
+                .unwrap_or_else(|_| "registry.example.com".to_string()),
+            blob_cache_dir: env::var("OCI_BLOB_CACHE_DIR")
+                .unwrap_or_else(|_| "/var/cache/a8n-oci".to_string()),
+            blob_cache_max_bytes: env::var("OCI_BLOB_CACHE_MAX_BYTES")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(53_687_091_200), // 50 GiB
+            manifest_cache_ttl_secs: env::var("OCI_MANIFEST_CACHE_TTL_SECS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(300),
+            concurrent_manifests_per_user: env::var("OCI_CONCURRENT_MANIFESTS_PER_USER")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(2),
+            pulls_per_user_per_day: env::var("OCI_PULLS_PER_USER_PER_DAY")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(50),
+            token_ttl_secs: env::var("OCI_TOKEN_TTL_SECS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(900),
+        }
+    }
+}
+
 impl Config {
     /// Load configuration from environment variables
     ///
@@ -343,6 +397,7 @@ impl Config {
 
         let tier = TierConfig::from_env();
         let download = DownloadConfig::from_env();
+        let oci = OciConfig::from_env();
 
         let config = Self {
             database_url,
@@ -363,6 +418,7 @@ impl Config {
             stripe_key_version,
             tier,
             download,
+            oci,
         };
 
         info!(
@@ -575,5 +631,36 @@ mod tests {
         assert_eq!("7".parse::<i16>().unwrap(), 7);
         assert_eq!(None::<String>.and_then(|v: String| v.parse::<i16>().ok()).unwrap_or(1), 1);
         assert_eq!(Some("invalid".to_string()).and_then(|v| v.parse::<i16>().ok()).unwrap_or(1), 1);
+    }
+
+    #[test]
+    fn oci_config_defaults() {
+        env::remove_var("OCI_REGISTRY_ENABLED");
+        env::remove_var("OCI_REGISTRY_PORT");
+        env::remove_var("OCI_REGISTRY_SERVICE");
+        env::remove_var("OCI_BLOB_CACHE_DIR");
+        env::remove_var("OCI_BLOB_CACHE_MAX_BYTES");
+        env::remove_var("OCI_MANIFEST_CACHE_TTL_SECS");
+        env::remove_var("OCI_CONCURRENT_MANIFESTS_PER_USER");
+        env::remove_var("OCI_PULLS_PER_USER_PER_DAY");
+        env::remove_var("OCI_TOKEN_TTL_SECS");
+
+        let cfg = OciConfig::from_env();
+        assert!(!cfg.enabled);
+        assert_eq!(cfg.port, 18081);
+        assert_eq!(cfg.blob_cache_dir, "/var/cache/a8n-oci");
+        assert_eq!(cfg.blob_cache_max_bytes, 53_687_091_200);
+        assert_eq!(cfg.manifest_cache_ttl_secs, 300);
+        assert_eq!(cfg.concurrent_manifests_per_user, 2);
+        assert_eq!(cfg.pulls_per_user_per_day, 50);
+        assert_eq!(cfg.token_ttl_secs, 900);
+    }
+
+    #[test]
+    fn oci_config_enabled_when_set() {
+        env::set_var("OCI_REGISTRY_ENABLED", "true");
+        let cfg = OciConfig::from_env();
+        assert!(cfg.enabled);
+        env::remove_var("OCI_REGISTRY_ENABLED");
     }
 }
