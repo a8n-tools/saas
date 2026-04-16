@@ -9,7 +9,7 @@ use chrono::Utc;
 use ipnetwork::IpNetwork;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use crate::errors::OciError;
 use crate::middleware::extract_client_ip;
@@ -45,6 +45,17 @@ fn has_member_access(user: &User) -> bool {
         || user.membership_status == "grace_period"
 }
 
+/// A pre-hashed Argon2id string used to perform constant-time verification
+/// on the "user not found" branch, preventing email enumeration via timing.
+fn dummy_hash() -> &'static str {
+    static DUMMY: OnceLock<String> = OnceLock::new();
+    DUMMY.get_or_init(|| {
+        PasswordService::new()
+            .hash("unused-password-for-timing-mitigation")
+            .expect("failed to compute dummy hash")
+    })
+}
+
 /// GET /auth/token
 pub async fn issue_token(
     req: HttpRequest,
@@ -57,8 +68,19 @@ pub async fn issue_token(
 
     let user = UserRepository::find_by_email(pool.get_ref(), &email)
         .await
-        .map_err(|_| OciError::Internal)?
-        .ok_or(OciError::Unauthorized)?;
+        .map_err(|_| OciError::Internal)?;
+
+    let user = match user {
+        Some(u) => u,
+        None => {
+            // Perform dummy verification on the "user not found" path to mitigate
+            // email enumeration attacks via response-time analysis.
+            let password_service = PasswordService::new();
+            let _ = password_service.verify(&password, dummy_hash());
+            audit_failed(pool.get_ref(), &email, ip, "user_not_found").await;
+            return Err(OciError::Unauthorized);
+        }
+    };
 
     if user.deleted_at.is_some() {
         audit_failed(pool.get_ref(), &email, ip, "inactive_user").await;
@@ -106,7 +128,9 @@ pub async fn issue_token(
         .with_actor(user.id, &user.email, &user.role)
         .with_ip(ip)
         .with_metadata(serde_json::json!({ "scope": scope_str }));
-    let _ = AuditLogRepository::create(pool.get_ref(), log).await;
+    if let Err(e) = AuditLogRepository::create(pool.get_ref(), log).await {
+        tracing::warn!(?e, "oci audit log write failed");
+    }
 
     Ok(HttpResponse::Ok().json(TokenResponse {
         token: token.clone(),
@@ -152,7 +176,9 @@ async fn audit_failed(
     let log = CreateAuditLog::new(AuditAction::OciLoginFailed)
         .with_ip(ip)
         .with_metadata(serde_json::json!({ "email": email, "reason": reason }));
-    let _ = AuditLogRepository::create(pool, log).await;
+    if let Err(e) = AuditLogRepository::create(pool, log).await {
+        tracing::warn!(?e, "oci audit log write failed");
+    }
 }
 
 #[cfg(test)]
