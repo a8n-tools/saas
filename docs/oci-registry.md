@@ -5,7 +5,7 @@ Branch: `feat/oci-registry`
 Exposes a read-only, OCI Distribution Spec v1.1–compliant container
 registry that proxies private Forgejo images to logged-in a8n members.
 A second HTTP server runs on its own port and subdomain (e.g.
-`registry.example.com`). Blobs are cached on disk, addressed by
+`oci.example.com`). Blobs are cached on disk, addressed by
 SHA-256. Source material: `docs/superpowers/specs/2026-04-16-oci-registry-design.md`
 and `docs/superpowers/plans/2026-04-16-oci-registry.md`.
 
@@ -13,10 +13,10 @@ and `docs/superpowers/plans/2026-04-16-oci-registry.md`.
 
 ### Members
 
-- `docker login registry.example.com` with your a8n email + password.
+- `docker login oci.example.com` with your a8n email + password.
   (TOTP is not currently supported on registry login — use a browser
   for first-time password recovery.)
-- `docker pull registry.example.com/<app-slug>:<pinned-tag>` pulls the
+- `docker pull oci.example.com/<app-slug>:<pinned-tag>` pulls the
   image an admin has configured for that app.
 - Only active members can pull. Lapsed subscribers get `401 UNAUTHORIZED`.
 - Push is not supported. `POST`/`PUT`/`PATCH`/`DELETE` under `/v2/*`
@@ -127,7 +127,7 @@ spawned.
 | --- | --- | --- |
 | `OCI_REGISTRY_ENABLED` | `false` | Master switch. |
 | `OCI_REGISTRY_PORT` | `18081` | Port for the OCI-only server. Front this with a dedicated subdomain. |
-| `OCI_REGISTRY_SERVICE` | `registry.example.com` | `service` value advertised in `WWW-Authenticate` + embedded in tokens. |
+| `OCI_REGISTRY_SERVICE` | `oci.example.com` | `service` value advertised in `WWW-Authenticate` + embedded in tokens. |
 | `OCI_BLOB_CACHE_DIR` | `/var/cache/a8n-oci` | Directory for SHA-256-named blobs. Must be writable. |
 | `OCI_BLOB_CACHE_MAX_BYTES` | `53687091200` (50 GiB) | Soft cap. LRU eviction runs async after each successful fetch. |
 | `OCI_MANIFEST_CACHE_TTL_SECS` | `300` | moka TTL for manifests. |
@@ -140,7 +140,7 @@ Compose changes (`compose.yml`, `compose.dev.yml`):
 - New named volume `oci_cache` → `/var/cache/a8n-oci`
   (prod: `a8n-tools-oci-cache`, dev: `saas-oci-cache-${USER}`).
 - Dev compose exposes `18081:18081` on the host and wires a Traefik router
-  for `${USER}-registry.a8n.run` → container port `18081`.
+  for `${USER}-oci.a8n.run` → container port `18081`.
 - All nine env vars above are plumbed through to the `api` service.
 
 **Prod compose deployment note.** `compose.yml` is a template — the `api`

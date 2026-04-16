@@ -320,7 +320,7 @@ impl OciConfig {
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(18081),
             service: env::var("OCI_REGISTRY_SERVICE")
-                .unwrap_or_else(|_| "registry.example.com".to_string()),
+                .unwrap_or_else(|_| "oci.example.com".to_string()),
             blob_cache_dir: env::var("OCI_BLOB_CACHE_DIR")
                 .unwrap_or_else(|_| "/var/cache/a8n-oci".to_string()),
             blob_cache_max_bytes: env::var("OCI_BLOB_CACHE_MAX_BYTES")

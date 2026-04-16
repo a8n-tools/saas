@@ -1,4 +1,4 @@
-//! Route configuration for the OCI registry server (registry.example.com).
+//! Route configuration for the OCI registry server (oci.example.com).
 //!
 //! Intentionally separate from the main API `configure()` — this module is
 //! mounted on a dedicated `App` in `main.rs` so that the OCI server can run
