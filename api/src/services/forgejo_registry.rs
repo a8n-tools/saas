@@ -52,6 +52,7 @@ impl ForgejoRegistryClient {
     pub fn new(base_url: String, token: String) -> Self {
         let http = Client::builder()
             .timeout(Duration::from_secs(120))
+            .redirect(reqwest::redirect::Policy::none())
             .build()
             .expect("reqwest client builds");
         Self { http, base_url, token }
