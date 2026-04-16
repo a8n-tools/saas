@@ -40,6 +40,19 @@ pub struct BlobHandle {
     pub path: PathBuf,
 }
 
+/// Accept only digest strings matching `sha256:<64 lowercase hex>`.
+/// Anything else is rejected — this blocks path-traversal attacks via
+/// crafted digest strings (e.g. `sha256:../../etc/passwd`).
+fn validate_digest(digest: &str) -> Result<(), AppError> {
+    let Some(hex) = digest.strip_prefix("sha256:") else {
+        return Err(AppError::validation("digest", "invalid blob digest format"));
+    };
+    if hex.len() != 64 || !hex.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) {
+        return Err(AppError::validation("digest", "invalid blob digest format"));
+    }
+    Ok(())
+}
+
 impl BlobCache {
     pub fn new(
         client: Arc<ForgejoRegistryClient>,
@@ -75,6 +88,8 @@ impl BlobCache {
         name: &str,
         digest: &str,
     ) -> Result<BlobHandle, AppError> {
+        validate_digest(digest)?;
+
         if let Some(row) = OciBlobCacheRepository::find(&self.pool, digest).await? {
             let path = self.final_path(digest);
             if path.exists() {
@@ -132,44 +147,52 @@ impl BlobCache {
         name: &str,
         digest: &str,
     ) -> Result<(), AppError> {
+        validate_digest(digest)?;
         self.ensure_dir().await.map_err(|e| AppError::internal(format!("mkdir: {e}")))?;
         let partial = self.partial_path(digest);
         let final_ = self.final_path(digest);
 
-        let mut upstream = self.client.get_blob(owner, name, digest).await
-            .map_err(map_registry_err)?;
+        let result: Result<(Option<String>, u64), AppError> = async {
+            let mut upstream = self.client.get_blob(owner, name, digest).await
+                .map_err(map_registry_err)?;
+            let mut file = fs::File::create(&partial).await
+                .map_err(|e| AppError::internal(format!("partial create: {e}")))?;
+            let mut hasher = Sha256::new();
+            let mut total: u64 = 0;
+            while let Some(chunk) = upstream.body.next().await {
+                let chunk: Bytes = chunk.map_err(|e| AppError::internal(format!("upstream stream: {e}")))?;
+                hasher.update(&chunk);
+                file.write_all(&chunk).await
+                    .map_err(|e| AppError::internal(format!("partial write: {e}")))?;
+                total += chunk.len() as u64;
+            }
+            file.flush().await.map_err(|e| AppError::internal(format!("flush: {e}")))?;
+            file.sync_all().await.map_err(|e| AppError::internal(format!("sync: {e}")))?;
+            drop(file);
 
-        let mut file = fs::File::create(&partial).await
-            .map_err(|e| AppError::internal(format!("partial create: {e}")))?;
-        let mut hasher = Sha256::new();
-        let mut total: u64 = 0;
+            let computed = format!("sha256:{}", hex::encode(hasher.finalize()));
+            if computed != digest {
+                return Err(AppError::internal(format!(
+                    "digest mismatch: upstream={computed}, expected={digest}"
+                )));
+            }
+            fs::rename(&partial, &final_).await
+                .map_err(|e| AppError::internal(format!("rename: {e}")))?;
+            Ok((upstream.media_type, total))
+        }.await;
 
-        while let Some(chunk) = upstream.body.next().await {
-            let chunk: Bytes = chunk.map_err(|e| AppError::internal(format!("upstream stream: {e}")))?;
-            hasher.update(&chunk);
-            file.write_all(&chunk).await
-                .map_err(|e| AppError::internal(format!("partial write: {e}")))?;
-            total += chunk.len() as u64;
-        }
-        file.flush().await.ok();
-        file.sync_all().await.ok();
-        drop(file);
-
-        let computed = format!("sha256:{}", hex::encode(hasher.finalize()));
-        if computed != digest {
-            fs::remove_file(&partial).await.ok();
-            return Err(AppError::internal(format!(
-                "digest mismatch: upstream={computed}, expected={digest}"
-            )));
-        }
-
-        fs::rename(&partial, &final_).await
-            .map_err(|e| AppError::internal(format!("rename: {e}")))?;
+        let (media_type, total) = match result {
+            Ok(v) => v,
+            Err(e) => {
+                let _ = fs::remove_file(&partial).await;
+                return Err(e);
+            }
+        };
 
         OciBlobCacheRepository::upsert(&self.pool, &NewCachedBlob {
             content_digest: digest.to_string(),
             size_bytes: total as i64,
-            media_type: upstream.media_type,
+            media_type,
         }).await?;
 
         let evictor = self.clone();
@@ -334,5 +357,29 @@ mod tests {
         b.unwrap();
 
         cleanup(&pool, &[&digest]).await;
+    }
+
+    #[actix_rt::test]
+    async fn rejects_malformed_digest() {
+        let Some(pool) = maybe_pool().await else { return; };
+        let server = MockServer::start().await;
+        let client = Arc::new(ForgejoRegistryClient::new(server.uri(), "tok".into()));
+        let tmp = tempfile::tempdir().unwrap();
+        let cache = BlobCache::new(client, tmp.path().to_str().unwrap(), 1_000_000, pool);
+
+        for bad in [
+            "sha256:../../etc/passwd",
+            "sha256:abc",
+            "not-a-digest",
+            "sha256:DEADBEEF",
+            "",
+        ] {
+            let err = cache.get_or_fetch("a", "b", bad).await.unwrap_err();
+            let msg = err.to_string().to_lowercase();
+            assert!(
+                msg.contains("invalid") || msg.contains("digest"),
+                "expected validation error for {bad:?}, got {msg}"
+            );
+        }
     }
 }
