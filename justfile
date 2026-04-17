@@ -124,16 +124,13 @@ build-docker-api:
 build-docker-frontend:
     docker buildx build -t saas-frontend:local -f oci-build/frontend/Dockerfile frontend/
 
-# Release
-# Create a release: bump major (vx.0.0) or minor version (v0.x.0), push branch, and print PR link
-# After the PR is merged, create the release and tag in the Forgejo web UI
+# ── Release ──────────────────────────────────────────────────────────────────
+
+# Create a release: bump major (vx.0.0), minor (v0.x.0), or hotfix (v0.0.x), push branch, and print PR link
+# After the PR is merged, the create-release workflow creates the tag and release automatically
 create-release bump:
     #!/usr/bin/env nu
     let bump = "{{ bump }}"
-    if $bump not-in ["major" "minor"] {
-        print $"(ansi red)Usage: just create-release <major|minor>(ansi reset)"
-        exit 1
-    }
 
     # Abort if there are uncommitted changes
     let status = git status --porcelain | str trim
@@ -152,36 +149,22 @@ create-release bump:
     # Pull latest changes
     git pull --rebase origin main
 
-    # Version agreement check
-    let cargo_version = (open api/Cargo.toml | get package.version)
-    let frontend_version = (open frontend/package.json | get version)
-    let latest_tag = (git tag --list 'v*' | lines | sort --natural | last | str trim --left --char 'v')
-    if $cargo_version != $frontend_version or $cargo_version != $latest_tag {
-        print $"(ansi red)Error: version mismatch — all sources must agree before creating a release.(ansi reset)"
-        print ""
-        print $"  api/Cargo.toml:        v($cargo_version)"
-        print $"  frontend/package.json: v($frontend_version)"
-        print $"  latest git tag:        v($latest_tag)"
-        print ""
-        print "Fix the versions so all three match, then retry."
-        exit 1
-    }
-
     # Calculate next version
-    let current = ($cargo_version | split row "." | each { into int })
+    let current = (open Cargo.toml | get package.version | split row "." | each { into int })
     let next = match $bump {
         "major" => [$"($current.0 + 1)" "0" "0"],
         "minor" => [$"($current.0)" $"($current.1 + 1)" "0"],
+        "hotfix" => [$"($current.0)" $"($current.1)" $"($current.2 + 1)"],
+        _ => { print $"(ansi red)Usage: just create-release <major|minor|hotfix>(ansi reset)"; exit 1 }
     }
     let bare = ($next | str join ".")
     let tag = $"v($bare)"
     let release_branch = $"release/($tag)"
 
-    # Create release branch, bump versions, and commit
+    # Create release branch, bump version, and commit
     git checkout -b $release_branch
-    open api/Cargo.toml | update package.version $bare | to toml | collect | save --force api/Cargo.toml
-    open frontend/package.json | update version $bare | save --force frontend/package.json
-    git add api/Cargo.toml frontend/package.json
+    open Cargo.toml | update package.version $bare | to toml | collect | save --force Cargo.toml
+    git add Cargo.toml
     git commit --signoff --message $"Release ($tag)"
 
     # Push release branch
@@ -195,9 +178,9 @@ create-release bump:
         $remote | str replace --regex "git@([^:]+):" "https://$1/" | str replace "git.a8n.run" "dev.a8n.run" | str replace ".git" ""
     }
     print $"(ansi green)Pushed ($release_branch)(ansi reset)"
-    print $"Create PR:      ($base_url)/compare/main...($release_branch)"
-    print $"After merging, create release ($tag) targeting main:"
-    print $"  ($base_url)/releases/new"
+    print $"Create PR: ($base_url)/compare/main...($release_branch)"
+    print $"After merging, the create-release workflow will tag and release ($tag) automatically."
+
 
 # Cleanup
 # Stop services and remove volumes (including oci + downloads caches)
