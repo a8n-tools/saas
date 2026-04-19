@@ -69,6 +69,33 @@ pub struct IdTokenClaims {
     pub has_member_access: Option<bool>,
 }
 
+// ── Lifecycle event token claims ─────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LifecycleSubject {
+    pub id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LifecycleEventPayload {
+    pub subject: LifecycleSubject,
+    #[serde(rename = "type")]
+    pub event_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LifecycleTokenClaims {
+    pub iss: String,
+    pub aud: String,
+    pub iat: i64,
+    pub jti: String,
+    pub events: std::collections::HashMap<String, LifecycleEventPayload>,
+}
+
+const LIFECYCLE_EVENT_KEY: &str = "https://schemas.a8n.tools/event/user-lifecycle";
+
 // ── Logout token claims ───────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -719,6 +746,60 @@ impl OidcProvider {
             .into_iter()
             .map(|r| (r.client_id, r.backchannel_logout_uri, r.sid))
             .collect())
+    }
+
+    // ── Lifecycle events ──────────────────────────────────────────────────────
+
+    /// Mint a signed lifecycle-event JWT for a specific (user, event_type, client).
+    pub fn mint_lifecycle_token(
+        &self,
+        user_id: Uuid,
+        event_type: &str,
+        client_id: Uuid,
+    ) -> Result<String, AppError> {
+        let now = Utc::now();
+
+        let mut header = Header::new(Algorithm::EdDSA);
+        header.kid = Some(self.keys.active_kid.clone());
+        header.typ = Some("lifecycle-event+jwt".to_string());
+
+        let mut events = std::collections::HashMap::new();
+        events.insert(
+            LIFECYCLE_EVENT_KEY.to_string(),
+            LifecycleEventPayload {
+                subject: LifecycleSubject { id: user_id.to_string() },
+                event_type: event_type.to_string(),
+                reason: None,
+            },
+        );
+
+        let claims = LifecycleTokenClaims {
+            iss: self.issuer().to_string(),
+            aud: client_id.to_string(),
+            iat: now.timestamp(),
+            jti: Uuid::new_v4().to_string(),
+            events,
+        };
+
+        jsonwebtoken::encode(&header, &claims, &self.keys.encoding_key)
+            .map_err(|e| AppError::internal(format!("Failed to mint lifecycle token: {e}")))
+    }
+
+    /// Query all clients with a `lifecycle_event_uri` and return
+    /// `(client_id, lifecycle_event_uri)` pairs.
+    pub async fn lifecycle_event_targets(&self) -> Result<Vec<(Uuid, String)>, AppError> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT client_id, lifecycle_event_uri AS "lifecycle_event_uri!"
+            FROM oauth_clients
+            WHERE lifecycle_event_uri IS NOT NULL AND disabled_at IS NULL
+            "#,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| AppError::internal(format!("Failed to query lifecycle event targets: {e}")))?;
+
+        Ok(rows.into_iter().map(|r| (r.client_id, r.lifecycle_event_uri)).collect())
     }
 
     // ── Entitlement check ─────────────────────────────────────────────────────
