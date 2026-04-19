@@ -49,6 +49,23 @@ pub enum AppError {
 
     #[error("Database error: {message}")]
     DatabaseError { message: String },
+
+    // ── OIDC / OAuth 2.1 error responses (RFC 6749 §5.2) ─────────────────────
+
+    #[error("invalid_grant: {0}")]
+    OidcInvalidGrant(String),
+
+    #[error("invalid_client: {0}")]
+    OidcInvalidClient(String),
+
+    #[error("invalid_token: {0}")]
+    OidcInvalidToken(String),
+
+    #[error("invalid_request: {0}")]
+    OidcInvalidRequest(String),
+
+    #[error("Bad request: {0}")]
+    BadRequest(String),
 }
 
 impl AppError {
@@ -67,6 +84,11 @@ impl AppError {
             AppError::Upstream { .. } => "UPSTREAM_ERROR",
             AppError::InternalError { .. } => "INTERNAL_ERROR",
             AppError::DatabaseError { .. } => "DATABASE_ERROR",
+            AppError::OidcInvalidGrant(_) => "invalid_grant",
+            AppError::OidcInvalidClient(_) => "invalid_client",
+            AppError::OidcInvalidToken(_) => "invalid_token",
+            AppError::OidcInvalidRequest(_) => "invalid_request",
+            AppError::BadRequest(_) => "BAD_REQUEST",
         }
     }
 
@@ -123,6 +145,11 @@ impl AppError {
             message: message.into(),
         }
     }
+
+    /// Create a bad-request error (400).
+    pub fn bad_request(message: impl Into<String>) -> Self {
+        AppError::BadRequest(message.into())
+    }
 }
 
 /// Error response body
@@ -164,10 +191,46 @@ impl ResponseError for AppError {
             AppError::Upstream { .. } => StatusCode::BAD_GATEWAY,
             AppError::InternalError { .. } => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::DatabaseError { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::OidcInvalidGrant(_) => StatusCode::BAD_REQUEST,
+            AppError::OidcInvalidClient(_) => StatusCode::UNAUTHORIZED,
+            AppError::OidcInvalidToken(_) => StatusCode::UNAUTHORIZED,
+            AppError::OidcInvalidRequest(_) => StatusCode::BAD_REQUEST,
+            AppError::BadRequest(_) => StatusCode::BAD_REQUEST,
         }
     }
 
     fn error_response(&self) -> HttpResponse {
+        // OIDC / OAuth 2.1 errors use RFC 6749 §5.2 JSON format directly.
+        match self {
+            AppError::OidcInvalidGrant(desc) => {
+                return HttpResponse::BadRequest().json(serde_json::json!({
+                    "error": "invalid_grant",
+                    "error_description": desc,
+                }));
+            }
+            AppError::OidcInvalidClient(desc) => {
+                return HttpResponse::Unauthorized()
+                    .insert_header(("WWW-Authenticate", "Basic realm=\"a8n-api\""))
+                    .json(serde_json::json!({
+                        "error": "invalid_client",
+                        "error_description": desc,
+                    }));
+            }
+            AppError::OidcInvalidToken(desc) => {
+                return HttpResponse::Unauthorized().json(serde_json::json!({
+                    "error": "invalid_token",
+                    "error_description": desc,
+                }));
+            }
+            AppError::OidcInvalidRequest(desc) => {
+                return HttpResponse::BadRequest().json(serde_json::json!({
+                    "error": "invalid_request",
+                    "error_description": desc,
+                }));
+            }
+            _ => {}
+        }
+
         let request_id = RequestId::new().0;
 
         let details = match self {
@@ -219,6 +282,12 @@ impl ResponseError for AppError {
             AppError::InternalError { .. } | AppError::DatabaseError { .. } => {
                 "An unexpected error occurred. Please try again later.".to_string()
             }
+            AppError::BadRequest(msg) => msg.clone(),
+            // OIDC variants handled above via early return.
+            AppError::OidcInvalidGrant(_)
+            | AppError::OidcInvalidClient(_)
+            | AppError::OidcInvalidToken(_)
+            | AppError::OidcInvalidRequest(_) => unreachable!(),
         };
 
         let error_response = ErrorResponse {

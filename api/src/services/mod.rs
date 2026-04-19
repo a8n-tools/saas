@@ -5,6 +5,8 @@
 pub mod auth;
 pub mod blob_cache;
 pub mod download_cache;
+pub mod oidc_keys;
+pub mod oidc_provider;
 pub mod download_limiter;
 pub mod email;
 pub mod encryption;

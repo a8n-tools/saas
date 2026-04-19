@@ -5,6 +5,7 @@
 pub mod admin;
 pub mod admin_oci;
 pub mod admin_stripe;
+pub mod oidc;
 pub mod application;
 pub mod auth;
 pub mod billing;
