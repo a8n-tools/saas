@@ -80,9 +80,15 @@ impl FromRequest for OptionalUser {
                     req.extensions_mut().insert(AuthenticatedClaims(claims.clone()));
                     ready(Ok(OptionalUser(Some(claims))))
                 }
-                Err(_) => ready(Ok(OptionalUser(None))),
+                Err(e) => {
+                    tracing::debug!(error = %e, path = %req.path(), "OptionalUser: token present but verification failed");
+                    ready(Ok(OptionalUser(None)))
+                }
             },
-            None => ready(Ok(OptionalUser(None))),
+            None => {
+                tracing::debug!(path = %req.path(), "OptionalUser: no token in request");
+                ready(Ok(OptionalUser(None)))
+            }
         }
     }
 }

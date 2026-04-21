@@ -162,8 +162,13 @@ pub async fn authorize(
                 provider.issuer(),
                 req.uri()
             );
+            tracing::info!(
+                has_access_token = req.cookie("access_token").is_some(),
+                has_refresh_token = req.cookie("refresh_token").is_some(),
+                "authorize: unauthenticated, redirecting to login",
+            );
             let login_url = format!(
-                "{}/login?redirect={}",
+                "{}/login?redirect={}&checked=1",
                 config.cors_origin.trim_end_matches('/'),
                 urlencoding::encode(&authorize_url),
             );
