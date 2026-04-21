@@ -60,7 +60,17 @@ impl DownloadCache {
         self.cache_dir.join(sha)
     }
 
+    /// Check for the cache dir, creating it only as a fallback.
+    ///
+    /// In prod the directory is a bind-mounted volume that the operator has
+    /// already provisioned with the correct ownership. Calling `create_dir_all`
+    /// unconditionally would mask a broken bind-mount (the dir would be created
+    /// on the container's overlay filesystem and silently lose data on
+    /// container recreation). We stat first and only create if truly missing.
     pub async fn ensure_dir(&self) -> Result<(), DownloadCacheError> {
+        if fs::metadata(&self.cache_dir).await.is_ok() {
+            return Ok(());
+        }
         fs::create_dir_all(&self.cache_dir).await?;
         Ok(())
     }
