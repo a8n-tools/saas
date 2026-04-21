@@ -1,2 +1,0 @@
--- Placeholder for a migration that was applied to some environments
--- before the final OIDC schema was committed. No-op on clean installs.
