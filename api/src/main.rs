@@ -295,7 +295,12 @@ async fn main() -> anyhow::Result<()> {
             Arc::new(key_set),
             pool.clone(),
         ));
-        info!(issuer = %config.oidc.issuer.as_deref().unwrap_or("(none)"), "OIDC provider initialized");
+        info!(
+            issuer = %config.oidc.issuer.as_deref().unwrap_or("(none)"),
+            active_kid = %config.oidc.jwt_active_kid,
+            public_keys_dir = %config.oidc.jwt_public_keys_dir,
+            "OIDC provider initialized",
+        );
         Some(provider)
     } else {
         info!("OIDC provider disabled (OIDC_ISSUER not set)");
