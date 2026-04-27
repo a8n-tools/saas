@@ -23,7 +23,7 @@ use crate::repositories::{
     NotificationRepository, StripeConfigRepository, TokenRepository, TotpRepository, UserRepository,
 };
 use crate::responses::{get_request_id, created, paginated, success, success_no_data};
-use crate::services::{AuthService, EmailService, EncryptionKeySet, JwtService, PasswordService, StripeConfig, StripeService, TotpService, WebhookService};
+use crate::services::{AuthService, DownloadCache, EmailService, EncryptionKeySet, JwtService, ManifestCache, PasswordService, ReleaseCache, StripeConfig, StripeService, TotpService, WebhookService};
 use crate::validation;
 
 // =============================================================================
@@ -440,6 +440,7 @@ pub async fn swap_application_order(
 
 /// PUT /v1/admin/applications/{app_id}
 /// Update an application
+#[allow(clippy::too_many_arguments)]
 pub async fn update_application(
     req: HttpRequest,
     admin: AdminUser,
@@ -447,6 +448,9 @@ pub async fn update_application(
     path: web::Path<uuid::Uuid>,
     body: web::Json<UpdateApplication>,
     webhook_service: web::Data<Arc<WebhookService>>,
+    release_cache: web::Data<Option<Arc<ReleaseCache>>>,
+    download_cache: web::Data<Option<Arc<DownloadCache>>>,
+    manifest_cache: web::Data<Option<Arc<ManifestCache>>>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
     let app_id = path.into_inner();
@@ -455,7 +459,59 @@ pub async fn update_application(
         .await?
         .ok_or(AppError::not_found("Application"))?;
 
+    // All-or-nothing Forgejo validation on merged values
+    let merged_owner = body.forgejo_owner.as_ref().or(old_app.forgejo_owner.as_ref());
+    let merged_repo = body.forgejo_repo.as_ref().or(old_app.forgejo_repo.as_ref());
+    let merged_tag = body.pinned_release_tag.as_ref().or(old_app.pinned_release_tag.as_ref());
+    let forgejo_any = merged_owner.is_some() || merged_repo.is_some() || merged_tag.is_some();
+    let forgejo_all = merged_owner.is_some() && merged_repo.is_some() && merged_tag.is_some();
+    if forgejo_any && !forgejo_all {
+        return Err(AppError::validation(
+            "forgejo",
+            "forgejo_owner, forgejo_repo, and pinned_release_tag must all be set together",
+        ));
+    }
+
+    // All-or-nothing OCI validation on merged values
+    let merged_oci_owner = body.oci_image_owner.as_ref().or(old_app.oci_image_owner.as_ref());
+    let merged_oci_name = body.oci_image_name.as_ref().or(old_app.oci_image_name.as_ref());
+    let merged_oci_tag = body.pinned_image_tag.as_ref().or(old_app.pinned_image_tag.as_ref());
+    let oci_any = merged_oci_owner.is_some() || merged_oci_name.is_some() || merged_oci_tag.is_some();
+    let oci_all = merged_oci_owner.is_some() && merged_oci_name.is_some() && merged_oci_tag.is_some();
+    if oci_any && !oci_all {
+        return Err(AppError::validation(
+            "oci",
+            "oci_image_owner, oci_image_name, and pinned_image_tag must all be set together",
+        ));
+    }
+
+    // Capture old tags before update for cache invalidation
+    let old_tag = old_app.pinned_release_tag.clone();
+    let old_pinned_image_tag = old_app.pinned_image_tag.clone();
+
     let app = ApplicationRepository::update(&pool, app_id, &body).await?;
+
+    // Invalidate caches if the pinned release tag changed
+    if let Some(old_tag_str) = old_tag.as_deref() {
+        if old_tag != app.pinned_release_tag {
+            if let Some(rc) = release_cache.get_ref().as_ref() {
+                rc.invalidate(app.id, old_tag_str).await;
+            }
+            if let Some(dc) = download_cache.get_ref().as_ref() {
+                if let Err(e) = dc.invalidate_app_tag(app.id, old_tag_str).await {
+                    tracing::warn!(error = %e, "download cache invalidation failed");
+                }
+            }
+        }
+    }
+
+    // Invalidate OCI manifest cache if the pinned image tag changed.
+    // On-disk blob eviction is handled by BlobCache's async LRU.
+    if old_pinned_image_tag != app.pinned_image_tag {
+        if let Some(mc) = manifest_cache.get_ref().as_ref() {
+            mc.invalidate_app(app.id).await;
+        }
+    }
 
     // Notify child app if maintenance mode or active status changed
     let maintenance_changed = old_app.maintenance_mode != app.maintenance_mode;
@@ -1118,6 +1174,7 @@ pub async fn get_system_health(
 pub struct UpdateStripeConfigRequest {
     pub secret_key: Option<String>,
     pub webhook_secret: Option<String>,
+    pub app_tag: Option<String>,
 }
 
 /// GET /v1/admin/stripe
@@ -1170,6 +1227,7 @@ pub async fn update_stripe_config(
     // Treat empty strings the same as None — user left the field blank
     let secret_key_plain = body.secret_key.as_deref().filter(|s| !s.is_empty());
     let webhook_secret_plain = body.webhook_secret.as_deref().filter(|s| !s.is_empty());
+    let app_tag = body.app_tag.as_deref().filter(|s| !s.is_empty()).map(|s| s.to_string());
 
     // Encrypt secrets before storing
     let (secret_key_enc, secret_key_nonce, key_version) = match secret_key_plain {
@@ -1195,6 +1253,7 @@ pub async fn update_stripe_config(
         webhook_secret_nonce,
         admin.0.sub,
         key_version,
+        app_tag.clone(),
     )
     .await?;
 
@@ -1215,6 +1274,7 @@ pub async fn update_stripe_config(
             "fields_updated": {
                 "secret_key": secret_key_plain.is_some(),
                 "webhook_secret": webhook_secret_plain.is_some(),
+                "app_tag": app_tag,
             }
         }));
     AuditLogRepository::create(&pool, audit_log).await?;
@@ -1267,6 +1327,141 @@ pub async fn grant_lifetime_membership(
     .await?;
 
     Ok(success(UserResponse::from(user), request_id))
+}
+
+// =============================================================================
+// Tier Configuration
+// =============================================================================
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateTierConfigRequest {
+    pub lifetime_slots: Option<i64>,
+    pub early_adopter_slots: Option<i64>,
+    pub early_adopter_trial_days: Option<i64>,
+    pub standard_trial_days: Option<i64>,
+}
+
+/// GET /v1/admin/tier-config
+pub async fn get_tier_config(
+    req: HttpRequest,
+    _admin: AdminUser,
+    pool: web::Data<PgPool>,
+) -> Result<HttpResponse, AppError> {
+    use crate::config::TierConfig;
+    use crate::models::tier::TierConfigResponse;
+    use crate::repositories::TierConfigRepository;
+
+    let request_id = get_request_id(&req);
+
+    let row = TierConfigRepository::get(&pool).await?;
+    let resolved = TierConfig::from_db_row(&row);
+    let source = if TierConfig::has_db_overrides(&row) {
+        "database"
+    } else {
+        "environment"
+    };
+
+    let (lifetime_used, early_adopter_used) =
+        UserRepository::count_tier_assignments(pool.get_ref()).await?;
+
+    Ok(success(
+        TierConfigResponse {
+            lifetime_slots: resolved.lifetime_slots,
+            early_adopter_slots: resolved.early_adopter_slots,
+            early_adopter_trial_days: resolved.early_adopter_trial_days,
+            standard_trial_days: resolved.standard_trial_days,
+            source,
+            lifetime_slots_used: lifetime_used,
+            early_adopter_slots_used: early_adopter_used,
+            updated_at: row.updated_at,
+            updated_by: row.updated_by,
+        },
+        request_id,
+    ))
+}
+
+/// PUT /v1/admin/tier-config
+pub async fn update_tier_config(
+    req: HttpRequest,
+    admin: AdminUser,
+    pool: web::Data<PgPool>,
+    auth_service: web::Data<Arc<AuthService>>,
+    body: web::Json<UpdateTierConfigRequest>,
+) -> Result<HttpResponse, AppError> {
+    use crate::config::TierConfig;
+    use crate::models::tier::TierConfigResponse;
+    use crate::repositories::TierConfigRepository;
+
+    let request_id = get_request_id(&req);
+
+    // Validate: all provided values must be positive
+    if let Some(v) = body.lifetime_slots {
+        if v < 0 {
+            return Err(AppError::validation("lifetime_slots", "Must be non-negative"));
+        }
+    }
+    if let Some(v) = body.early_adopter_slots {
+        if v < 0 {
+            return Err(AppError::validation("early_adopter_slots", "Must be non-negative"));
+        }
+    }
+    if let Some(v) = body.early_adopter_trial_days {
+        if v < 0 {
+            return Err(AppError::validation("early_adopter_trial_days", "Must be non-negative"));
+        }
+    }
+    if let Some(v) = body.standard_trial_days {
+        if v < 0 {
+            return Err(AppError::validation("standard_trial_days", "Must be non-negative"));
+        }
+    }
+
+    let row = TierConfigRepository::update(
+        &pool,
+        body.lifetime_slots,
+        body.early_adopter_slots,
+        body.early_adopter_trial_days,
+        body.standard_trial_days,
+        admin.0.sub,
+    )
+    .await?;
+
+    // Hot-reload the AuthService with the new tier config
+    let resolved = TierConfig::from_db_row(&row);
+    auth_service.reload_tier_config(resolved.clone());
+    tracing::info!(?resolved, "Tier config updated and hot-reloaded");
+
+    let (lifetime_used, early_adopter_used) =
+        UserRepository::count_tier_assignments(pool.get_ref()).await?;
+
+    AuditLogRepository::create(
+        &pool,
+        CreateAuditLog::new(AuditAction::AdminTierConfigUpdated)
+            .with_actor(admin.0.sub, &admin.0.email, &admin.0.role)
+            .with_metadata(serde_json::json!({
+                "setting": "tier_config",
+                "lifetime_slots": body.lifetime_slots,
+                "early_adopter_slots": body.early_adopter_slots,
+                "early_adopter_trial_days": body.early_adopter_trial_days,
+                "standard_trial_days": body.standard_trial_days,
+            })),
+    )
+    .await?;
+
+    Ok(success(
+        TierConfigResponse {
+            lifetime_slots: TierConfig::from_db_row(&row).lifetime_slots,
+            early_adopter_slots: TierConfig::from_db_row(&row).early_adopter_slots,
+            early_adopter_trial_days: TierConfig::from_db_row(&row).early_adopter_trial_days,
+            standard_trial_days: TierConfig::from_db_row(&row).standard_trial_days,
+            source: "database",
+            lifetime_slots_used: lifetime_used,
+            early_adopter_slots_used: early_adopter_used,
+            updated_at: row.updated_at,
+            updated_by: row.updated_by,
+        },
+        request_id,
+    ))
 }
 
 // =============================================================================
@@ -1609,6 +1804,59 @@ pub async fn reencrypt_key(
             ))
         }
         _ => Err(AppError::not_found(format!("Unknown key: {key_id}"))),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sqlx::PgPool;
+
+    async fn maybe_pool() -> Option<PgPool> {
+        let url = std::env::var("DATABASE_URL").ok()?;
+        PgPool::connect(&url).await.ok()
+    }
+
+    #[actix_rt::test]
+    async fn admin_update_invalidates_manifest_cache_on_pin_change() {
+        let Some(pool) = maybe_pool().await else { return; };
+        let slug = format!("oci-upd-{}", uuid::Uuid::new_v4());
+        sqlx::query(r#"
+            INSERT INTO applications
+            (name, slug, display_name, container_name,
+             oci_image_owner, oci_image_name, pinned_image_tag)
+            VALUES ($1, $1, $1, $1, 'a8n', 'rus', 'v1.0.0')
+        "#).bind(&slug).execute(&pool).await.unwrap();
+
+        let app_row: (uuid::Uuid,) = sqlx::query_as("SELECT id FROM applications WHERE slug = $1")
+            .bind(&slug).fetch_one(&pool).await.unwrap();
+        let app_id = app_row.0;
+
+        let mc = Arc::new(ManifestCache::new(60));
+        mc.insert(app_id, "v1.0.0", crate::models::oci::CachedManifest {
+            bytes: bytes::Bytes::from_static(b"{}"),
+            media_type: "application/vnd.oci.image.manifest.v1+json".into(),
+            digest: "sha256:abc".into(),
+        }).await;
+        assert!(mc.get(app_id, "v1.0.0").await.is_some());
+
+        let update = UpdateApplication {
+            display_name: None, description: None, icon_url: None,
+            source_code_url: None, version: None, subdomain: None,
+            container_name: None, health_check_url: None,
+            is_active: None, maintenance_mode: None, maintenance_message: None,
+            webhook_url: None,
+            forgejo_owner: None, forgejo_repo: None, pinned_release_tag: None,
+            oci_image_owner: None, oci_image_name: None,
+            pinned_image_tag: Some("v2.0.0".into()),
+        };
+        let _updated = crate::repositories::ApplicationRepository::update(&pool, app_id, &update).await.unwrap();
+
+        // Simulate the handler's invalidation path (we're not going through HTTP).
+        mc.invalidate_app(app_id).await;
+        assert!(mc.get(app_id, "v1.0.0").await.is_none());
+
+        sqlx::query("DELETE FROM applications WHERE id = $1").bind(app_id).execute(&pool).await.unwrap();
     }
 }
 

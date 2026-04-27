@@ -139,20 +139,26 @@ impl ApplicationRepository {
         let app = sqlx::query_as::<_, Application>(
             r#"
             UPDATE applications
-            SET display_name     = COALESCE($1, display_name),
-                description      = COALESCE($2, description),
-                icon_url         = COALESCE($3, icon_url),
-                source_code_url  = COALESCE($4, source_code_url),
-                version          = COALESCE($5, version),
-                subdomain        = COALESCE($6, subdomain),
-                container_name   = COALESCE($7, container_name),
-                health_check_url = COALESCE($8, health_check_url),
-                is_active        = COALESCE($9, is_active),
-                maintenance_mode = COALESCE($10, maintenance_mode),
+            SET display_name        = COALESCE($1, display_name),
+                description         = COALESCE($2, description),
+                icon_url            = COALESCE($3, icon_url),
+                source_code_url     = COALESCE($4, source_code_url),
+                version             = COALESCE($5, version),
+                subdomain           = COALESCE($6, subdomain),
+                container_name      = COALESCE($7, container_name),
+                health_check_url    = COALESCE($8, health_check_url),
+                is_active           = COALESCE($9, is_active),
+                maintenance_mode    = COALESCE($10, maintenance_mode),
                 maintenance_message = COALESCE($11, maintenance_message),
-                webhook_url      = COALESCE($12, webhook_url),
-                updated_at       = NOW()
-            WHERE id = $13
+                webhook_url         = COALESCE($12, webhook_url),
+                forgejo_owner       = COALESCE($13, forgejo_owner),
+                forgejo_repo        = COALESCE($14, forgejo_repo),
+                pinned_release_tag  = COALESCE($15, pinned_release_tag),
+                oci_image_owner     = COALESCE($16, oci_image_owner),
+                oci_image_name      = COALESCE($17, oci_image_name),
+                pinned_image_tag    = COALESCE($18, pinned_image_tag),
+                updated_at          = NOW()
+            WHERE id = $19
             RETURNING *
             "#,
         )
@@ -168,11 +174,31 @@ impl ApplicationRepository {
         .bind(data.maintenance_mode)
         .bind(data.maintenance_message.as_deref())
         .bind(data.webhook_url.as_deref())
+        .bind(data.forgejo_owner.as_deref())
+        .bind(data.forgejo_repo.as_deref())
+        .bind(data.pinned_release_tag.as_deref())
+        .bind(data.oci_image_owner.as_deref())
+        .bind(data.oci_image_name.as_deref())
+        .bind(data.pinned_image_tag.as_deref())
         .bind(app_id)
         .fetch_one(pool)
         .await?;
 
         Ok(app)
+    }
+
+    /// Returns the previously-pinned tag for an application (for cache invalidation).
+    pub async fn get_pinned_tag(
+        pool: &PgPool,
+        app_id: Uuid,
+    ) -> Result<Option<String>, AppError> {
+        let row: Option<(Option<String>,)> = sqlx::query_as(
+            "SELECT pinned_release_tag FROM applications WHERE id = $1",
+        )
+        .bind(app_id)
+        .fetch_optional(pool)
+        .await?;
+        Ok(row.and_then(|r| r.0))
     }
 
     /// Create a new application (admin)
@@ -250,5 +276,62 @@ impl ApplicationRepository {
         .await?;
 
         Ok(apps)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    //! DB-backed integration tests. Skipped when DATABASE_URL is unset.
+    use super::*;
+    use crate::models::UpdateApplication;
+
+    async fn maybe_pool() -> Option<PgPool> {
+        let url = std::env::var("DATABASE_URL").ok()?;
+        PgPool::connect(&url).await.ok()
+    }
+
+    #[actix_rt::test]
+    async fn update_sets_oci_fields() {
+        let Some(pool) = maybe_pool().await else { return; };
+        let slug = format!("test-oci-update-{}", uuid::Uuid::new_v4());
+
+        sqlx::query(r#"
+            INSERT INTO applications (name, slug, display_name, container_name)
+            VALUES ($1, $1, $1, $1)
+        "#).bind(&slug).execute(&pool).await.unwrap();
+
+        let row: (uuid::Uuid,) = sqlx::query_as("SELECT id FROM applications WHERE slug = $1")
+            .bind(&slug).fetch_one(&pool).await.unwrap();
+
+        let update = UpdateApplication {
+            display_name: None,
+            description: None,
+            icon_url: None,
+            source_code_url: None,
+            version: None,
+            subdomain: None,
+            container_name: None,
+            health_check_url: None,
+            is_active: None,
+            maintenance_mode: None,
+            maintenance_message: None,
+            webhook_url: None,
+            forgejo_owner: None,
+            forgejo_repo: None,
+            pinned_release_tag: None,
+            oci_image_owner: Some("a8n".into()),
+            oci_image_name: Some("rus".into()),
+            pinned_image_tag: Some("v1".into()),
+        };
+
+        ApplicationRepository::update(&pool, row.0, &update).await.unwrap();
+
+        let reloaded = ApplicationRepository::find_by_slug(&pool, &slug)
+            .await.unwrap().expect("app exists");
+        assert_eq!(reloaded.oci_image_owner.as_deref(), Some("a8n"));
+        assert_eq!(reloaded.oci_image_name.as_deref(), Some("rus"));
+        assert_eq!(reloaded.pinned_image_tag.as_deref(), Some("v1"));
+
+        sqlx::query("DELETE FROM applications WHERE id = $1").bind(row.0).execute(&pool).await.unwrap();
     }
 }

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/authStore'
+import { useEmailConfigStore } from '@/stores/emailConfigStore'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -21,6 +22,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { EmailGuardButton } from '@/components/EmailGuardButton'
 import { Search, MoreVertical, User, Loader2, KeyRound, Shield, ShieldOff, Trash2, AlertCircle, UserPlus, Mail, X, Clock, ChevronDown, ChevronRight, BadgeCheck, BadgeMinus } from 'lucide-react'
 import { adminApi, type AdminUser, type AdminInvite } from '@/api/admin'
 import { formatRelativeTime } from '@/lib/utils'
@@ -29,6 +32,7 @@ import type { ApiError } from '@/types'
 type DialogAction = 'deactivate' | 'activate' | 'reset' | 'delete' | 'makeAdmin' | 'removeAdmin' | 'grantMembership' | 'revokeMembership' | 'invite' | null
 
 export function AdminUsersPage() {
+  const emailEnabled = useEmailConfigStore((s) => s.emailEnabled)
   const [searchQuery, setSearchQuery] = useState('')
   const [page, setPage] = useState(1)
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null)
@@ -181,7 +185,7 @@ export function AdminUsersPage() {
             Manage user accounts and memberships.
           </p>
         </div>
-        <Button onClick={() => {
+        <EmailGuardButton onClick={() => {
           setDialogType('invite')
           setInviteEmail('')
           setInviteSuccess(false)
@@ -189,7 +193,7 @@ export function AdminUsersPage() {
         }}>
           <UserPlus className="h-4 w-4 mr-2" />
           Invite Admin
-        </Button>
+        </EmailGuardButton>
       </div>
 
       {isError && (
@@ -259,10 +263,24 @@ export function AdminUsersPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleAction(user, 'reset')}>
-                            <KeyRound className="h-4 w-4 mr-2" />
-                            Reset Password
-                          </DropdownMenuItem>
+                          {emailEnabled ? (
+                            <DropdownMenuItem onClick={() => handleAction(user, 'reset')}>
+                              <KeyRound className="h-4 w-4 mr-2" />
+                              Reset Password
+                            </DropdownMenuItem>
+                          ) : (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span>
+                                  <DropdownMenuItem disabled>
+                                    <KeyRound className="h-4 w-4 mr-2" />
+                                    Reset Password
+                                  </DropdownMenuItem>
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent>Email is not configured</TooltipContent>
+                            </Tooltip>
+                          )}
                           {currentUser?.id !== user.id && (
                             <>
                               <DropdownMenuSeparator />

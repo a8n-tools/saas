@@ -23,6 +23,12 @@ pub struct Application {
     pub webhook_url: Option<String>,
     pub version: Option<String>,
     pub source_code_url: Option<String>,
+    pub forgejo_owner: Option<String>,
+    pub forgejo_repo: Option<String>,
+    pub pinned_release_tag: Option<String>,
+    pub oci_image_owner: Option<String>,
+    pub oci_image_name: Option<String>,
+    pub pinned_image_tag: Option<String>,
     pub sort_order: i32,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -64,6 +70,22 @@ impl ApplicationResponse {
                 None
             },
         }
+    }
+}
+
+impl Application {
+    pub fn is_downloadable(&self) -> bool {
+        self.forgejo_owner.is_some()
+            && self.forgejo_repo.is_some()
+            && self.pinned_release_tag.is_some()
+    }
+
+    /// True when all three OCI fields are set AND the application is active.
+    pub fn is_pullable(&self) -> bool {
+        self.is_active
+            && self.oci_image_owner.is_some()
+            && self.oci_image_name.is_some()
+            && self.pinned_image_tag.is_some()
     }
 }
 
@@ -118,6 +140,12 @@ mod tests {
             webhook_url: None,
             version: Some("1.0.0".to_string()),
             source_code_url: None,
+            forgejo_owner: None,
+            forgejo_repo: None,
+            pinned_release_tag: None,
+            oci_image_owner: None,
+            oci_image_name: None,
+            pinned_image_tag: None,
             sort_order: 0,
             created_at: Utc::now(),
             updated_at: Utc::now(),
@@ -160,6 +188,38 @@ mod tests {
     }
 
     #[test]
+    fn application_is_downloadable_when_all_forgejo_fields_set() {
+        let mut app = test_app();
+        app.forgejo_owner = Some("a8n".to_string());
+        app.forgejo_repo = Some("rus".to_string());
+        app.pinned_release_tag = Some("v1.0.0".to_string());
+        assert!(app.is_downloadable());
+
+        app.pinned_release_tag = None;
+        assert!(!app.is_downloadable());
+    }
+
+    #[test]
+    fn is_pullable_requires_all_three_oci_fields_and_active() {
+        let base = Application {
+            is_active: true,
+            oci_image_owner: Some("a8n".into()),
+            oci_image_name: Some("rus".into()),
+            pinned_image_tag: Some("v1.0".into()),
+            ..test_app()
+        };
+        assert!(base.is_pullable());
+
+        let mut inactive = base.clone();
+        inactive.is_active = false;
+        assert!(!inactive.is_pullable());
+
+        let mut no_tag = base.clone();
+        no_tag.pinned_image_tag = None;
+        assert!(!no_tag.is_pullable());
+    }
+
+    #[test]
     fn application_response_hides_maintenance_message_when_not_in_maintenance() {
         let mut app = test_app();
         app.maintenance_mode = false;
@@ -184,4 +244,10 @@ pub struct UpdateApplication {
     pub maintenance_mode: Option<bool>,
     pub maintenance_message: Option<String>,
     pub webhook_url: Option<String>,
+    pub forgejo_owner: Option<String>,
+    pub forgejo_repo: Option<String>,
+    pub pinned_release_tag: Option<String>,
+    pub oci_image_owner: Option<String>,
+    pub oci_image_name: Option<String>,
+    pub pinned_image_tag: Option<String>,
 }

@@ -43,6 +43,7 @@ impl StripeConfigRepository {
         webhook_secret_nonce: Option<Vec<u8>>,
         updated_by: Uuid,
         key_version: i16,
+        app_tag: Option<String>,
     ) -> Result<StripeConfig, AppError> {
         let config = sqlx::query_as::<_, StripeConfig>(
             r#"
@@ -53,6 +54,7 @@ impl StripeConfigRepository {
                 webhook_secret        = CASE WHEN $3::BYTEA IS NOT NULL THEN $3 ELSE webhook_secret END,
                 webhook_secret_nonce  = CASE WHEN $3::BYTEA IS NOT NULL THEN $4 ELSE webhook_secret_nonce END,
                 key_version           = CASE WHEN $1::BYTEA IS NOT NULL OR $3::BYTEA IS NOT NULL THEN $6 ELSE key_version END,
+                app_tag               = COALESCE($7, app_tag),
                 updated_at            = NOW(),
                 updated_by            = $5
             WHERE id = 1
@@ -65,6 +67,7 @@ impl StripeConfigRepository {
         .bind(webhook_secret_nonce)
         .bind(updated_by)
         .bind(key_version)
+        .bind(app_tag)
         .fetch_one(pool)
         .await?;
 

@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
+import { useEmailConfigStore } from '@/stores/emailConfigStore'
+import { useStripeConfigStore } from '@/stores/stripeConfigStore'
 import { authApi } from '@/api'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { Toaster } from '@/components/ui/toaster'
 
 // Layouts
 import { PublicLayout } from '@/components/layout/PublicLayout'
@@ -34,6 +38,7 @@ import { MembershipPage } from '@/pages/dashboard/MembershipPage'
 import { CheckoutSuccessPage } from '@/pages/dashboard/CheckoutSuccessPage'
 import { SettingsPage } from '@/pages/dashboard/SettingsPage'
 import { TwoFactorSetupPage } from '@/pages/dashboard/TwoFactorSetupPage'
+import { DownloadsPage } from '@/pages/dashboard/DownloadsPage'
 
 // Admin pages
 import { AdminDashboardPage } from '@/pages/admin/AdminDashboardPage'
@@ -43,6 +48,7 @@ import { AdminApplicationsPage } from '@/pages/admin/AdminApplicationsPage'
 import { AdminAuditLogsPage } from '@/pages/admin/AdminAuditLogsPage'
 import { AdminFeedbackPage } from '@/pages/admin/AdminFeedbackPage'
 import { AdminStripePage } from '@/pages/admin/AdminStripePage'
+import AdminTierSettingsPage from '@/pages/admin/AdminTierSettingsPage'
 
 // Settings pages (public, token-based)
 import { ConfirmEmailPage } from '@/pages/settings/ConfirmEmailPage'
@@ -59,7 +65,11 @@ function SetupGuard({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     authApi.setupStatus()
-      .then((res) => setStatus(res.setup_required ? 'setup' : 'ready'))
+      .then((res) => {
+        useEmailConfigStore.getState().setEmailEnabled(res.email_enabled)
+        useStripeConfigStore.getState().setStripeEnabled(res.stripe_enabled)
+        setStatus(res.setup_required ? 'setup' : 'ready')
+      })
       .catch(() => setStatus('ready'))
   }, [])
 
@@ -155,6 +165,7 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
+    <TooltipProvider>
     <SetupGuard>
       <FeedbackLauncher />
       <Routes>
@@ -192,6 +203,7 @@ export default function App() {
           <Route path="/billing" element={<BillingPage />} />
           <Route path="/membership" element={<MembershipPage />} />
           <Route path="/checkout/success" element={<CheckoutSuccessPage />} />
+          <Route path="/downloads" element={<DownloadsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/settings/2fa/setup" element={<TwoFactorSetupPage />} />
           <Route path="/membership-required" element={<MembershipRequiredPage />} />
@@ -210,6 +222,7 @@ export default function App() {
           <Route path="/admin/memberships" element={<AdminMembershipsPage />} />
           <Route path="/admin/applications" element={<AdminApplicationsPage />} />
           <Route path="/admin/stripe" element={<AdminStripePage />} />
+          <Route path="/admin/tier-settings" element={<AdminTierSettingsPage />} />
           <Route path="/admin/feedback" element={<AdminFeedbackPage />} />
           <Route path="/admin/audit-logs" element={<AdminAuditLogsPage />} />
         </Route>
@@ -218,5 +231,7 @@ export default function App() {
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </SetupGuard>
+    <Toaster />
+    </TooltipProvider>
   )
 }

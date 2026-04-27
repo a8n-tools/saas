@@ -6,6 +6,7 @@ import {
   AppWindow,
   Banknote,
   CreditCard,
+  Download,
   Receipt,
   Settings,
   Users,
@@ -23,6 +24,7 @@ interface SidebarItem {
 const dashboardItems: SidebarItem[] = [
   { title: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { title: 'Applications', href: '/applications', icon: AppWindow },
+  { title: 'Downloads', href: '/downloads', icon: Download },
   { title: 'Membership', href: '/membership', icon: CreditCard },
   { title: 'Billing', href: '/billing', icon: Receipt },
   { title: 'Settings', href: '/settings', icon: Settings },
@@ -34,6 +36,7 @@ const adminItems: SidebarItem[] = [
   { title: 'Memberships', href: '/admin/memberships', icon: CreditCard },
   { title: 'Applications', href: '/admin/applications', icon: AppWindow },
   { title: 'Stripe', href: '/admin/stripe', icon: Banknote },
+  { title: 'Tier Settings', href: '/admin/tier-settings', icon: Settings },
   { title: 'Feedback', href: '/admin/feedback', icon: MessageSquareQuote },
   { title: 'Audit Logs', href: '/admin/audit-logs', icon: FileText },
 ]

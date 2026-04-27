@@ -25,6 +25,11 @@ describe('DashboardLayout', () => {
     expect(screen.getByLabelText('Toggle theme')).toBeInTheDocument()
   })
 
+  it('renders high contrast toggle button', () => {
+    render(<DashboardLayout />)
+    expect(screen.getByLabelText('Toggle high contrast')).toBeInTheDocument()
+  })
+
   it('renders sidebar with navigation', () => {
     render(<DashboardLayout />)
     // Sidebar dashboard variant has a "Dashboard" nav link

@@ -18,8 +18,11 @@ use uuid::Uuid;
 
 type HmacSha256 = Hmac<Sha256>;
 
+/// Metadata key used to tag Stripe products belonging to this application.
+const APP_TAG_KEY: &str = "app";
+
 /// Stripe configuration
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct StripeConfig {
     pub secret_key: String,
     pub webhook_secret: String,
@@ -27,6 +30,8 @@ pub struct StripeConfig {
     pub cancel_url: String,
     /// Stripe Price ID with unit_amount=0 for free/lifetime members
     pub free_price_id: Option<String>,
+    /// Application tag stored in product metadata to filter shared Stripe accounts
+    pub app_tag: String,
 }
 
 impl StripeConfig {
@@ -45,6 +50,10 @@ impl StripeConfig {
             cancel_url: std::env::var("STRIPE_CANCEL_URL")
                 .unwrap_or_else(|_| format!("{base}/pricing?checkout=canceled")),
             free_price_id: std::env::var("STRIPE_FREE_PRICE_ID").ok(),
+            app_tag: std::env::var("STRIPE_APP_TAG")
+                .ok()
+                .filter(|s| !s.is_empty())
+                .unwrap_or_else(|| "a8n-tools".to_string()),
         })
     }
 
@@ -65,12 +74,18 @@ impl StripeConfig {
             _ => env_config.webhook_secret,
         };
 
+        let app_tag = db
+            .app_tag
+            .clone()
+            .unwrap_or(env_config.app_tag);
+
         Ok(Self {
             secret_key,
             webhook_secret,
             success_url: env_config.success_url,
             cancel_url: env_config.cancel_url,
             free_price_id: env_config.free_price_id,
+            app_tag,
         })
     }
 }
@@ -115,16 +130,29 @@ impl StripeService {
         (inner.config.clone(), inner.client.clone())
     }
 
+    /// Returns `true` when the service holds a real Stripe secret key
+    /// (i.e. not the placeholder that `from_env` returns when the env var
+    /// is missing).
+    pub fn is_configured(&self) -> bool {
+        let key = &self.inner.read().expect("StripeService lock poisoned").config.secret_key;
+        !key.is_empty() && key != "sk_test_placeholder"
+    }
+
     /// Get the configured $0 price ID for free/lifetime subscriptions.
     pub fn free_price_id(&self) -> Option<String> {
         self.snapshot().0.free_price_id
     }
 
+    /// Get the application tag used for product metadata filtering.
+    pub fn app_tag(&self) -> String {
+        self.snapshot().0.app_tag
+    }
+
     // ─── Products ────────────────────────────────────────────
 
-    /// List all products from Stripe (active and inactive)
+    /// List products from Stripe, filtered to only those tagged with this app's tag.
     pub async fn list_products(&self) -> Result<Vec<StripeProductResponse>, AppError> {
-        let (_config, client) = self.snapshot();
+        let (config, client) = self.snapshot();
 
         let mut params = stripe::ListProducts::new();
         params.limit = Some(100);
@@ -145,30 +173,40 @@ impl StripeService {
         Ok(products
             .data
             .into_iter()
-            .map(|p| StripeProductResponse {
-                id: p.id.to_string(),
-                name: p.name.unwrap_or_default(),
-                description: p.description,
-                active: p.active.unwrap_or(false),
-                metadata: p.metadata.unwrap_or_default(),
-                created: p.created.unwrap_or_default(),
+            .filter_map(|p| {
+                let metadata = p.metadata.unwrap_or_default();
+                // Only include products tagged for this application
+                if metadata.get(APP_TAG_KEY).map(|v| v.as_str()) != Some(&config.app_tag) {
+                    return None;
+                }
+                Some(StripeProductResponse {
+                    id: p.id.to_string(),
+                    name: p.name.unwrap_or_default(),
+                    description: p.description,
+                    active: p.active.unwrap_or(false),
+                    metadata,
+                    created: p.created.unwrap_or_default(),
+                })
             })
             .collect())
     }
 
-    /// Create a product in Stripe
+    /// Create a product in Stripe, automatically tagging it with this app's tag.
     pub async fn create_product(
         &self,
         name: &str,
         description: Option<&str>,
         metadata: HashMap<String, String>,
     ) -> Result<StripeProductResponse, AppError> {
-        let (_config, client) = self.snapshot();
+        let (config, client) = self.snapshot();
 
         let mut params = stripe::CreateProduct::new(name);
         if let Some(desc) = description {
             params.description = Some(desc);
         }
+        // Auto-inject the application tag so this product is filtered correctly
+        let mut metadata = metadata;
+        metadata.insert(APP_TAG_KEY.to_string(), config.app_tag.clone());
         params.metadata = Some(metadata);
 
         let product = stripe::Product::create(&client, params)
@@ -260,7 +298,8 @@ impl StripeService {
 
     // ─── Prices ──────────────────────────────────────────────
 
-    /// List prices from Stripe, optionally filtered by product
+    /// List prices from Stripe, optionally filtered by product.
+    /// When no `product_id` is given, only prices belonging to app-tagged products are returned.
     pub async fn list_prices(
         &self,
         product_id: Option<&str>,
@@ -288,16 +327,31 @@ impl StripeService {
             AppError::internal("Failed to load prices from Stripe")
         })?;
 
+        // When listing all prices (no product_id filter), restrict to app-tagged products
+        let tagged_product_ids: Option<std::collections::HashSet<String>> =
+            if parsed_product_id.is_none() {
+                let products = self.list_products().await?;
+                Some(products.into_iter().map(|p| p.id).collect())
+            } else {
+                None
+            };
+
         Ok(prices
             .data
             .into_iter()
-            .map(|p| {
+            .filter_map(|p| {
                 let product_id = match &p.product {
                     Some(stripe::Expandable::Id(id)) => id.to_string(),
                     Some(stripe::Expandable::Object(obj)) => obj.id.to_string(),
                     None => String::new(),
                 };
-                StripePriceResponse {
+                // Skip prices whose product is not tagged for this app
+                if let Some(ref allowed) = tagged_product_ids {
+                    if !allowed.contains(&product_id) {
+                        return None;
+                    }
+                }
+                Some(StripePriceResponse {
                     id: p.id.to_string(),
                     product_id,
                     unit_amount: p.unit_amount,
@@ -310,7 +364,7 @@ impl StripeService {
                         .as_ref()
                         .map(|r| format!("{:?}", r.interval).to_lowercase()),
                     active: p.active.unwrap_or(false),
-                }
+                })
             })
             .collect())
     }
@@ -1026,6 +1080,7 @@ mod tests {
             success_url: "http://localhost/checkout/success".to_string(),
             cancel_url: "http://localhost/cancel".to_string(),
             free_price_id: None,
+            app_tag: "a8n-tools".to_string(),
         }
     }
 

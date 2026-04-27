@@ -5,6 +5,8 @@ import { useAuthStore } from '@/stores/authStore'
 import { useApplications } from '@/hooks/useApplications'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { StripeGuardButton } from '@/components/StripeGuardButton'
+import { useStripeConfigStore } from '@/stores/stripeConfigStore'
 import { Badge } from '@/components/ui/badge'
 import { AppWindow, CreditCard, ExternalLink, Loader2, ArrowRight } from 'lucide-react'
 import { getAppGradient, hasActiveMembership } from '@/lib/utils'
@@ -22,6 +24,7 @@ export function DashboardPage() {
   const { applications, isLoading } = useApplications()
   const tagline = useMemo(() => taglines[Math.floor(Math.random() * taglines.length)], [])
 
+  const stripeEnabled = useStripeConfigStore((s) => s.stripeEnabled)
   const isMember = hasActiveMembership(user)
 
   return (
@@ -68,11 +71,17 @@ export function DashboardPage() {
                   ? 'Your trial has ended — subscribe to continue.'
                   : 'Subscribe to get access to all applications.'}
               </p>
-              <Link to="/membership">
-                <Button size="sm" className="gap-2 bg-gradient-to-r from-primary to-indigo-500 text-white border-0 shadow-md shadow-primary/20">
+              {stripeEnabled ? (
+                <Link to="/membership">
+                  <Button size="sm" className="gap-2 bg-gradient-to-r from-primary to-indigo-500 text-white border-0 shadow-md shadow-primary/20">
+                    Subscribe Now <ArrowRight className="h-3.5 w-3.5" />
+                  </Button>
+                </Link>
+              ) : (
+                <StripeGuardButton size="sm" className="gap-2 bg-gradient-to-r from-primary to-indigo-500 text-white border-0 shadow-md shadow-primary/20">
                   Subscribe Now <ArrowRight className="h-3.5 w-3.5" />
-                </Button>
-              </Link>
+                </StripeGuardButton>
+              )}
             </div>
           )}
         </CardContent>

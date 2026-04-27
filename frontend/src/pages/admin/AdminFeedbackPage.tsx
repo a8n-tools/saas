@@ -15,6 +15,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { useEmailConfigStore } from '@/stores/emailConfigStore'
 import { MessageSquareQuote, Loader2, AlertCircle, Mail, ArrowRight, Bug, Lightbulb, Sparkles, Workflow, Download, RotateCcw, Paperclip } from 'lucide-react'
 import { adminApi, downloadFeedbackExport, getFeedbackAttachmentUrl, type AdminFeedbackDetail, type AdminFeedbackStatus, type FeedbackAttachmentMeta } from '@/api/admin'
 import { formatDate, formatRelativeTime } from '@/lib/utils'
@@ -60,6 +62,7 @@ function formatBytes(bytes: number) {
 }
 
 export function AdminFeedbackPage() {
+  const emailEnabled = useEmailConfigStore((s) => s.emailEnabled)
   const queryClient = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
   const [page, setPage] = useState(1)
@@ -518,19 +521,32 @@ export function AdminFeedbackPage() {
                 </>
               )}
             </div>
-            <Button
-              onClick={() => selectedFeedback && respondMutation.mutate(selectedFeedback.id)}
-              disabled={!selectedFeedback || !response.trim() || respondMutation.isPending}
-            >
-              {respondMutation.isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving
-                </>
-              ) : (
-                'Save response'
-              )}
-            </Button>
+            {!emailEnabled ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-block">
+                    <Button disabled style={{ pointerEvents: 'none' }}>
+                      Save response
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>Email is not configured</TooltipContent>
+              </Tooltip>
+            ) : (
+              <Button
+                onClick={() => selectedFeedback && respondMutation.mutate(selectedFeedback.id)}
+                disabled={!selectedFeedback || !response.trim() || respondMutation.isPending}
+              >
+                {respondMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving
+                  </>
+                ) : (
+                  'Save response'
+                )}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

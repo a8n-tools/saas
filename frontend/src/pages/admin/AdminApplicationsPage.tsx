@@ -16,10 +16,12 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Loader2, AppWindow, ExternalLink, Pencil, AlertCircle, Plus, Trash2, ShieldAlert, ArrowUp, ArrowDown } from 'lucide-react'
+import { Loader2, AppWindow, ExternalLink, Pencil, AlertCircle, Plus, Trash2, ShieldAlert, ArrowUp, ArrowDown, RefreshCw } from 'lucide-react'
 import { adminApi } from '@/api/admin'
 import { authApi } from '@/api/auth'
+import { downloadsApi } from '@/api/downloads'
 import type { AdminApplication, UpdateApplicationRequest, CreateApplicationRequest } from '@/api/admin'
+import type { AppDownloadsResponse } from '@/types'
 import { config } from '@/config'
 import type { ApiError } from '@/types'
 
@@ -39,6 +41,9 @@ export function AdminApplicationsPage() {
   const [deletePassword, setDeletePassword] = useState('')
   const [deleteTotpCode, setDeleteTotpCode] = useState('')
   const [deleteError, setDeleteError] = useState('')
+  const [refreshResult, setRefreshResult] = useState<AppDownloadsResponse | null>(null)
+  const [refreshError, setRefreshError] = useState('')
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
   const { data: applications, isLoading, isError, error } = useQuery({
     queryKey: ['admin', 'applications'],
@@ -143,14 +148,73 @@ export function AdminApplicationsPage() {
       health_check_url: app.health_check_url ?? '',
       webhook_url: app.webhook_url ?? '',
       maintenance_message: app.maintenance_message ?? '',
+      forgejo_owner: app.forgejo_owner ?? '',
+      forgejo_repo: app.forgejo_repo ?? '',
+      pinned_release_tag: app.pinned_release_tag ?? '',
+      oci_image_owner: app.oci_image_owner ?? '',
+      oci_image_name: app.oci_image_name ?? '',
+      pinned_image_tag: app.pinned_image_tag ?? '',
     })
+    setRefreshResult(null)
+    setRefreshError('')
     setEditingApp(app)
   }
+
+  const forgejoOwner = editForm.forgejo_owner ?? ''
+  const forgejoRepo = editForm.forgejo_repo ?? ''
+  const pinnedReleaseTag = editForm.pinned_release_tag ?? ''
+
+  const forgejoValues = [forgejoOwner, forgejoRepo, pinnedReleaseTag]
+  const forgejoAnyFilled = forgejoValues.some((v) => v !== '')
+  const forgejoAllFilled = forgejoValues.every((v) => v !== '')
+  const forgejoValidationError =
+    forgejoAnyFilled && !forgejoAllFilled
+      ? 'forgejo_owner, forgejo_repo, and pinned_release_tag must all be set together'
+      : ''
+
+  const ociImageOwner = editForm.oci_image_owner ?? ''
+  const ociImageName = editForm.oci_image_name ?? ''
+  const pinnedImageTag = editForm.pinned_image_tag ?? ''
+
+  const ociValues = [ociImageOwner, ociImageName, pinnedImageTag]
+  const ociAnyFilled = ociValues.some((v) => v !== '')
+  const ociAllFilled = ociValues.every((v) => v !== '')
+  const ociValidationError =
+    ociAnyFilled && !ociAllFilled
+      ? 'oci_image_owner, oci_image_name, and pinned_image_tag must all be set together'
+      : ''
 
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!editingApp) return
-    editMutation.mutate({ appId: editingApp.id, data: editForm })
+    if (forgejoValidationError) return
+    if (ociValidationError) return
+    const data: UpdateApplicationRequest = {
+      ...editForm,
+      forgejo_owner: forgejoOwner || null,
+      forgejo_repo: forgejoRepo || null,
+      pinned_release_tag: pinnedReleaseTag || null,
+      oci_image_owner: ociImageOwner || null,
+      oci_image_name: ociImageName || null,
+      pinned_image_tag: pinnedImageTag || null,
+    }
+    editMutation.mutate({ appId: editingApp.id, data })
+  }
+
+  const handleRefreshRelease = async () => {
+    if (!editingApp) return
+    setIsRefreshing(true)
+    setRefreshResult(null)
+    setRefreshError('')
+    try {
+      const result = await downloadsApi.adminRefresh(editingApp.slug)
+      setRefreshResult(result)
+    } catch (err) {
+      const apiErr = err as ApiError
+      setRefreshError(apiErr?.error?.message || 'Failed to refresh release')
+    } finally {
+      setIsRefreshing(false)
+    }
   }
 
   const handleCreateNameChange = (name: string) => {
@@ -563,6 +627,121 @@ export function AdminApplicationsPage() {
                   Platform will POST to this URL when maintenance mode or active status changes.
                 </p>
               </div>
+              <div className="grid gap-2">
+                <Label htmlFor="forgejo_owner">Forgejo Owner</Label>
+                <Input
+                  id="forgejo_owner"
+                  value={editForm.forgejo_owner ?? ''}
+                  onChange={(e) => setEditForm({ ...editForm, forgejo_owner: e.target.value })}
+                  placeholder="e.g. a8n"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Forgejo user or organization that owns the repo.
+                </p>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="forgejo_repo">Forgejo Repo</Label>
+                <Input
+                  id="forgejo_repo"
+                  value={editForm.forgejo_repo ?? ''}
+                  onChange={(e) => setEditForm({ ...editForm, forgejo_repo: e.target.value })}
+                  placeholder="e.g. rus"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="pinned_release_tag">Pinned Release Tag</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="pinned_release_tag"
+                    value={editForm.pinned_release_tag ?? ''}
+                    onChange={(e) => setEditForm({ ...editForm, pinned_release_tag: e.target.value })}
+                    placeholder="v1.0.0 or latest"
+                  />
+                  {forgejoAllFilled && editingApp && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleRefreshRelease}
+                      disabled={isRefreshing}
+                    >
+                      {isRefreshing ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <RefreshCw className="mr-2 h-4 w-4" />
+                      )}
+                      Refresh release
+                    </Button>
+                  )}
+                </div>
+              </div>
+              {forgejoValidationError && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{forgejoValidationError}</AlertDescription>
+                </Alert>
+              )}
+              <div className="grid gap-2">
+                <Label htmlFor="oci_image_owner">OCI Image Owner</Label>
+                <Input
+                  id="oci_image_owner"
+                  value={editForm.oci_image_owner ?? ''}
+                  onChange={(e) => setEditForm({ ...editForm, oci_image_owner: e.target.value })}
+                  placeholder="e.g. a8n"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Forgejo container-registry owner (may differ from the release owner).
+                </p>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="oci_image_name">OCI Image Name</Label>
+                <Input
+                  id="oci_image_name"
+                  value={editForm.oci_image_name ?? ''}
+                  onChange={(e) => setEditForm({ ...editForm, oci_image_name: e.target.value })}
+                  placeholder="e.g. rus"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="pinned_image_tag">Pinned Image Tag</Label>
+                <Input
+                  id="pinned_image_tag"
+                  value={editForm.pinned_image_tag ?? ''}
+                  onChange={(e) => setEditForm({ ...editForm, pinned_image_tag: e.target.value })}
+                  placeholder="v1.0.0 or latest"
+                />
+              </div>
+              {ociValidationError && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{ociValidationError}</AlertDescription>
+                </Alert>
+              )}
+              {refreshError && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{refreshError}</AlertDescription>
+                </Alert>
+              )}
+              {refreshResult && (
+                <div className="rounded-md border p-3 text-sm">
+                  <p className="font-medium mb-2">Release: {refreshResult.release_tag ?? 'unknown'}</p>
+                  {refreshResult.assets.length === 0 ? (
+                    <p className="text-muted-foreground">No assets found.</p>
+                  ) : (
+                    <ul className="space-y-1">
+                      {refreshResult.assets.map((asset) => (
+                        <li key={asset.asset_name} className="flex items-center justify-between gap-4">
+                          <span className="font-mono text-xs">{asset.asset_name}</span>
+                          <span className="text-muted-foreground text-xs whitespace-nowrap">
+                            {(asset.size_bytes / 1024).toFixed(0)} KB
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
               {editingApp?.maintenance_mode && (
                 <div className="grid gap-2">
                   <Label htmlFor="maintenance_message">Maintenance Message</Label>
@@ -578,7 +757,7 @@ export function AdminApplicationsPage() {
               <Button type="button" variant="outline" onClick={() => setEditingApp(null)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={editMutation.isPending}>
+              <Button type="submit" disabled={editMutation.isPending || !!forgejoValidationError || !!ociValidationError}>
                 {editMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Save Changes
               </Button>

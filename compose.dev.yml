@@ -35,7 +35,7 @@ services:
       APP_PORT: 4000
       RUST_LOG: ${RUST_LOG:-debug}
       # CORS_ORIGIN: http://localhost:5173
-      CORS_ORIGIN: https://app.a8n.run
+      CORS_ORIGIN: https://${USER}-app.a8n.run
       ENVIRONMENT: development
       JWT_SECRET: ${JWT_SECRET:-s3cr3tK3yAtL34st32Ch4r4ct3rsL0ng!}
       COOKIE_DOMAIN: .a8n.run
@@ -47,11 +47,29 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       EMAIL_ENABLED: ${EMAIL_ENABLED:-false}
       # BASE_URL: ${BASE_URL:-http://localhost:5173}
-      BASE_URL: ${BASE_URL:-http://app.a8n.run}
+      BASE_URL: ${BASE_URL:-https://${USER}-app.a8n.run}
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       STRIPE_PRICE_ID: ${STRIPE_PRICE_ID:-}
       STRIPE_BUSINESS_PRICE_ID: ${STRIPE_BUSINESS_PRICE_ID:-}
+      FORGEJO_BASE_URL: ${FORGEJO_BASE_URL:-}
+      FORGEJO_API_TOKEN: ${FORGEJO_API_TOKEN:-}
+      DOWNLOAD_CACHE_DIR: /var/cache/a8n-downloads
+      DOWNLOAD_CACHE_MAX_BYTES: ${DOWNLOAD_CACHE_MAX_BYTES:-10737418240}
+      DOWNLOAD_CONCURRENCY_PER_USER: ${DOWNLOAD_CONCURRENCY_PER_USER:-2}
+      DOWNLOAD_DAILY_LIMIT_PER_USER: ${DOWNLOAD_DAILY_LIMIT_PER_USER:-50}
+      FORGEJO_RELEASE_CACHE_TTL_SECS: ${FORGEJO_RELEASE_CACHE_TTL_SECS:-300}
+      OCI_REGISTRY_ENABLED: ${OCI_REGISTRY_ENABLED:-false}
+      OCI_REGISTRY_PORT: ${OCI_REGISTRY_PORT:-18081}
+      OCI_REGISTRY_SERVICE: ${OCI_REGISTRY_SERVICE:-${USER}-oci.a8n.run}
+      OCI_BLOB_CACHE_DIR: /var/cache/a8n-oci
+      OCI_BLOB_CACHE_MAX_BYTES: ${OCI_BLOB_CACHE_MAX_BYTES:-53687091200}
+      OCI_MANIFEST_CACHE_TTL_SECS: ${OCI_MANIFEST_CACHE_TTL_SECS:-300}
+      OCI_CONCURRENT_MANIFESTS_PER_USER: ${OCI_CONCURRENT_MANIFESTS_PER_USER:-2}
+      OCI_PULLS_PER_USER_PER_DAY: ${OCI_PULLS_PER_USER_PER_DAY:-50}
+      OCI_TOKEN_TTL_SECS: ${OCI_TOKEN_TTL_SECS:-900}
+    ports:
+      - "18081:18081"
     volumes:
       - ./api/src:/app/src:ro
       - ./api/migrations:/app/migrations:ro
@@ -59,6 +77,8 @@ services:
       - ./api/Cargo.toml:/app/Cargo.toml:ro
       - ./api/Cargo.lock:/app/Cargo.lock:ro
       - api_target:/app/target
+      - downloads_cache:/var/cache/a8n-downloads
+      - oci_cache:/var/cache/a8n-oci
     networks:
       - default # Use default network for internal communication with Postgres
       - network-traefik-public
@@ -66,13 +86,18 @@ services:
       postgres:
         condition: service_healthy
     labels:
-      traefik.enable: true
-      traefik.docker.network: network-traefik-public
-      traefik.http.routers.api-saas.rule: Host(`api.a8n.run`)
-      traefik.http.routers.api-saas.service: api-saas@docker
-      traefik.http.routers.api-saas.entrypoints: web-secure
-      traefik.http.routers.api-saas.tls.certresolver: cert-cloudflare
-      traefik.http.services.api-saas.loadbalancer.server.port: 4000
+      - "traefik.enable=true"
+      - "traefik.docker.network=network-traefik-public"
+      - "traefik.http.routers.api-saas-${USER}.rule=Host(`api.a8n.run`) || Host(`${USER}-api.a8n.run`)"
+      - "traefik.http.routers.api-saas-${USER}.service=api-saas-${USER}@docker"
+      - "traefik.http.routers.api-saas-${USER}.entrypoints=web-secure"
+      - "traefik.http.routers.api-saas-${USER}.tls.certresolver=cert-cloudflare"
+      - "traefik.http.services.api-saas-${USER}.loadbalancer.server.port=4000"
+      - "traefik.http.routers.oci-saas-${USER}.rule=Host(`${USER}-oci.a8n.run`)"
+      - "traefik.http.routers.oci-saas-${USER}.service=oci-saas-${USER}@docker"
+      - "traefik.http.routers.oci-saas-${USER}.entrypoints=web-secure"
+      - "traefik.http.routers.oci-saas-${USER}.tls.certresolver=cert-cloudflare"
+      - "traefik.http.services.oci-saas-${USER}.loadbalancer.server.port=18081"
 
   # React Frontend
   frontend:
@@ -85,7 +110,7 @@ services:
       # Use Docker service name for internal proxy requests
       # TODO: Once port 443 is working through Traefik, this is not needed.
       # VITE_API_URL: http://api.a8n.run:4000
-      VITE_API_URL: https://api.a8n.run
+      VITE_API_URL: https://${USER}-api.a8n.run
       VITE_STRIPE_PUBLISHABLE_KEY: ${VITE_STRIPE_PUBLISHABLE_KEY:-}
     networks:
       - network-traefik-public
@@ -100,13 +125,13 @@ services:
       - ./frontend/postcss.config.js:/app/postcss.config.js:ro
       - ./frontend/vitest.config.ts:/app/vitest.config.ts:ro
     labels:
-      traefik.enable: true
-      traefik.docker.network: network-traefik-public
-      traefik.http.routers.frontend-saas.rule: Host(`app.a8n.run`)
-      traefik.http.routers.frontend-saas.service: frontend-saas@docker
-      traefik.http.routers.frontend-saas.entrypoints: web-secure
-      traefik.http.routers.frontend-saas.tls.certresolver: cert-cloudflare
-      traefik.http.services.frontend-saas.loadbalancer.server.port: 5173
+      - "traefik.enable=true"
+      - "traefik.docker.network=network-traefik-public"
+      - "traefik.http.routers.frontend-saas-${USER}.rule=Host(`app.a8n.run`) || Host(`${USER}-app.a8n.run`)"
+      - "traefik.http.routers.frontend-saas-${USER}.service=frontend-saas-${USER}@docker"
+      - "traefik.http.routers.frontend-saas-${USER}.entrypoints=web-secure"
+      - "traefik.http.routers.frontend-saas-${USER}.tls.certresolver=cert-cloudflare"
+      - "traefik.http.services.frontend-saas-${USER}.loadbalancer.server.port=5173"
 
 
 volumes:
@@ -114,6 +139,10 @@ volumes:
     name: saas-data-${USER}
   api_target:
     name: saas-api-target-${USER}
+  downloads_cache:
+    name: saas-downloads-cache-${USER}
+  oci_cache:
+    name: saas-oci-cache-${USER}
 
 networks:
   network-traefik-public:

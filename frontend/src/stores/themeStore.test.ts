@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { useThemeStore } from './themeStore'
 
 beforeEach(() => {
-  useThemeStore.setState({ theme: 'system' })
-  document.documentElement.classList.remove('light', 'dark')
+  useThemeStore.setState({ theme: 'system', highContrast: false })
+  document.documentElement.classList.remove('light', 'dark', 'high-contrast')
 })
 
 describe('themeStore', () => {
@@ -46,6 +46,39 @@ describe('themeStore', () => {
 
       expect(document.documentElement.classList.contains('dark')).toBe(false)
       expect(document.documentElement.classList.contains('light')).toBe(true)
+    })
+  })
+
+  describe('toggleHighContrast', () => {
+    it('starts with high contrast disabled', () => {
+      expect(useThemeStore.getState().highContrast).toBe(false)
+    })
+
+    it('enables high contrast on first toggle', () => {
+      const { toggleHighContrast } = useThemeStore.getState()
+      toggleHighContrast()
+
+      expect(useThemeStore.getState().highContrast).toBe(true)
+      expect(document.documentElement.classList.contains('high-contrast')).toBe(true)
+    })
+
+    it('disables high contrast on second toggle', () => {
+      const { toggleHighContrast } = useThemeStore.getState()
+      toggleHighContrast()
+      toggleHighContrast()
+
+      expect(useThemeStore.getState().highContrast).toBe(false)
+      expect(document.documentElement.classList.contains('high-contrast')).toBe(false)
+    })
+
+    it('is independent of theme selection', () => {
+      const { setTheme, toggleHighContrast } = useThemeStore.getState()
+      toggleHighContrast()
+      setTheme('dark')
+
+      expect(useThemeStore.getState().highContrast).toBe(true)
+      expect(document.documentElement.classList.contains('high-contrast')).toBe(true)
+      expect(document.documentElement.classList.contains('dark')).toBe(true)
     })
   })
 })

@@ -3,15 +3,19 @@ import { useAuthStore } from '@/stores/authStore'
 import { useApplications } from '@/hooks/useApplications'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { StripeGuardButton } from '@/components/StripeGuardButton'
+import { useStripeConfigStore } from '@/stores/stripeConfigStore'
 import { Badge } from '@/components/ui/badge'
 import { ExternalLink, Loader2, Link2, ArrowRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { getAppGradient, hasActiveMembership } from '@/lib/utils'
+import { AppDownloadsSection } from '@/components/downloads/AppDownloadsSection'
 
 export function ApplicationsPage() {
   const { user } = useAuthStore()
   const { applications, isLoading } = useApplications()
 
+  const stripeEnabled = useStripeConfigStore((s) => s.stripeEnabled)
   const isMember = hasActiveMembership(user)
 
   if (isLoading) {
@@ -41,11 +45,17 @@ export function ApplicationsPage() {
                 Subscribe to access all applications.
               </p>
             </div>
-            <Link to="/membership">
-              <Button className="gap-2 bg-gradient-to-r from-primary to-indigo-500 text-white border-0 shadow-md shadow-primary/20">
+            {stripeEnabled ? (
+              <Link to="/membership">
+                <Button className="gap-2 bg-gradient-to-r from-primary to-indigo-500 text-white border-0 shadow-md shadow-primary/20">
+                  Subscribe Now <ArrowRight className="h-3.5 w-3.5" />
+                </Button>
+              </Link>
+            ) : (
+              <StripeGuardButton className="gap-2 bg-gradient-to-r from-primary to-indigo-500 text-white border-0 shadow-md shadow-primary/20">
                 Subscribe Now <ArrowRight className="h-3.5 w-3.5" />
-              </Button>
-            </Link>
+              </StripeGuardButton>
+            )}
           </CardContent>
         </Card>
       )}
@@ -104,6 +114,7 @@ export function ApplicationsPage() {
                       : 'Not Available'}
                   </Button>
                 )}
+                <AppDownloadsSection slug={app.slug} hasMembership={isMember} />
               </CardContent>
             </Card>
           )

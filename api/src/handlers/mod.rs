@@ -3,12 +3,16 @@
 //! This module contains all HTTP request handlers organized by domain.
 
 pub mod admin;
+pub mod admin_oci;
 pub mod admin_stripe;
 pub mod application;
 pub mod auth;
 pub mod billing;
+pub mod download;
 pub mod feedback;
 pub mod membership;
+pub mod oci_auth;
+pub mod oci_registry;
 pub mod totp;
 pub mod user;
 pub mod webhook;
@@ -38,6 +42,7 @@ pub use user::{
     revoke_session,
 };
 pub use billing::{create_setup_intent, download_invoice, list_invoices};
+pub use download::{admin_refresh_release, download_asset, list_all_downloads, list_app_downloads};
 pub use webhook::stripe_webhook;
 
 // Admin handlers
@@ -47,8 +52,10 @@ pub use admin::{
     grant_membership, impersonate_user, key_rotation_status, list_admin_invites, list_all_applications, list_audit_logs,
     list_notifications, list_memberships, list_users, reencrypt_key, revoke_admin_invite, swap_application_order,
     mark_all_notifications_read, mark_notification_read, revoke_membership, send_test_email,
-    update_application, update_stripe_config, update_user_role, update_user_status,
+    update_application, update_stripe_config, update_tier_config, get_tier_config,
+    update_user_role, update_user_status,
 };
+pub use admin_oci::{refresh_oci};
 pub use admin_stripe::{
     archive_stripe_price, archive_stripe_product, create_stripe_price, create_stripe_product,
     create_stripe_webhook, delete_stripe_webhook, list_stripe_prices, list_stripe_products,

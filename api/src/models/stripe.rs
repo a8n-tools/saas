@@ -17,6 +17,8 @@ pub struct StripeConfig {
     pub key_version: i16,
     pub updated_at: DateTime<Utc>,
     pub updated_by: Option<Uuid>,
+    /// Application tag used to filter products/prices in shared Stripe accounts.
+    pub app_tag: Option<String>,
 }
 
 // --- Stripe API response structs ---
@@ -125,6 +127,7 @@ pub struct StripeConfigResponse {
     pub webhook_secret_masked: Option<String>,
     pub has_secret_key: bool,
     pub has_webhook_secret: bool,
+    pub app_tag: String,
     pub updated_at: Option<DateTime<Utc>>,
     /// "database" or "environment" — indicates where the config came from
     pub source: String,
@@ -145,11 +148,17 @@ impl StripeConfigResponse {
             _ => None,
         };
 
+        let app_tag = config
+            .app_tag
+            .clone()
+            .unwrap_or_else(Self::default_app_tag);
+
         Ok(Self {
             secret_key_masked: secret_key_plain.as_deref().map(mask_secret),
             webhook_secret_masked: webhook_secret_plain.as_deref().map(mask_secret),
             has_secret_key: config.secret_key.is_some(),
             has_webhook_secret: config.webhook_secret.is_some(),
+            app_tag,
             updated_at: Some(config.updated_at),
             source: "database".to_string(),
         })
@@ -167,9 +176,17 @@ impl StripeConfigResponse {
             webhook_secret_masked: webhook_secret.as_deref().map(mask_secret),
             has_secret_key: secret_key.is_some(),
             has_webhook_secret: webhook_secret.is_some(),
+            app_tag: Self::default_app_tag(),
             updated_at: None,
             source: "environment".to_string(),
         }
+    }
+
+    fn default_app_tag() -> String {
+        std::env::var("STRIPE_APP_TAG")
+            .ok()
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "a8n-tools".to_string())
     }
 }
 
@@ -271,6 +288,7 @@ mod tests {
             key_version: 1,
             updated_at: Utc::now(),
             updated_by: None,
+            app_tag: None,
         };
 
         let resp = StripeConfigResponse::from_db(&config, &ks).unwrap();
@@ -293,6 +311,7 @@ mod tests {
             key_version: 1,
             updated_at: Utc::now(),
             updated_by: None,
+            app_tag: None,
         };
 
         let resp = StripeConfigResponse::from_db(&config, &ks).unwrap();
@@ -363,6 +382,7 @@ mod tests {
             key_version: 1,
             updated_at: Utc::now(),
             updated_by: None,
+            app_tag: None,
         };
 
         // Decrypt with v2 key set (v1 as previous)
@@ -391,6 +411,7 @@ mod tests {
             key_version: 1,
             updated_at: Utc::now(),
             updated_by: None,
+            app_tag: None,
         };
 
         // v2 key only, no previous — cannot decrypt v1 data

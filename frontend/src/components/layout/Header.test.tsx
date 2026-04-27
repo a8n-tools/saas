@@ -74,6 +74,21 @@ describe('Header', () => {
     expect(newTheme).not.toBe(initialTheme)
   })
 
+  it('shows high contrast toggle button', () => {
+    render(<Header />)
+
+    expect(screen.getByRole('button', { name: /toggle high contrast/i })).toBeInTheDocument()
+  })
+
+  it('toggles high contrast on click', async () => {
+    const user = userEvent.setup()
+    render(<Header />)
+
+    expect(useThemeStore.getState().highContrast).toBe(false)
+    await user.click(screen.getByRole('button', { name: /toggle high contrast/i }))
+    expect(useThemeStore.getState().highContrast).toBe(true)
+  })
+
   it('calls logout when logout button clicked', async () => {
     const user = userEvent.setup()
     useAuthStore.setState({ user: mockUser, isAuthenticated: true })

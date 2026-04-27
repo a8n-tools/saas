@@ -77,6 +77,12 @@ export interface AdminApplication {
   webhook_url: string | null
   version: string | null
   source_code_url: string | null
+  forgejo_owner: string | null
+  forgejo_repo: string | null
+  pinned_release_tag: string | null
+  oci_image_owner: string | null
+  oci_image_name: string | null
+  pinned_image_tag: string | null
   sort_order: number
   created_at: string
   updated_at: string
@@ -95,6 +101,12 @@ export interface UpdateApplicationRequest {
   is_active?: boolean
   maintenance_mode?: boolean
   maintenance_message?: string
+  forgejo_owner?: string | null
+  forgejo_repo?: string | null
+  pinned_release_tag?: string | null
+  oci_image_owner?: string | null
+  oci_image_name?: string | null
+  pinned_image_tag?: string | null
 }
 
 export interface CreateApplicationRequest {
@@ -190,6 +202,7 @@ export interface StripeConfigResponse {
   webhook_secret_masked: string | null
   has_secret_key: boolean
   has_webhook_secret: boolean
+  app_tag: string
   updated_at: string | null
   source: 'database' | 'environment'
 }
@@ -197,6 +210,26 @@ export interface StripeConfigResponse {
 export interface UpdateStripeConfigRequest {
   secret_key?: string
   webhook_secret?: string
+  app_tag?: string
+}
+
+export interface TierConfigResponse {
+  lifetime_slots: number
+  early_adopter_slots: number
+  early_adopter_trial_days: number
+  standard_trial_days: number
+  source: 'database' | 'environment'
+  lifetime_slots_used: number
+  early_adopter_slots_used: number
+  updated_at: string
+  updated_by: string | null
+}
+
+export interface UpdateTierConfigRequest {
+  lifetime_slots?: number
+  early_adopter_slots?: number
+  early_adopter_trial_days?: number
+  standard_trial_days?: number
 }
 
 export interface GrantMembershipRequest {
@@ -356,6 +389,13 @@ export const adminApi = {
 
   revokeInvite: (inviteId: string): Promise<void> =>
     apiClient.delete(`/admin/invites/${inviteId}`),
+
+  // Tier config
+  getTierConfig: (): Promise<TierConfigResponse> =>
+    apiClient.get('/admin/tier-config'),
+
+  updateTierConfig: (data: UpdateTierConfigRequest): Promise<TierConfigResponse> =>
+    apiClient.put('/admin/tier-config', data),
 
   // Stripe config
   getStripeConfig: (): Promise<StripeConfigResponse> =>

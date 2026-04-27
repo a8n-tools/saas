@@ -4,16 +4,23 @@
 
 pub mod application;
 pub mod audit;
+pub mod download;
 pub mod feedback;
 pub mod membership;
+pub mod oci;
 pub mod rate_limit;
 pub mod stripe;
+pub mod tier;
 pub mod token;
 pub mod totp;
 pub mod user;
 
 // Re-export commonly used types
 pub use application::{Application, ApplicationResponse, CreateApplication, DeleteApplicationRequest, SwapApplicationOrderRequest, UpdateApplication};
+pub use download::{
+    AppDownloadGroup, AppDownloadsResponse, DownloadAsset, DownloadCacheRow, ReleaseAsset,
+    ReleaseMetadata,
+};
 pub use audit::{
     AdminNotification, AuditAction, AuditLog, AuditSeverity, CreateAdminNotification,
     CreateAuditLog, NotificationType,
@@ -39,5 +46,6 @@ pub use stripe::{
     StripeProductResponse, StripeSubscriptionItemResponse, StripeSubscriptionResponse,
     StripeWebhookEndpointResponse,
 };
+pub use tier::{TierConfigResponse, TierConfigRow};
 pub use totp::{RecoveryCode, UserTotp};
 pub use user::{CreateUser, MembershipStatus, SubscriptionTier, User, UserResponse, UserRole};

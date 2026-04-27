@@ -253,3 +253,23 @@ export interface StripePaymentResponse {
   created: number
   invoice_pdf: string | null
 }
+
+export interface DownloadAsset {
+  asset_name: string
+  size_bytes: number
+  content_type: string
+  download_url: string
+}
+
+export interface AppDownloadsResponse {
+  release_tag: string | null
+  assets: DownloadAsset[]
+}
+
+export interface AppDownloadGroup {
+  app_slug: string
+  app_display_name: string
+  icon_url: string | null
+  release_tag: string
+  assets: DownloadAsset[]
+}

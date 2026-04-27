@@ -33,6 +33,8 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route("/applications/{app_id}", web::put().to(handlers::update_application))
             .route("/applications/{app_id}/swap-order", web::put().to(handlers::swap_application_order))
             .route("/applications/{app_id}", web::delete().to(handlers::delete_application))
+            .route("/applications/{slug}/downloads/refresh", web::post().to(handlers::admin_refresh_release))
+            .route("/applications/{slug}/oci/refresh", web::post().to(handlers::refresh_oci))
             // Audit logs
             .route("/audit-logs", web::get().to(handlers::list_audit_logs))
             // Feedback
@@ -51,6 +53,9 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route("/invites", web::post().to(handlers::create_admin_invite))
             .route("/invites", web::get().to(handlers::list_admin_invites))
             .route("/invites/{invite_id}", web::delete().to(handlers::revoke_admin_invite))
+            // Tier config
+            .route("/tier-config", web::get().to(handlers::get_tier_config))
+            .route("/tier-config", web::put().to(handlers::update_tier_config))
             // Stripe config
             .route("/stripe", web::get().to(handlers::get_stripe_config))
             .route("/stripe", web::put().to(handlers::update_stripe_config))
