@@ -1,6 +1,8 @@
 ################################################################################
 # Main Caddy config
 # https://caddyserver.com/docs/caddyfile/directives
+#
+# See also: docs/oci-registry.md and docs/forgejo-download-proxy.md.
 ################################################################################
 {
 	auto_https off
