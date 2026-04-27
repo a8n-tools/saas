@@ -14,4 +14,5 @@ fn main() {
     };
 
     println!("cargo:rustc-env=GIT_COMMIT={commit}");
+    println!("cargo:rerun-if-changed=build.rs");
 }
