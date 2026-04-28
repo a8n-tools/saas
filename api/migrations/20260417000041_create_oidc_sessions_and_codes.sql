@@ -1,5 +1,5 @@
 -- IdP-side sessions (server-side; allows back-channel revocation)
-CREATE TABLE op_sessions (
+CREATE TABLE IF NOT EXISTS op_sessions (
     id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     -- Opaque value stored in the browser cookie
     sid             TEXT        NOT NULL UNIQUE,
@@ -15,13 +15,13 @@ CREATE TABLE op_sessions (
     amr             TEXT[]
 );
 
-CREATE INDEX op_sessions_user_active
+CREATE INDEX IF NOT EXISTS op_sessions_user_active
     ON op_sessions(user_id) WHERE revoked_at IS NULL;
-CREATE INDEX op_sessions_sid
+CREATE INDEX IF NOT EXISTS op_sessions_sid
     ON op_sessions(sid) WHERE revoked_at IS NULL;
 
 -- Authorization codes (hashed; single-use; 60 s TTL)
-CREATE TABLE oauth_authorization_codes (
+CREATE TABLE IF NOT EXISTS oauth_authorization_codes (
     code_hash               BYTEA       PRIMARY KEY,
     client_id               UUID        NOT NULL REFERENCES oauth_clients(client_id),
     user_id                 UUID        NOT NULL REFERENCES users(id),
@@ -40,13 +40,13 @@ CREATE TABLE oauth_authorization_codes (
     revoked_at              TIMESTAMPTZ
 );
 
-CREATE INDEX oauth_codes_expires ON oauth_authorization_codes(expires_at);
+CREATE INDEX IF NOT EXISTS oauth_codes_expires ON oauth_authorization_codes(expires_at);
 
 -- Per-user, per-application entitlement.
 -- Token and authorization endpoints refuse to issue tokens for a (user, client)
 -- pair without an active row here.  Default at migration time: grant all
 -- existing users access to the seeded clients (preserves current behavior).
-CREATE TABLE user_application_access (
+CREATE TABLE IF NOT EXISTS user_application_access (
     user_id         UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     client_id       UUID        NOT NULL REFERENCES oauth_clients(client_id) ON DELETE CASCADE,
     granted_scopes  TEXT[]      NOT NULL,
@@ -56,7 +56,7 @@ CREATE TABLE user_application_access (
     PRIMARY KEY (user_id, client_id)
 );
 
-CREATE INDEX user_application_access_active
+CREATE INDEX IF NOT EXISTS user_application_access_active
     ON user_application_access(user_id) WHERE revoked_at IS NULL;
 
 -- Grant every existing user access to every seeded client with full scopes.

@@ -1,5 +1,5 @@
 -- Refresh-token families (one per login session / code exchange)
-CREATE TABLE refresh_token_families (
+CREATE TABLE IF NOT EXISTS refresh_token_families (
     id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     client_id       UUID        NOT NULL REFERENCES oauth_clients(client_id),
     user_id         UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -9,11 +9,11 @@ CREATE TABLE refresh_token_families (
     revoke_reason   TEXT
 );
 
-CREATE INDEX refresh_token_families_user
+CREATE INDEX IF NOT EXISTS refresh_token_families_user
     ON refresh_token_families(user_id) WHERE revoked_at IS NULL;
 
 -- Refresh tokens — rotated on every use; hashed; opaque to clients
-CREATE TABLE refresh_tokens_v2 (
+CREATE TABLE IF NOT EXISTS refresh_tokens_v2 (
     id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     token_hash          BYTEA       NOT NULL UNIQUE,   -- SHA-256 of raw token
     family_id           UUID        NOT NULL REFERENCES refresh_token_families(id) ON DELETE CASCADE,
@@ -32,27 +32,27 @@ CREATE TABLE refresh_tokens_v2 (
     user_agent          TEXT
 );
 
-CREATE INDEX refresh_tokens_family
+CREATE INDEX IF NOT EXISTS refresh_tokens_family
     ON refresh_tokens_v2(family_id);
-CREATE INDEX refresh_tokens_active_user
+CREATE INDEX IF NOT EXISTS refresh_tokens_active_user
     ON refresh_tokens_v2(user_id)
     WHERE revoked_at IS NULL AND used_at IS NULL;
 
 -- Optional JTI blocklist for access tokens.
 -- Populated only for explicitly revoked tokens (password change, admin revoke).
 -- RSes consult via a short-lived in-process cache.
-CREATE TABLE access_token_blocklist (
+CREATE TABLE IF NOT EXISTS access_token_blocklist (
     jti         TEXT        PRIMARY KEY,
     exp         TIMESTAMPTZ NOT NULL,
     reason      TEXT        NOT NULL,
     revoked_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX access_token_blocklist_exp ON access_token_blocklist(exp);
+CREATE INDEX IF NOT EXISTS access_token_blocklist_exp ON access_token_blocklist(exp);
 
 -- Lifecycle event outbox for back-channel user-state notifications (§7.5).
 -- Inserted in the same transaction as the user-state change.
-CREATE TABLE lifecycle_event_outbox (
+CREATE TABLE IF NOT EXISTS lifecycle_event_outbox (
     id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     event_type  TEXT        NOT NULL CHECK (event_type IN (
         'user.suspended', 'user.unsuspended', 'user.deleted',
@@ -64,7 +64,7 @@ CREATE TABLE lifecycle_event_outbox (
 );
 
 -- One delivery attempt row per (event, target client)
-CREATE TABLE lifecycle_event_delivery (
+CREATE TABLE IF NOT EXISTS lifecycle_event_delivery (
     id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     event_id        UUID        NOT NULL REFERENCES lifecycle_event_outbox(id) ON DELETE CASCADE,
     client_id       UUID        NOT NULL REFERENCES oauth_clients(client_id) ON DELETE CASCADE,
@@ -79,6 +79,6 @@ CREATE TABLE lifecycle_event_delivery (
     last_error      TEXT
 );
 
-CREATE INDEX lifecycle_event_delivery_pending
+CREATE INDEX IF NOT EXISTS lifecycle_event_delivery_pending
     ON lifecycle_event_delivery(next_attempt_at)
     WHERE delivered_at IS NULL AND failed_at IS NULL;
