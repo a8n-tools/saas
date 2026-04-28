@@ -6,6 +6,7 @@ use actix_web::{web, HttpRequest, HttpResponse};
 use serde::Deserialize;
 use sqlx::PgPool;
 use std::sync::Arc;
+use tokio;
 
 use crate::errors::AppError;
 use crate::middleware::{extract_client_ip, AuthCookies, AuthenticatedUser};
@@ -317,6 +318,7 @@ pub async fn delete_account(
     config: web::Data<crate::config::Config>,
     totp_service: web::Data<Arc<TotpService>>,
     stripe_service: web::Data<Arc<StripeService>>,
+    oidc_provider: web::Data<Option<Arc<crate::services::oidc_provider::OidcProvider>>>,
     body: web::Json<DeleteAccountRequest>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
@@ -392,6 +394,15 @@ pub async fn delete_account(
         user_email = %user.0.email,
         "User deleted their own account"
     );
+
+    if let Some(provider) = oidc_provider.as_ref().as_ref().cloned() {
+        let deleted_user_id = user.0.sub;
+        tokio::spawn(crate::handlers::admin::dispatch_lifecycle_event(
+            provider,
+            deleted_user_id,
+            "user.deleted",
+        ));
+    }
 
     // Clear auth cookies and return success
     let secure = config.is_production();

@@ -21,7 +21,14 @@ use a8n_api::{
     models::{CreateUser, UserRole},
     repositories::{FeedbackRepository, RateLimitRepository, UserRepository},
     routes,
-    services::{AuthService, BlobCache, DownloadCache, DownloadLimiter, EmailService, EncryptionKeySet, ForgejoClient, ForgejoRegistryClient, JwtConfig, JwtService, ManifestCache, OciLimiter, OciTokenService, PasswordService, ReleaseCache, StripeConfig, StripeService, TotpService, WebhookService},
+    services::{
+        oidc_keys::OidcKeySet,
+        oidc_provider::OidcProvider,
+        AuthService, BlobCache, DownloadCache, DownloadLimiter, EmailService, EncryptionKeySet,
+        ForgejoClient, ForgejoRegistryClient, JwtConfig, JwtService, ManifestCache, OciLimiter,
+        OciTokenService, PasswordService, ReleaseCache, StripeConfig, StripeService, TotpService,
+        WebhookService,
+    },
 };
 
 #[tokio::main]
@@ -272,6 +279,33 @@ async fn main() -> anyhow::Result<()> {
 
     info!("Webhook service initialized");
 
+    // Initialize OIDC provider (optional — only when OIDC_ISSUER is set)
+    let oidc_provider: Option<Arc<OidcProvider>> = if config.oidc.enabled() {
+        let key_set = OidcKeySet::load(
+            &config.oidc.jwt_private_key_path,
+            &config.oidc.jwt_active_kid,
+            &config.oidc.jwt_public_keys_dir,
+        )
+        .map_err(|e| {
+            error!(error = %e, "Failed to load OIDC key set");
+            anyhow::anyhow!("{}", e)
+        })?;
+        let provider = Arc::new(OidcProvider::new(
+            config.oidc.clone(),
+            Arc::new(key_set),
+            pool.clone(),
+        ));
+        info!(
+            issuer = %config.oidc.issuer.as_deref().unwrap_or("(none)"),
+            active_kid = %config.oidc.jwt_active_kid,
+            public_keys_dir = %config.oidc.jwt_public_keys_dir,
+            "OIDC provider initialized",
+        );
+        Some(provider)
+    } else {
+        info!("OIDC provider disabled (OIDC_ISSUER not set)");
+        None
+    };
 
     // Initialize auto-ban service
     let auto_ban_service = Arc::new(AutoBanService::new(config.auto_ban.clone(), pool.clone()));
@@ -448,6 +482,8 @@ async fn main() -> anyhow::Result<()> {
             .app_data(web::Data::new(oci_token_service.clone()))
             .app_data(web::Data::new(config_data.oci.clone()))
             .app_data(web::Data::new(forgejo_registry_client.clone()))
+            // OIDC provider (None when OIDC_ISSUER is not set; handlers return 404)
+            .app_data(web::Data::new(oidc_provider.clone()))
             // Configure routes
             .configure(routes::configure)
     })

@@ -6,6 +6,7 @@ use actix_web::{web, HttpRequest, HttpResponse};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use std::sync::Arc;
+use tokio;
 
 use chrono::{Duration, Utc};
 
@@ -97,6 +98,7 @@ pub async fn update_user_status(
     req: HttpRequest,
     admin: AdminUser,
     pool: web::Data<PgPool>,
+    oidc_provider: web::Data<Option<Arc<crate::services::oidc_provider::OidcProvider>>>,
     path: web::Path<uuid::Uuid>,
     body: web::Json<UpdateUserStatusRequest>,
 ) -> Result<HttpResponse, AppError> {
@@ -124,6 +126,10 @@ pub async fn update_user_status(
                 "target_email": target_user.email,
             }));
         AuditLogRepository::create(&pool, audit_log).await?;
+
+        if let Some(provider) = oidc_provider.as_ref().as_ref().cloned() {
+            tokio::spawn(dispatch_lifecycle_event(provider, user_id, "user.deleted"));
+        }
     }
 
     Ok(success_no_data(request_id))
@@ -135,6 +141,7 @@ pub async fn delete_user(
     req: HttpRequest,
     admin: AdminUser,
     pool: web::Data<PgPool>,
+    oidc_provider: web::Data<Option<Arc<crate::services::oidc_provider::OidcProvider>>>,
     path: web::Path<uuid::Uuid>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
@@ -172,6 +179,10 @@ pub async fn delete_user(
             "target_role": target_user.role,
         }));
     AuditLogRepository::create(&pool, audit_log).await?;
+
+    if let Some(provider) = oidc_provider.as_ref().as_ref().cloned() {
+        tokio::spawn(dispatch_lifecycle_event(provider, user_id, "user.deleted"));
+    }
 
     Ok(success_no_data(request_id))
 }
@@ -1804,6 +1815,60 @@ pub async fn reencrypt_key(
             ))
         }
         _ => Err(AppError::not_found(format!("Unknown key: {key_id}"))),
+    }
+}
+
+// ── Lifecycle event dispatch ──────────────────────────────────────────────────
+
+/// Fire-and-forget helper: POST a lifecycle-event token to every registered
+/// `lifecycle_event_uri` for the given `user_id`.  Called via `tokio::spawn`.
+pub(crate) async fn dispatch_lifecycle_event(
+    provider: Arc<crate::services::oidc_provider::OidcProvider>,
+    user_id: uuid::Uuid,
+    event_type: &'static str,
+) {
+    let targets = match provider.lifecycle_event_targets().await {
+        Ok(t) => t,
+        Err(e) => {
+            tracing::warn!(error = %e, "lifecycle_event_targets query failed");
+            return;
+        }
+    };
+
+    if targets.is_empty() {
+        return;
+    }
+
+    let http = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .build()
+        .unwrap_or_default();
+
+    for (client_id, uri) in targets {
+        match provider.mint_lifecycle_token(user_id, event_type, client_id) {
+            Ok(token) => {
+                if let Err(e) = http
+                    .post(&uri)
+                    .form(&[("lifecycle_event", &token)])
+                    .send()
+                    .await
+                {
+                    tracing::warn!(
+                        error = %e,
+                        client_id = %client_id,
+                        event_type,
+                        "lifecycle event POST failed"
+                    );
+                }
+            }
+            Err(e) => {
+                tracing::warn!(
+                    error = %e,
+                    client_id = %client_id,
+                    "Failed to mint lifecycle token"
+                );
+            }
+        }
     }
 }
 

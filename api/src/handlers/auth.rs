@@ -490,6 +490,7 @@ pub async fn logout(
     user: AuthenticatedUser,
     auth_service: web::Data<Arc<AuthService>>,
     config: web::Data<crate::config::Config>,
+    oidc_provider: web::Data<Option<Arc<crate::services::oidc_provider::OidcProvider>>>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
     let ip_address = extract_client_ip(&req);
@@ -499,6 +500,50 @@ pub async fn logout(
         auth_service
             .logout(refresh_token, user.0.sub, ip_address)
             .await?;
+    }
+
+    // Revoke OIDC op-sessions and fan out back-channel logout tokens to all
+    // registered clients (e.g. DMARC) so they kill their local sessions too.
+    if let Some(provider_arc) = oidc_provider.as_ref().as_ref().cloned() {
+        let user_id = user.0.sub;
+        tokio::spawn(async move {
+            match provider_arc.revoke_sessions_for_backchannel(user_id).await {
+                Ok(targets) => {
+                    let http = reqwest::Client::builder()
+                        .timeout(std::time::Duration::from_secs(5))
+                        .build()
+                        .unwrap_or_default();
+                    for (client_id, uri, sid) in targets {
+                        match provider_arc.mint_logout_token(user_id, &sid, client_id) {
+                            Ok(token) => {
+                                if let Err(e) = http
+                                    .post(&uri)
+                                    .form(&[("logout_token", &token)])
+                                    .send()
+                                    .await
+                                {
+                                    tracing::warn!(
+                                        %uri, %client_id, error = %e,
+                                        "Backchannel logout delivery failed"
+                                    );
+                                } else {
+                                    tracing::info!(
+                                        %uri, %client_id,
+                                        "Backchannel logout delivered"
+                                    );
+                                }
+                            }
+                            Err(e) => {
+                                tracing::warn!(%client_id, error = %e, "Failed to mint logout token");
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "Failed to revoke sessions for backchannel logout");
+                }
+            }
+        });
     }
 
     let secure = config.is_production();

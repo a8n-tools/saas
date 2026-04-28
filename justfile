@@ -30,6 +30,12 @@ dev-detach: ensure-env
     @echo "  Frontend:  http://localhost:5173"
     @echo "  API:       http://localhost:18080"
 
+# Start development environment on a8n.run (detached, Traefik-routed, for SSO testing)
+dev-sso: ensure-env
+    {{ compose }}up --build --detach
+    @echo "  Frontend:  https://{{env('USER')}}-app.a8n.run"
+    @echo "  API:       https://{{env('USER')}}-api.a8n.run"
+
 # Stop all services
 down:
     {{ compose }}down
