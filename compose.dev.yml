@@ -27,6 +27,7 @@ services:
       context: ./api
       dockerfile: Dockerfile
     container_name: saas-api-${USER}
+    command: ["/app/target/debug/a8n-api"]
     restart: unless-stopped
     environment:
       # scheme://username:password@host:port/path/file.ext

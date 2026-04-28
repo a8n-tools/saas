@@ -93,14 +93,17 @@ export function LoginPage() {
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Cross-tab sync — when another tab logs in, redirect this tab too
+  // Cross-tab sync — when another tab logs in, redirect this tab too.
+  // Skip when alreadyChecked: the server confirmed we can't authenticate via
+  // cookies, so a stale isAuthenticated in localStorage must not re-trigger
+  // the redirect and cause an infinite loop.
   const mountedRef = useRef(false)
   useEffect(() => {
     if (!mountedRef.current) {
       mountedRef.current = true
       return
     }
-    if (isAuthenticated) {
+    if (isAuthenticated && !alreadyChecked) {
       doRedirect()
     }
   }, [isAuthenticated]) // eslint-disable-line react-hooks/exhaustive-deps

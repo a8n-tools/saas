@@ -28,6 +28,6 @@ INSERT INTO oauth_clients (
     ARRAY['openid', 'email', 'offline_access'],
     ARRAY['authorization_code', 'refresh_token'],
     'client_secret_basic', TRUE,
-    NULL,
+    '$argon2id$v=19$m=65536,t=3,p=4$Y1zaV3Ekui9d5n2WJz+nDA$vO8+IA48tNpT80m7F+D6RauAY+fWRy/dH3XX6Px85uM',
     'https://links.a8n.run/api'
 );
