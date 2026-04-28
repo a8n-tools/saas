@@ -30,4 +30,5 @@ INSERT INTO oauth_clients (
     'client_secret_basic', TRUE,
     NULL,
     'https://storefront.a8n.run/api'
-);
+)
+ON CONFLICT (client_id) DO NOTHING;

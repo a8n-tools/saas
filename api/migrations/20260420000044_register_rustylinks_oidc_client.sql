@@ -30,4 +30,5 @@ INSERT INTO oauth_clients (
     'client_secret_basic', TRUE,
     '$argon2id$v=19$m=65536,t=3,p=4$Y1zaV3Ekui9d5n2WJz+nDA$vO8+IA48tNpT80m7F+D6RauAY+fWRy/dH3XX6Px85uM',
     'https://links.a8n.run/api'
-);
+)
+ON CONFLICT (client_id) DO NOTHING;

@@ -3,7 +3,7 @@
 -- Dynamic registration (RFC 7591) is disabled; clients are seeded here.
 -- require_pkce is always TRUE — no exceptions.
 
-CREATE TABLE oauth_clients (
+CREATE TABLE IF NOT EXISTS oauth_clients (
     id                          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     client_id                   UUID        NOT NULL UNIQUE,
     -- Argon2id hash; NULL for public clients
@@ -38,7 +38,7 @@ CREATE TABLE oauth_clients (
     disabled_at                 TIMESTAMPTZ
 );
 
-CREATE INDEX oauth_clients_active ON oauth_clients(client_id)
+CREATE INDEX IF NOT EXISTS oauth_clients_active ON oauth_clients(client_id)
     WHERE disabled_at IS NULL;
 
 -- Seed initial clients for SaaS web and DMARC BFF.
@@ -90,4 +90,5 @@ INSERT INTO oauth_clients (
     ARRAY['authorization_code', 'refresh_token'],
     'none', TRUE,
     'https://dmarc.a8n.tools/api'
-);
+)
+ON CONFLICT (client_id) DO NOTHING;
