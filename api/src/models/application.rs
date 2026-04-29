@@ -184,7 +184,10 @@ mod tests {
         let response = ApplicationResponse::from_application(app, true);
         assert!(!response.is_accessible);
         assert!(response.maintenance_mode);
-        assert_eq!(response.maintenance_message.as_deref(), Some("Under maintenance"));
+        assert_eq!(
+            response.maintenance_message.as_deref(),
+            Some("Under maintenance")
+        );
     }
 
     #[test]

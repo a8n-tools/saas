@@ -10,10 +10,10 @@
 //!   GET  /oauth2/logout                      — RP-Initiated Logout
 
 use actix_web::{web, HttpRequest, HttpResponse};
-use tokio;
 use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use tokio;
 use uuid::Uuid;
 
 use crate::errors::AppError;
@@ -60,9 +60,7 @@ fn oidc_unauthorized(error: &str, description: &str) -> HttpResponse {
 // ── Discovery ─────────────────────────────────────────────────────────────────
 
 /// GET /.well-known/openid-configuration
-pub async fn discovery(
-    provider: web::Data<Option<Arc<OidcProvider>>>,
-) -> HttpResponse {
+pub async fn discovery(provider: web::Data<Option<Arc<OidcProvider>>>) -> HttpResponse {
     let provider = require_provider!(provider, plain);
     let issuer = match provider.config.issuer.as_deref() {
         Some(i) if !i.is_empty() => i.to_string(),
@@ -110,9 +108,7 @@ pub async fn discovery(
 // ── JWKS ──────────────────────────────────────────────────────────────────────
 
 /// GET /.well-known/jwks.json
-pub async fn jwks(
-    provider: web::Data<Option<Arc<OidcProvider>>>,
-) -> HttpResponse {
+pub async fn jwks(provider: web::Data<Option<Arc<OidcProvider>>>) -> HttpResponse {
     let provider = require_provider!(provider, plain);
 
     HttpResponse::Ok()
@@ -157,11 +153,7 @@ pub async fn authorize(
     let user = match user.0 {
         Some(claims) => AuthenticatedUser(claims),
         None => {
-            let authorize_url = format!(
-                "{}{}",
-                provider.issuer(),
-                req.uri()
-            );
+            let authorize_url = format!("{}{}", provider.issuer(), req.uri());
             tracing::info!(
                 has_access_token = req.cookie("access_token").is_some(),
                 has_refresh_token = req.cookie("refresh_token").is_some(),
@@ -399,12 +391,14 @@ async fn handle_authorization_code_grant(
     let code = body.code.as_deref().ok_or_else(|| {
         AppError::OidcInvalidRequest("code is required for authorization_code grant".into())
     })?;
-    let redirect_uri = body.redirect_uri.as_deref().ok_or_else(|| {
-        AppError::OidcInvalidRequest("redirect_uri is required".into())
-    })?;
-    let code_verifier = body.code_verifier.as_deref().ok_or_else(|| {
-        AppError::OidcInvalidRequest("code_verifier is required (PKCE)".into())
-    })?;
+    let redirect_uri = body
+        .redirect_uri
+        .as_deref()
+        .ok_or_else(|| AppError::OidcInvalidRequest("redirect_uri is required".into()))?;
+    let code_verifier = body
+        .code_verifier
+        .as_deref()
+        .ok_or_else(|| AppError::OidcInvalidRequest("code_verifier is required (PKCE)".into()))?;
 
     let code_row = provider
         .consume_authorization_code(code, client.client_id, redirect_uri, code_verifier)
@@ -417,7 +411,10 @@ async fn handle_authorization_code_grant(
 
     // Re-check entitlement
     if !provider.has_entitlement(user.id, client.client_id).await? {
-        return Ok(oidc_error("access_denied", "user not entitled to this client"));
+        return Ok(oidc_error(
+            "access_denied",
+            "user not entitled to this client",
+        ));
     }
 
     // Mint tokens
@@ -471,13 +468,15 @@ async fn handle_refresh_grant(
     ip: Option<std::net::IpAddr>,
     user_agent: Option<&str>,
 ) -> Result<HttpResponse, AppError> {
-    let raw_refresh = body.refresh_token.as_deref().ok_or_else(|| {
-        AppError::OidcInvalidRequest("refresh_token is required".into())
-    })?;
+    let raw_refresh = body
+        .refresh_token
+        .as_deref()
+        .ok_or_else(|| AppError::OidcInvalidRequest("refresh_token is required".into()))?;
 
-    let requested_scope: Option<Vec<String>> = body.scope.as_ref().map(|s| {
-        s.split_whitespace().map(String::from).collect()
-    });
+    let requested_scope: Option<Vec<String>> = body
+        .scope
+        .as_ref()
+        .map(|s| s.split_whitespace().map(String::from).collect());
 
     let rotated = provider
         .rotate_refresh_token(
@@ -496,7 +495,10 @@ async fn handle_refresh_grant(
 
     // Re-check entitlement at every rotation
     if !provider.has_entitlement(user.id, client.client_id).await? {
-        return Ok(oidc_error("access_denied", "user not entitled to this client"));
+        return Ok(oidc_error(
+            "access_denied",
+            "user not entitled to this client",
+        ));
     }
 
     let (access_token, at_exp) = provider.mint_access_token(
@@ -643,47 +645,47 @@ pub async fn logout(
         let user_id = claims.sub; // already Uuid
         match provider_arc.revoke_sessions_for_backchannel(user_id).await {
             Ok(targets) if !targets.is_empty() => {
-                    let provider_arc = Arc::clone(&provider_arc);
-                    tokio::spawn(async move {
-                        let http = reqwest::Client::builder()
-                            .timeout(std::time::Duration::from_secs(5))
-                            .build()
-                            .unwrap_or_default();
-                        for (client_id, uri, sid) in targets {
-                            match provider_arc.mint_logout_token(user_id, &sid, client_id) {
-                                Ok(token) => {
-                                    if let Err(e) = http
-                                        .post(&uri)
-                                        .form(&[("logout_token", &token)])
-                                        .send()
-                                        .await
-                                    {
-                                        tracing::warn!(
-                                            %uri, %client_id, error = %e,
-                                            "Backchannel logout delivery failed"
-                                        );
-                                    } else {
-                                        tracing::info!(
-                                            %uri, %client_id,
-                                            "Backchannel logout delivered"
-                                        );
-                                    }
-                                }
-                                Err(e) => {
+                let provider_arc = Arc::clone(&provider_arc);
+                tokio::spawn(async move {
+                    let http = reqwest::Client::builder()
+                        .timeout(std::time::Duration::from_secs(5))
+                        .build()
+                        .unwrap_or_default();
+                    for (client_id, uri, sid) in targets {
+                        match provider_arc.mint_logout_token(user_id, &sid, client_id) {
+                            Ok(token) => {
+                                if let Err(e) = http
+                                    .post(&uri)
+                                    .form(&[("logout_token", &token)])
+                                    .send()
+                                    .await
+                                {
                                     tracing::warn!(
-                                        %client_id, error = %e,
-                                        "Failed to mint logout token"
+                                        %uri, %client_id, error = %e,
+                                        "Backchannel logout delivery failed"
+                                    );
+                                } else {
+                                    tracing::info!(
+                                        %uri, %client_id,
+                                        "Backchannel logout delivered"
                                     );
                                 }
                             }
+                            Err(e) => {
+                                tracing::warn!(
+                                    %client_id, error = %e,
+                                    "Failed to mint logout token"
+                                );
+                            }
                         }
-                    });
-                }
-                Ok(_) => {} // no clients with backchannel URIs
-                Err(e) => {
-                    tracing::warn!(error = %e, "Failed to revoke sessions for backchannel logout");
-                }
+                    }
+                });
             }
+            Ok(_) => {} // no clients with backchannel URIs
+            Err(e) => {
+                tracing::warn!(error = %e, "Failed to revoke sessions for backchannel logout");
+            }
+        }
     }
 
     Ok(HttpResponse::Found()
@@ -706,14 +708,8 @@ fn extract_client_credentials(
                     if let Ok(cred_str) = String::from_utf8(decoded) {
                         if let Some((id, secret)) = cred_str.split_once(':') {
                             return Ok((
-                                urlencoding::decode(id)
-                                    .unwrap_or_default()
-                                    .into_owned(),
-                                Some(
-                                    urlencoding::decode(secret)
-                                        .unwrap_or_default()
-                                        .into_owned(),
-                                ),
+                                urlencoding::decode(id).unwrap_or_default().into_owned(),
+                                Some(urlencoding::decode(secret).unwrap_or_default().into_owned()),
                             ));
                         }
                     }
@@ -741,9 +737,10 @@ fn authenticate_client(
         return Ok(());
     }
 
-    let expected_hash = client.client_secret_hash.as_deref().ok_or_else(|| {
-        AppError::OidcInvalidClient("client has no secret configured".into())
-    })?;
+    let expected_hash = client
+        .client_secret_hash
+        .as_deref()
+        .ok_or_else(|| AppError::OidcInvalidClient("client has no secret configured".into()))?;
 
     let secret = provided_secret.ok_or_else(|| {
         AppError::OidcInvalidClient("client_secret required for confidential client".into())
@@ -767,14 +764,13 @@ fn verify_at_jwt_get_sub(provider: &OidcProvider, token: &str) -> Result<String,
         .map_err(|_| AppError::OidcInvalidToken("malformed JWT header".into()))?;
 
     if header.typ.as_deref() != Some("at+jwt") {
-        return Err(AppError::OidcInvalidToken(
-            "JWT typ must be at+jwt".into(),
-        ));
+        return Err(AppError::OidcInvalidToken("JWT typ must be at+jwt".into()));
     }
 
-    let kid = header.kid.as_deref().ok_or_else(|| {
-        AppError::OidcInvalidToken("JWT header missing kid".into())
-    })?;
+    let kid = header
+        .kid
+        .as_deref()
+        .ok_or_else(|| AppError::OidcInvalidToken("JWT header missing kid".into()))?;
 
     let decoding_key = provider
         .keys
@@ -787,7 +783,9 @@ fn verify_at_jwt_get_sub(provider: &OidcProvider, token: &str) -> Result<String,
     validation.leeway = 30;
 
     let data = jsonwebtoken::decode::<serde_json::Value>(token, decoding_key, &validation)
-        .map_err(|e| AppError::OidcInvalidToken(format!("access token verification failed: {e}")))?;
+        .map_err(|e| {
+            AppError::OidcInvalidToken(format!("access token verification failed: {e}"))
+        })?;
 
     data.claims["sub"]
         .as_str()
@@ -810,8 +808,5 @@ fn extract_ip(req: &HttpRequest) -> Option<std::net::IpAddr> {
         .and_then(|v| v.to_str().ok())
         .and_then(|s| s.split(',').next())
         .and_then(|s| s.trim().parse().ok())
-        .or_else(|| {
-            req.peer_addr()
-                .map(|addr| addr.ip())
-        })
+        .or_else(|| req.peer_addr().map(|addr| addr.ip()))
 }

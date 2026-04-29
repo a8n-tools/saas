@@ -20,9 +20,7 @@ use crate::services::{BlobCache, ManifestCache, OciLimitDenial, OciLimiter};
 const DEFAULT_ACCEPT: &str = "application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json";
 
 /// GET /v2/  — version probe. Requires auth but no scope.
-pub async fn version_probe(
-    user: Option<OciBearerUser>,
-) -> Result<HttpResponse, OciError> {
+pub async fn version_probe(user: Option<OciBearerUser>) -> Result<HttpResponse, OciError> {
     match user {
         Some(_) => Ok(HttpResponse::Ok()
             .append_header(("Docker-Distribution-API-Version", "registry/2.0"))
@@ -65,7 +63,10 @@ pub async fn get_manifest(
     if !app.is_pullable() {
         return Err(OciError::NameUnknown);
     }
-    let pinned = app.pinned_image_tag.clone().ok_or(OciError::ManifestUnknown)?;
+    let pinned = app
+        .pinned_image_tag
+        .clone()
+        .ok_or(OciError::ManifestUnknown)?;
 
     // Reference must be the pinned tag or a sha256 digest. Child manifests
     // (multi-arch) are fetched via digest references and hash-verified by
@@ -83,7 +84,9 @@ pub async fn get_manifest(
         Ok(g) => g,
         Err(OciLimitDenial::Concurrency) => {
             audit_denied(pool.get_ref(), &req, &user, &app.id, "concurrency", None).await;
-            return Err(OciError::TooManyRequests { retry_after_secs: None });
+            return Err(OciError::TooManyRequests {
+                retry_after_secs: None,
+            });
         }
         Err(OciLimitDenial::DailyCap { reset_in_secs }) => {
             let secs_u64 = reset_in_secs.max(0) as u64;
@@ -118,10 +121,7 @@ pub async fn get_manifest(
             .oci_image_owner
             .as_deref()
             .ok_or(OciError::NameUnknown)?;
-        let name = app
-            .oci_image_name
-            .as_deref()
-            .ok_or(OciError::NameUnknown)?;
+        let name = app.oci_image_name.as_deref().ok_or(OciError::NameUnknown)?;
         let mr = match client.get_manifest(owner, name, &reference, &accept).await {
             Ok(mr) => mr,
             Err(e) => {
@@ -212,10 +212,7 @@ pub async fn get_blob(
         .oci_image_owner
         .as_deref()
         .ok_or(OciError::NameUnknown)?;
-    let name = app
-        .oci_image_name
-        .as_deref()
-        .ok_or(OciError::NameUnknown)?;
+    let name = app.oci_image_name.as_deref().ok_or(OciError::NameUnknown)?;
 
     let handle = match blob_cache.get_or_fetch(owner, name, &digest).await {
         Ok(h) => h,
@@ -321,9 +318,7 @@ async fn audit_denied(
         .with_actor(user.claims.sub, &user.email, &user.role)
         .with_ip(extract_client_ip(req).map(IpNetwork::from))
         .with_resource("application", *app_id)
-        .with_metadata(
-            serde_json::json!({ "reason": reason, "reset_in_secs": reset_in_secs }),
-        );
+        .with_metadata(serde_json::json!({ "reason": reason, "reset_in_secs": reset_in_secs }));
     if let Err(e) = AuditLogRepository::create(pool, log).await {
         tracing::warn!(?e, "oci pull_denied audit log failed");
     }
@@ -403,7 +398,12 @@ mod integration {
         id
     }
 
-    async fn seed_pullable_app(pool: &PgPool, owner: &str, name: &str, tag: &str) -> (Uuid, String) {
+    async fn seed_pullable_app(
+        pool: &PgPool,
+        owner: &str,
+        name: &str,
+        tag: &str,
+    ) -> (Uuid, String) {
         let id = Uuid::new_v4();
         let slug = format!("app-{}", id.simple());
         sqlx::query(
@@ -426,16 +426,27 @@ mod integration {
 
     async fn cleanup(pool: &PgPool, user_id: Uuid, app_id: Uuid, digest: &str) {
         sqlx::query("DELETE FROM oci_blob_cache WHERE content_digest = $1")
-            .bind(digest).execute(pool).await.ok();
+            .bind(digest)
+            .execute(pool)
+            .await
+            .ok();
         sqlx::query("DELETE FROM applications WHERE id = $1")
-            .bind(app_id).execute(pool).await.ok();
+            .bind(app_id)
+            .execute(pool)
+            .await
+            .ok();
         sqlx::query("DELETE FROM users WHERE id = $1")
-            .bind(user_id).execute(pool).await.ok();
+            .bind(user_id)
+            .execute(pool)
+            .await
+            .ok();
     }
 
     #[actix_rt::test]
     async fn happy_path_manifest_and_blob() {
-        let Some(pool) = maybe_pool().await else { return; };
+        let Some(pool) = maybe_pool().await else {
+            return;
+        };
 
         // Upstream mock
         let server = MockServer::start().await;
@@ -495,7 +506,10 @@ mod integration {
                 .app_data(web::Data::new(Some(blob_cache.clone())))
                 .app_data(web::Data::new(limiter.clone()))
                 .app_data(token_svc.clone())
-                .route("/v2/{slug}/manifests/{reference}", web::get().to(get_manifest))
+                .route(
+                    "/v2/{slug}/manifests/{reference}",
+                    web::get().to(get_manifest),
+                )
                 .route("/v2/{slug}/blobs/{digest}", web::get().to(get_blob)),
         )
         .await;
@@ -555,7 +569,10 @@ mod integration {
             .app_data(web::Data::new(Some(blob_cache)))
             .app_data(web::Data::new(limiter))
             .app_data(token_svc)
-            .route("/v2/{slug}/manifests/{reference}", web::get().to(get_manifest))
+            .route(
+                "/v2/{slug}/manifests/{reference}",
+                web::get().to(get_manifest),
+            )
             .route("/v2/{slug}/blobs/{digest}", web::get().to(get_blob))
             .route(
                 "/v2/{slug}/blobs/uploads/",
@@ -569,13 +586,16 @@ mod integration {
 
     #[actix_rt::test]
     async fn scope_mismatch_denies() {
-        let Some(pool) = maybe_pool().await else { return; };
+        let Some(pool) = maybe_pool().await else {
+            return;
+        };
 
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path_regex("/v2/.+/manifests/.+"))
             .respond_with(ResponseTemplate::new(200).set_body_bytes(b"{}".to_vec()))
-            .mount(&server).await;
+            .mount(&server)
+            .await;
 
         let user_id = seed_user(&pool).await;
         let (app_id, slug) = seed_pullable_app(&pool, "acme", "app", "v1").await;
@@ -584,7 +604,10 @@ mod integration {
         let manifest_cache = Arc::new(ManifestCache::new(300));
         let tmp = tempfile::tempdir().unwrap();
         let blob_cache = Arc::new(BlobCache::new(
-            client.clone(), tmp.path().to_str().unwrap(), 10_000_000, pool.clone(),
+            client.clone(),
+            tmp.path().to_str().unwrap(),
+            10_000_000,
+            pool.clone(),
         ));
         blob_cache.ensure_dir().await.unwrap();
         let limiter = Arc::new(OciLimiter::new(2, 100));
@@ -595,8 +618,14 @@ mod integration {
         let token = token_svc.issue(user_id, wrong_scope).unwrap();
 
         let app = test::init_service(build_app(
-            pool.clone(), client, manifest_cache, blob_cache, limiter, token_svc,
-        )).await;
+            pool.clone(),
+            client,
+            manifest_cache,
+            blob_cache,
+            limiter,
+            token_svc,
+        ))
+        .await;
 
         let req = test::TestRequest::get()
             .uri(&format!("/v2/{}/manifests/v1", slug))
@@ -614,7 +643,9 @@ mod integration {
     #[actix_rt::test]
     async fn cross_audience_token_rejected() {
         use crate::services::JwtService;
-        let Some(pool) = maybe_pool().await else { return; };
+        let Some(pool) = maybe_pool().await else {
+            return;
+        };
 
         let server = MockServer::start().await;
         let user_id = seed_user(&pool).await;
@@ -624,7 +655,10 @@ mod integration {
         let manifest_cache = Arc::new(ManifestCache::new(300));
         let tmp = tempfile::tempdir().unwrap();
         let blob_cache = Arc::new(BlobCache::new(
-            client.clone(), tmp.path().to_str().unwrap(), 10_000_000, pool.clone(),
+            client.clone(),
+            tmp.path().to_str().unwrap(),
+            10_000_000,
+            pool.clone(),
         ));
         blob_cache.ensure_dir().await.unwrap();
         let limiter = Arc::new(OciLimiter::new(2, 100));
@@ -633,13 +667,21 @@ mod integration {
 
         // Issue a primary-API access token (no aud="registry" claim)
         let user = crate::repositories::UserRepository::find_by_id(&pool, user_id)
-            .await.unwrap().unwrap();
+            .await
+            .unwrap()
+            .unwrap();
         let jwt_svc = JwtService::new(jwt_cfg);
         let api_token = jwt_svc.create_access_token(&user).unwrap();
 
         let app = test::init_service(build_app(
-            pool.clone(), client, manifest_cache, blob_cache, limiter, token_svc,
-        )).await;
+            pool.clone(),
+            client,
+            manifest_cache,
+            blob_cache,
+            limiter,
+            token_svc,
+        ))
+        .await;
 
         let req = test::TestRequest::get()
             .uri(&format!("/v2/{}/manifests/v1", slug))
@@ -653,7 +695,9 @@ mod integration {
 
     #[actix_rt::test]
     async fn push_verbs_return_405() {
-        let Some(pool) = maybe_pool().await else { return; };
+        let Some(pool) = maybe_pool().await else {
+            return;
+        };
 
         let server = MockServer::start().await;
         let user_id = seed_user(&pool).await;
@@ -663,7 +707,10 @@ mod integration {
         let manifest_cache = Arc::new(ManifestCache::new(300));
         let tmp = tempfile::tempdir().unwrap();
         let blob_cache = Arc::new(BlobCache::new(
-            client.clone(), tmp.path().to_str().unwrap(), 10_000_000, pool.clone(),
+            client.clone(),
+            tmp.path().to_str().unwrap(),
+            10_000_000,
+            pool.clone(),
         ));
         blob_cache.ensure_dir().await.unwrap();
         let limiter = Arc::new(OciLimiter::new(2, 100));
@@ -671,14 +718,28 @@ mod integration {
         let token_svc = Arc::new(OciTokenService::new(&jwt_cfg, 900));
 
         let app = test::init_service(build_app(
-            pool.clone(), client, manifest_cache, blob_cache, limiter, token_svc,
-        )).await;
+            pool.clone(),
+            client,
+            manifest_cache,
+            blob_cache,
+            limiter,
+            token_svc,
+        ))
+        .await;
 
         for (method_name, req) in [
-            ("POST uploads", test::TestRequest::post()
-                .uri(&format!("/v2/{}/blobs/uploads/", slug)).to_request()),
-            ("PUT manifest", test::TestRequest::put()
-                .uri(&format!("/v2/{}/manifests/v1", slug)).to_request()),
+            (
+                "POST uploads",
+                test::TestRequest::post()
+                    .uri(&format!("/v2/{}/blobs/uploads/", slug))
+                    .to_request(),
+            ),
+            (
+                "PUT manifest",
+                test::TestRequest::put()
+                    .uri(&format!("/v2/{}/manifests/v1", slug))
+                    .to_request(),
+            ),
         ] {
             let resp = test::call_service(&app, req).await;
             assert_eq!(resp.status(), 405, "{method_name} must return 405");
@@ -689,10 +750,13 @@ mod integration {
 
     #[actix_rt::test]
     async fn manifest_cache_hit_skips_upstream() {
-        let Some(pool) = maybe_pool().await else { return; };
+        let Some(pool) = maybe_pool().await else {
+            return;
+        };
 
         let server = MockServer::start().await;
-        let manifest_body = br#"{"mediaType":"application/vnd.oci.image.manifest.v1+json"}"#.to_vec();
+        let manifest_body =
+            br#"{"mediaType":"application/vnd.oci.image.manifest.v1+json"}"#.to_vec();
         // Expect exactly ONE upstream hit despite two pulls
         Mock::given(method("GET"))
             .and(path_regex("/v2/.+/manifests/.+"))
@@ -703,7 +767,8 @@ mod integration {
                     .insert_header("Docker-Content-Digest", "sha256:cachedman"),
             )
             .expect(1)
-            .mount(&server).await;
+            .mount(&server)
+            .await;
 
         let user_id = seed_user(&pool).await;
         let (app_id, slug) = seed_pullable_app(&pool, "acme", "app", "v1").await;
@@ -712,17 +777,28 @@ mod integration {
         let manifest_cache = Arc::new(ManifestCache::new(300));
         let tmp = tempfile::tempdir().unwrap();
         let blob_cache = Arc::new(BlobCache::new(
-            client.clone(), tmp.path().to_str().unwrap(), 10_000_000, pool.clone(),
+            client.clone(),
+            tmp.path().to_str().unwrap(),
+            10_000_000,
+            pool.clone(),
         ));
         blob_cache.ensure_dir().await.unwrap();
         let limiter = Arc::new(OciLimiter::new(2, 100));
         let jwt_cfg = JwtConfig::from_secret("a-very-long-secret-key-for-tests-12345", "a8n");
         let token_svc = Arc::new(OciTokenService::new(&jwt_cfg, 900));
-        let token = token_svc.issue(user_id, &format!("repository:{}:pull", slug)).unwrap();
+        let token = token_svc
+            .issue(user_id, &format!("repository:{}:pull", slug))
+            .unwrap();
 
         let app = test::init_service(build_app(
-            pool.clone(), client, manifest_cache, blob_cache, limiter, token_svc,
-        )).await;
+            pool.clone(),
+            client,
+            manifest_cache,
+            blob_cache,
+            limiter,
+            token_svc,
+        ))
+        .await;
 
         for _ in 0..2 {
             let req = test::TestRequest::get()
@@ -734,25 +810,34 @@ mod integration {
         }
         // wiremock's .expect(1) is verified on server drop — forcing a drop here is awkward.
         // Instead, verify by counting received requests.
-        let count = server.received_requests().await.unwrap()
+        let count = server
+            .received_requests()
+            .await
+            .unwrap()
             .iter()
             .filter(|r| r.url.path().contains("/manifests/"))
             .count();
-        assert_eq!(count, 1, "manifest cache must serve the 2nd pull without re-fetching");
+        assert_eq!(
+            count, 1,
+            "manifest cache must serve the 2nd pull without re-fetching"
+        );
 
         cleanup(&pool, user_id, app_id, "").await;
     }
 
     #[actix_rt::test]
     async fn digest_mismatch_returns_502() {
-        let Some(pool) = maybe_pool().await else { return; };
+        let Some(pool) = maybe_pool().await else {
+            return;
+        };
 
         let server = MockServer::start().await;
         let wrong_body = b"not-what-the-digest-says".to_vec();
         Mock::given(method("GET"))
             .and(path_regex("/v2/.+/blobs/.+"))
             .respond_with(ResponseTemplate::new(200).set_body_bytes(wrong_body))
-            .mount(&server).await;
+            .mount(&server)
+            .await;
 
         let user_id = seed_user(&pool).await;
         let (app_id, slug) = seed_pullable_app(&pool, "acme", "app", "v1").await;
@@ -761,17 +846,28 @@ mod integration {
         let manifest_cache = Arc::new(ManifestCache::new(300));
         let tmp = tempfile::tempdir().unwrap();
         let blob_cache = Arc::new(BlobCache::new(
-            client.clone(), tmp.path().to_str().unwrap(), 10_000_000, pool.clone(),
+            client.clone(),
+            tmp.path().to_str().unwrap(),
+            10_000_000,
+            pool.clone(),
         ));
         blob_cache.ensure_dir().await.unwrap();
         let limiter = Arc::new(OciLimiter::new(2, 100));
         let jwt_cfg = JwtConfig::from_secret("a-very-long-secret-key-for-tests-12345", "a8n");
         let token_svc = Arc::new(OciTokenService::new(&jwt_cfg, 900));
-        let token = token_svc.issue(user_id, &format!("repository:{}:pull", slug)).unwrap();
+        let token = token_svc
+            .issue(user_id, &format!("repository:{}:pull", slug))
+            .unwrap();
 
         let app = test::init_service(build_app(
-            pool.clone(), client, manifest_cache, blob_cache, limiter, token_svc,
-        )).await;
+            pool.clone(),
+            client,
+            manifest_cache,
+            blob_cache,
+            limiter,
+            token_svc,
+        ))
+        .await;
 
         // A valid-looking digest whose bytes will NOT match upstream.
         let fake_digest = format!("sha256:{}", "a".repeat(64));
@@ -784,8 +880,12 @@ mod integration {
 
         // No row should have been inserted for this digest.
         let row = crate::repositories::OciBlobCacheRepository::find(&pool, &fake_digest)
-            .await.unwrap();
-        assert!(row.is_none(), "no blob cache row should exist on digest mismatch");
+            .await
+            .unwrap();
+        assert!(
+            row.is_none(),
+            "no blob cache row should exist on digest mismatch"
+        );
 
         cleanup(&pool, user_id, app_id, &fake_digest).await;
     }
