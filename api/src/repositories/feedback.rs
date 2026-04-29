@@ -4,7 +4,10 @@ use sqlx::{PgPool, QueryBuilder};
 use uuid::Uuid;
 
 use crate::errors::AppError;
-use crate::models::{ArchivedFeedbackItem, CreateFeedback, Feedback, FeedbackAttachmentMeta, FeedbackStatus, RespondToFeedback};
+use crate::models::{
+    ArchivedFeedbackItem, CreateFeedback, Feedback, FeedbackAttachmentMeta, FeedbackStatus,
+    RespondToFeedback,
+};
 
 pub struct FeedbackRepository;
 
@@ -31,12 +34,10 @@ impl FeedbackRepository {
     }
 
     pub async fn find_by_id(pool: &PgPool, id: Uuid) -> Result<Option<Feedback>, AppError> {
-        let feedback = sqlx::query_as::<_, Feedback>(
-            "SELECT * FROM feedback WHERE id = $1",
-        )
-        .bind(id)
-        .fetch_optional(pool)
-        .await?;
+        let feedback = sqlx::query_as::<_, Feedback>("SELECT * FROM feedback WHERE id = $1")
+            .bind(id)
+            .fetch_optional(pool)
+            .await?;
 
         Ok(feedback)
     }
@@ -63,15 +64,9 @@ impl FeedbackRepository {
             .push(" OFFSET ")
             .push_bind(offset);
 
-        let feedback = query
-            .build_query_as::<Feedback>()
-            .fetch_all(pool)
-            .await?;
+        let feedback = query.build_query_as::<Feedback>().fetch_all(pool).await?;
 
-        let total: (i64,) = count_query
-            .build_query_as()
-            .fetch_one(pool)
-            .await?;
+        let total: (i64,) = count_query.build_query_as().fetch_one(pool).await?;
 
         Ok((feedback, total.0))
     }
@@ -178,12 +173,10 @@ impl FeedbackRepository {
     }
 
     pub async fn delete(pool: &PgPool, id: Uuid) -> Result<(), AppError> {
-        let result = sqlx::query(
-            "DELETE FROM feedback WHERE id = $1 AND status = 'closed'",
-        )
-        .bind(id)
-        .execute(pool)
-        .await?;
+        let result = sqlx::query("DELETE FROM feedback WHERE id = $1 AND status = 'closed'")
+            .bind(id)
+            .execute(pool)
+            .await?;
 
         if result.rows_affected() == 0 {
             return Err(AppError::not_found("Feedback"));

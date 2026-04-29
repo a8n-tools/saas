@@ -51,7 +51,11 @@ impl ForgejoClient {
             .timeout(Duration::from_secs(60))
             .build()
             .expect("reqwest client builds");
-        Self { http, base_url, token }
+        Self {
+            http,
+            base_url,
+            token,
+        }
     }
 
     /// Fetch release metadata for `owner/repo/tag`.
@@ -89,7 +93,10 @@ impl ForgejoClient {
                         browser_download_url: a.browser_download_url,
                     })
                     .collect();
-                Ok(ReleaseMetadata { tag_name: raw.tag_name, assets })
+                Ok(ReleaseMetadata {
+                    tag_name: raw.tag_name,
+                    assets,
+                })
             }
             404 => Err(ForgejoError::NotFound),
             s => Err(ForgejoError::Upstream(s)),
@@ -161,7 +168,10 @@ mod tests {
         assert_eq!(guess_content_type("rus.tar.gz"), "application/gzip");
         assert_eq!(guess_content_type("rus.zip"), "application/zip");
         assert_eq!(guess_content_type("rus.tar"), "application/x-tar");
-        assert_eq!(guess_content_type("rus.exe"), "application/vnd.microsoft.portable-executable");
+        assert_eq!(
+            guess_content_type("rus.exe"),
+            "application/vnd.microsoft.portable-executable"
+        );
         assert_eq!(guess_content_type("rus"), "application/octet-stream");
     }
 

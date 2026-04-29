@@ -86,9 +86,7 @@ impl DownloadLimiter {
             // Release the inflight slot BEFORE touching the DB again so a
             // failing decrement can't leak the slot permanently.
             release_slot(&self.inflight, user_id);
-            if let Err(e) =
-                DownloadDailyCountRepository::decrement(pool, user_id, today).await
-            {
+            if let Err(e) = DownloadDailyCountRepository::decrement(pool, user_id, today).await {
                 tracing::warn!(error = %e, "failed to roll back daily count after exceeding cap");
             }
             let now = Utc::now();

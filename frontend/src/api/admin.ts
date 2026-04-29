@@ -218,6 +218,12 @@ export interface TierConfigResponse {
   early_adopter_slots: number
   early_adopter_trial_days: number
   standard_trial_days: number
+  free_price_id: string | null
+  early_adopter_price_id: string | null
+  standard_price_id: string | null
+  lifetime_product_id: string | null
+  early_adopter_product_id: string | null
+  standard_product_id: string | null
   source: 'database' | 'environment'
   lifetime_slots_used: number
   early_adopter_slots_used: number
@@ -230,6 +236,12 @@ export interface UpdateTierConfigRequest {
   early_adopter_slots?: number
   early_adopter_trial_days?: number
   standard_trial_days?: number
+  free_price_id?: string
+  early_adopter_price_id?: string
+  standard_price_id?: string
+  lifetime_product_id?: string
+  early_adopter_product_id?: string
+  standard_product_id?: string
 }
 
 export interface GrantMembershipRequest {

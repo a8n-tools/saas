@@ -36,8 +36,8 @@ pub struct StripeConfig {
 
 impl StripeConfig {
     pub fn from_env() -> Result<Self, AppError> {
-        let frontend_origin = std::env::var("CORS_ORIGIN")
-            .unwrap_or_else(|_| "http://localhost:5173".to_string());
+        let frontend_origin =
+            std::env::var("CORS_ORIGIN").unwrap_or_else(|_| "http://localhost:5173".to_string());
         let base = frontend_origin.trim_end_matches('/');
 
         Ok(Self {
@@ -74,10 +74,7 @@ impl StripeConfig {
             _ => env_config.webhook_secret,
         };
 
-        let app_tag = db
-            .app_tag
-            .clone()
-            .unwrap_or(env_config.app_tag);
+        let app_tag = db.app_tag.clone().unwrap_or(env_config.app_tag);
 
         Ok(Self {
             secret_key,
@@ -134,7 +131,12 @@ impl StripeService {
     /// (i.e. not the placeholder that `from_env` returns when the env var
     /// is missing).
     pub fn is_configured(&self) -> bool {
-        let key = &self.inner.read().expect("StripeService lock poisoned").config.secret_key;
+        let key = &self
+            .inner
+            .read()
+            .expect("StripeService lock poisoned")
+            .config
+            .secret_key;
         !key.is_empty() && key != "sk_test_placeholder"
     }
 
@@ -157,18 +159,16 @@ impl StripeService {
         let mut params = stripe::ListProducts::new();
         params.limit = Some(100);
 
-        let products = stripe::Product::list(&client, &params)
-            .await
-            .map_err(|e| {
-                tracing::error!(
-                    error = %e,
-                    hint = "A product may have a legacy default_price with a non-standard ID \
-                            (expected format: price_...). Remove the default_price from the \
-                            product in the Stripe dashboard.",
-                    "Failed to list Stripe products"
-                );
-                AppError::internal("Failed to load products from Stripe")
-            })?;
+        let products = stripe::Product::list(&client, &params).await.map_err(|e| {
+            tracing::error!(
+                error = %e,
+                hint = "A product may have a legacy default_price with a non-standard ID \
+                        (expected format: price_...). Remove the default_price from the \
+                        product in the Stripe dashboard.",
+                "Failed to list Stripe products"
+            );
+            AppError::internal("Failed to load products from Stripe")
+        })?;
 
         Ok(products
             .data
@@ -239,9 +239,9 @@ impl StripeService {
     ) -> Result<StripeProductResponse, AppError> {
         let (_config, client) = self.snapshot();
 
-        let pid: stripe::ProductId = product_id.parse().map_err(|_| {
-            AppError::validation("product_id", "Invalid product ID")
-        })?;
+        let pid: stripe::ProductId = product_id
+            .parse()
+            .map_err(|_| AppError::validation("product_id", "Invalid product ID"))?;
 
         let mut params = stripe::UpdateProduct::default();
         if let Some(n) = name {
@@ -278,9 +278,9 @@ impl StripeService {
     pub async fn archive_product(&self, product_id: &str) -> Result<(), AppError> {
         let (_config, client) = self.snapshot();
 
-        let pid: stripe::ProductId = product_id.parse().map_err(|_| {
-            AppError::validation("product_id", "Invalid product ID")
-        })?;
+        let pid: stripe::ProductId = product_id
+            .parse()
+            .map_err(|_| AppError::validation("product_id", "Invalid product ID"))?;
 
         let mut params = stripe::UpdateProduct::default();
         params.active = Some(false);
@@ -310,7 +310,10 @@ impl StripeService {
         params.limit = Some(100);
 
         let parsed_product_id: Option<stripe::ProductId> = product_id
-            .map(|pid| pid.parse().map_err(|_| AppError::validation("product_id", "Invalid product ID")))
+            .map(|pid| {
+                pid.parse()
+                    .map_err(|_| AppError::validation("product_id", "Invalid product ID"))
+            })
             .transpose()?;
         if let Some(ref pid) = parsed_product_id {
             params.product = Some(stripe::IdOrCreate::Id(pid));
@@ -395,12 +398,10 @@ impl StripeService {
             ..Default::default()
         });
 
-        let price = stripe::Price::create(&client, params)
-            .await
-            .map_err(|e| {
-                tracing::error!(error = %e, "Failed to create Stripe price");
-                AppError::internal("Failed to create price")
-            })?;
+        let price = stripe::Price::create(&client, params).await.map_err(|e| {
+            tracing::error!(error = %e, "Failed to create Stripe price");
+            AppError::internal("Failed to create price")
+        })?;
 
         tracing::info!(price_id = %price.id, product_id = %product_id, "Created Stripe price");
 
@@ -427,9 +428,9 @@ impl StripeService {
     pub async fn archive_price(&self, price_id: &str) -> Result<(), AppError> {
         let (_config, client) = self.snapshot();
 
-        let pid: stripe::PriceId = price_id.parse().map_err(|_| {
-            AppError::validation("price_id", "Invalid price ID")
-        })?;
+        let pid: stripe::PriceId = price_id
+            .parse()
+            .map_err(|_| AppError::validation("price_id", "Invalid price ID"))?;
 
         let mut params = stripe::UpdatePrice::default();
         params.active = Some(false);
@@ -454,9 +455,9 @@ impl StripeService {
     ) -> Result<Option<StripeSubscriptionResponse>, AppError> {
         let (_config, client) = self.snapshot();
 
-        let cid: stripe::CustomerId = customer_id.parse().map_err(|_| {
-            AppError::validation("customer_id", "Invalid customer ID")
-        })?;
+        let cid: stripe::CustomerId = customer_id
+            .parse()
+            .map_err(|_| AppError::validation("customer_id", "Invalid customer ID"))?;
 
         let mut params = stripe::ListSubscriptions::new();
         params.customer = Some(cid);
@@ -519,20 +520,18 @@ impl StripeService {
     ) -> Result<Vec<StripeInvoiceResponse>, AppError> {
         let (_config, client) = self.snapshot();
 
-        let cid: stripe::CustomerId = customer_id.parse().map_err(|_| {
-            AppError::validation("customer_id", "Invalid customer ID")
-        })?;
+        let cid: stripe::CustomerId = customer_id
+            .parse()
+            .map_err(|_| AppError::validation("customer_id", "Invalid customer ID"))?;
 
         let mut params = stripe::ListInvoices::new();
         params.customer = Some(cid);
         params.limit = Some(limit.unwrap_or(50));
 
-        let invoices = stripe::Invoice::list(&client, &params)
-            .await
-            .map_err(|e| {
-                tracing::error!(error = %e, customer_id = %customer_id, "Failed to list invoices");
-                AppError::internal("Failed to list invoices")
-            })?;
+        let invoices = stripe::Invoice::list(&client, &params).await.map_err(|e| {
+            tracing::error!(error = %e, customer_id = %customer_id, "Failed to list invoices");
+            AppError::internal("Failed to list invoices")
+        })?;
 
         Ok(invoices
             .data
@@ -562,15 +561,12 @@ impl StripeService {
     }
 
     /// Get a single invoice from Stripe by ID
-    pub async fn get_invoice(
-        &self,
-        invoice_id: &str,
-    ) -> Result<StripeInvoiceResponse, AppError> {
+    pub async fn get_invoice(&self, invoice_id: &str) -> Result<StripeInvoiceResponse, AppError> {
         let (_config, client) = self.snapshot();
 
-        let iid: stripe::InvoiceId = invoice_id.parse().map_err(|_| {
-            AppError::validation("invoice_id", "Invalid invoice ID")
-        })?;
+        let iid: stripe::InvoiceId = invoice_id
+            .parse()
+            .map_err(|_| AppError::validation("invoice_id", "Invalid invoice ID"))?;
 
         let inv = stripe::Invoice::retrieve(&client, &iid, &[])
             .await
@@ -739,11 +735,7 @@ impl StripeService {
     // ─── Existing Methods (Checkout, Customer, etc.) ─────────
 
     /// Create a Stripe customer linked to a platform user
-    pub async fn create_customer(
-        &self,
-        email: &str,
-        user_id: Uuid,
-    ) -> Result<String, AppError> {
+    pub async fn create_customer(&self, email: &str, user_id: Uuid) -> Result<String, AppError> {
         let (_config, client) = self.snapshot();
 
         let mut metadata = HashMap::new();
@@ -783,11 +775,10 @@ impl StripeService {
         let mut metadata = HashMap::new();
         metadata.insert("user_id".to_string(), user_id.to_string());
 
-        let customer_id: stripe::CustomerId = customer_id.parse()
-            .map_err(|_| {
-                tracing::error!(customer_id = %customer_id, "Invalid Stripe customer ID format");
-                AppError::internal("Invalid customer ID")
-            })?;
+        let customer_id: stripe::CustomerId = customer_id.parse().map_err(|_| {
+            tracing::error!(customer_id = %customer_id, "Invalid Stripe customer ID format");
+            AppError::internal("Invalid customer ID")
+        })?;
 
         let params = stripe::CreateCheckoutSession {
             mode: Some(stripe::CheckoutSessionMode::Subscription),
@@ -815,7 +806,8 @@ impl StripeService {
             })?;
 
         let session_id = session.id.to_string();
-        let checkout_url = session.url
+        let checkout_url = session
+            .url
             .ok_or_else(|| AppError::internal("Checkout session missing URL"))?;
 
         tracing::info!(
@@ -837,13 +829,13 @@ impl StripeService {
     ) -> Result<String, AppError> {
         let (_config, client) = self.snapshot();
 
-        let cid: stripe::CustomerId = customer_id.parse().map_err(|_| {
-            AppError::validation("customer_id", "Invalid customer ID")
-        })?;
+        let cid: stripe::CustomerId = customer_id
+            .parse()
+            .map_err(|_| AppError::validation("customer_id", "Invalid customer ID"))?;
 
-        let pid: stripe::PriceId = price_id.parse().map_err(|_| {
-            AppError::validation("price_id", "Invalid price ID")
-        })?;
+        let pid: stripe::PriceId = price_id
+            .parse()
+            .map_err(|_| AppError::validation("price_id", "Invalid price ID"))?;
 
         let mut params = stripe::CreateSubscription::new(cid);
         params.items = Some(vec![stripe::CreateSubscriptionItems {
@@ -874,11 +866,10 @@ impl StripeService {
         subscription_id: &str,
         at_period_end: bool,
     ) -> Result<(), AppError> {
-        let sub_id: stripe::SubscriptionId = subscription_id.parse()
-            .map_err(|_| {
-                tracing::error!(subscription_id = %subscription_id, "Invalid subscription ID format");
-                AppError::internal("Invalid subscription ID")
-            })?;
+        let sub_id: stripe::SubscriptionId = subscription_id.parse().map_err(|_| {
+            tracing::error!(subscription_id = %subscription_id, "Invalid subscription ID format");
+            AppError::internal("Invalid subscription ID")
+        })?;
 
         let (_config, client) = self.snapshot();
 
@@ -894,16 +885,12 @@ impl StripeService {
                     AppError::internal("Failed to cancel subscription")
                 })?;
         } else {
-            stripe::Subscription::cancel(
-                &client,
-                &sub_id,
-                stripe::CancelSubscription::default(),
-            )
-            .await
-            .map_err(|e| {
-                tracing::error!(error = %e, "Failed to cancel subscription immediately");
-                AppError::internal("Failed to cancel subscription")
-            })?;
+            stripe::Subscription::cancel(&client, &sub_id, stripe::CancelSubscription::default())
+                .await
+                .map_err(|e| {
+                    tracing::error!(error = %e, "Failed to cancel subscription immediately");
+                    AppError::internal("Failed to cancel subscription")
+                })?;
         }
 
         tracing::info!(
@@ -919,11 +906,10 @@ impl StripeService {
     pub async fn reactivate_subscription(&self, subscription_id: &str) -> Result<(), AppError> {
         let (_config, client) = self.snapshot();
 
-        let sub_id: stripe::SubscriptionId = subscription_id.parse()
-            .map_err(|_| {
-                tracing::error!(subscription_id = %subscription_id, "Invalid subscription ID format");
-                AppError::internal("Invalid subscription ID")
-            })?;
+        let sub_id: stripe::SubscriptionId = subscription_id.parse().map_err(|_| {
+            tracing::error!(subscription_id = %subscription_id, "Invalid subscription ID format");
+            AppError::internal("Invalid subscription ID")
+        })?;
 
         let params = stripe::UpdateSubscription {
             cancel_at_period_end: Some(false),
@@ -949,11 +935,10 @@ impl StripeService {
     ) -> Result<String, AppError> {
         let (config, client) = self.snapshot();
 
-        let customer_id: stripe::CustomerId = customer_id.parse()
-            .map_err(|_| {
-                tracing::error!(customer_id = %customer_id, "Invalid customer ID format");
-                AppError::internal("Invalid customer ID")
-            })?;
+        let customer_id: stripe::CustomerId = customer_id.parse().map_err(|_| {
+            tracing::error!(customer_id = %customer_id, "Invalid customer ID format");
+            AppError::internal("Invalid customer ID")
+        })?;
 
         let mut params = stripe::CreateBillingPortalSession::new(customer_id);
         params.return_url = Some(&config.success_url);
@@ -987,14 +972,16 @@ impl StripeService {
             }
         }
 
-        let timestamp = timestamp
-            .ok_or_else(|| AppError::validation("signature", "Missing timestamp in webhook signature"))?;
+        let timestamp = timestamp.ok_or_else(|| {
+            AppError::validation("signature", "Missing timestamp in webhook signature")
+        })?;
 
         if signatures.is_empty() {
             return Err(AppError::validation("signature", "No v1 signature found"));
         }
 
-        let ts: i64 = timestamp.parse()
+        let ts: i64 = timestamp
+            .parse()
             .map_err(|_| AppError::validation("signature", "Invalid timestamp"))?;
         let now = chrono::Utc::now().timestamp();
         if (now - ts).abs() > 300 {
@@ -1003,7 +990,10 @@ impl StripeService {
                 now = now,
                 "Webhook timestamp outside tolerance window"
             );
-            return Err(AppError::validation("signature", "Webhook timestamp too old"));
+            return Err(AppError::validation(
+                "signature",
+                "Webhook timestamp too old",
+            ));
         }
 
         let payload_str = std::str::from_utf8(payload)
@@ -1040,9 +1030,11 @@ impl StripeService {
                 AppError::internal("Failed to initialize payment")
             })?;
 
-        let customer_id: stripe::CustomerId = customer.id.to_string().parse().map_err(|_| {
-            AppError::internal("Invalid customer ID returned from Stripe")
-        })?;
+        let customer_id: stripe::CustomerId = customer
+            .id
+            .to_string()
+            .parse()
+            .map_err(|_| AppError::internal("Invalid customer ID returned from Stripe"))?;
 
         let intent_params = stripe::CreateSetupIntent {
             customer: Some(customer_id),

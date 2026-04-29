@@ -55,7 +55,11 @@ impl ForgejoRegistryClient {
             .redirect(reqwest::redirect::Policy::none())
             .build()
             .expect("reqwest client builds");
-        Self { http, base_url, token }
+        Self {
+            http,
+            base_url,
+            token,
+        }
     }
 
     fn validate_host(&self, url: &Url) -> Result<(), RegistryError> {
@@ -87,7 +91,9 @@ impl ForgejoRegistryClient {
         let parsed = Url::parse(&url)?;
         self.validate_host(&parsed)?;
 
-        let resp = self.http.get(parsed)
+        let resp = self
+            .http
+            .get(parsed)
             .basic_auth("", Some(&self.token))
             .header("Accept", accept)
             .send()
@@ -107,7 +113,11 @@ impl ForgejoRegistryClient {
             .unwrap_or("")
             .to_string();
         let bytes = resp.bytes().await?;
-        Ok(ManifestResponse { bytes, media_type, digest })
+        Ok(ManifestResponse {
+            bytes,
+            media_type,
+            digest,
+        })
     }
 
     /// GET /v2/<owner>/<name>/blobs/<digest>
@@ -127,7 +137,9 @@ impl ForgejoRegistryClient {
         let parsed = Url::parse(&url)?;
         self.validate_host(&parsed)?;
 
-        let resp = self.http.get(parsed)
+        let resp = self
+            .http
+            .get(parsed)
             .basic_auth("", Some(&self.token))
             .send()
             .await?;
@@ -171,12 +183,12 @@ mod tests {
 
     #[actix_rt::test]
     async fn rejects_upstream_url_outside_base() {
-        let client = ForgejoRegistryClient::new(
-            "https://git.example.com".into(),
-            "tok".into(),
-        );
+        let client = ForgejoRegistryClient::new("https://git.example.com".into(), "tok".into());
         let bad = Url::parse("https://evil.example.com/v2/a/b/blobs/sha256:x").unwrap();
-        assert!(matches!(client.validate_host(&bad), Err(RegistryError::InvalidUrl)));
+        assert!(matches!(
+            client.validate_host(&bad),
+            Err(RegistryError::InvalidUrl)
+        ));
 
         let good = Url::parse("https://git.example.com/v2/a/b/blobs/sha256:x").unwrap();
         assert!(client.validate_host(&good).is_ok());
@@ -198,7 +210,10 @@ mod tests {
             .await;
 
         let client = ForgejoRegistryClient::new(server.uri(), "tok".into());
-        let mr = client.get_manifest("a", "b", "v1", "application/vnd.oci.image.manifest.v1+json").await.unwrap();
+        let mr = client
+            .get_manifest("a", "b", "v1", "application/vnd.oci.image.manifest.v1+json")
+            .await
+            .unwrap();
         assert_eq!(mr.media_type, "application/vnd.oci.image.manifest.v1+json");
         assert_eq!(mr.digest, "sha256:abc");
         assert_eq!(mr.bytes, Bytes::from(&body[..]));
@@ -214,7 +229,10 @@ mod tests {
             .await;
 
         let client = ForgejoRegistryClient::new(server.uri(), "tok".into());
-        let err = client.get_manifest("a", "b", "v1", "application/json").await.unwrap_err();
+        let err = client
+            .get_manifest("a", "b", "v1", "application/json")
+            .await
+            .unwrap_err();
         assert!(matches!(err, RegistryError::NotFound));
     }
 }

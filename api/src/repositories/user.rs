@@ -1,8 +1,8 @@
 //! User repository
 
 use chrono::{self, DateTime, Utc};
-use sqlx::PgPool;
 use sqlx::postgres::Postgres;
+use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::errors::AppError;
@@ -12,10 +12,7 @@ pub struct UserRepository;
 
 impl UserRepository {
     /// Create a new user
-    pub async fn create(
-        pool: &PgPool,
-        data: CreateUser,
-    ) -> Result<User, AppError> {
+    pub async fn create(pool: &PgPool, data: CreateUser) -> Result<User, AppError> {
         let user = sqlx::query_as::<_, User>(
             r#"
             INSERT INTO users (email, password_hash, role)
@@ -139,10 +136,7 @@ impl UserRepository {
     }
 
     /// Activate membership (set subscription_status to 'active')
-    pub async fn activate_membership(
-        pool: &PgPool,
-        user_id: Uuid,
-    ) -> Result<User, AppError> {
+    pub async fn activate_membership(pool: &PgPool, user_id: Uuid) -> Result<User, AppError> {
         let user = sqlx::query_as::<_, User>(
             r#"
             UPDATE users
@@ -258,10 +252,7 @@ impl UserRepository {
 
     /// Reset subscription tier to standard when a membership is revoked/canceled.
     /// This frees the lifetime or early_adopter slot so it can be assigned to the next user.
-    pub async fn reset_subscription_tier<'e, E>(
-        executor: E,
-        user_id: Uuid,
-    ) -> Result<(), AppError>
+    pub async fn reset_subscription_tier<'e, E>(executor: E, user_id: Uuid) -> Result<(), AppError>
     where
         E: sqlx::Executor<'e, Database = Postgres>,
     {
@@ -283,11 +274,38 @@ impl UserRepository {
         Ok(())
     }
 
-    /// Clear grace period
-    pub async fn clear_grace_period<'e, E>(
+    /// Set subscription tier from a Stripe subscription event.
+    /// Clears trial_ends_at (user is now a paid subscriber) but does not touch subscription_status.
+    pub async fn upgrade_subscription_tier<'e, E>(
         executor: E,
         user_id: Uuid,
+        tier: &SubscriptionTier,
     ) -> Result<(), AppError>
+    where
+        E: sqlx::Executor<'e, Database = Postgres>,
+    {
+        let lifetime_member = matches!(tier, SubscriptionTier::Lifetime | SubscriptionTier::Free);
+        sqlx::query(
+            r#"
+            UPDATE users
+            SET subscription_tier = $1,
+                lifetime_member   = $2,
+                trial_ends_at     = NULL,
+                updated_at        = NOW()
+            WHERE id = $3
+            "#,
+        )
+        .bind(tier.as_str())
+        .bind(lifetime_member)
+        .bind(user_id)
+        .execute(executor)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Clear grace period
+    pub async fn clear_grace_period<'e, E>(executor: E, user_id: Uuid) -> Result<(), AppError>
     where
         E: sqlx::Executor<'e, Database = Postgres>,
     {
@@ -361,7 +379,11 @@ impl UserRepository {
     }
 
     /// Set two_factor_enabled flag on a user
-    pub async fn set_two_factor_enabled(pool: &PgPool, user_id: Uuid, enabled: bool) -> Result<(), AppError> {
+    pub async fn set_two_factor_enabled(
+        pool: &PgPool,
+        user_id: Uuid,
+        enabled: bool,
+    ) -> Result<(), AppError> {
         sqlx::query(
             "UPDATE users SET two_factor_enabled = $2, updated_at = NOW() WHERE id = $1 AND deleted_at IS NULL",
         )
@@ -479,9 +501,7 @@ impl UserRepository {
                     .fetch_all(pool)
                     .await?;
 
-                let total: (i64,) = sqlx::query_as(&count_query)
-                    .fetch_one(pool)
-                    .await?;
+                let total: (i64,) = sqlx::query_as(&count_query).fetch_one(pool).await?;
 
                 (users, total.0)
             }

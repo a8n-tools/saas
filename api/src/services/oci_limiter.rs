@@ -75,18 +75,24 @@ impl OciLimiter {
                 let mut m = self.inflight.lock().unwrap();
                 if let Some(n) = m.get_mut(&user_id) {
                     *n = n.saturating_sub(1);
-                    if *n == 0 { m.remove(&user_id); }
+                    if *n == 0 {
+                        m.remove(&user_id);
+                    }
                 }
                 return Err(e);
             }
         };
 
         if (count as u32) > self.daily_limit {
-            OciPullDailyCountRepository::decrement(pool, user_id, today).await.ok();
+            OciPullDailyCountRepository::decrement(pool, user_id, today)
+                .await
+                .ok();
             let mut m = self.inflight.lock().unwrap();
             if let Some(n) = m.get_mut(&user_id) {
                 *n = n.saturating_sub(1);
-                if *n == 0 { m.remove(&user_id); }
+                if *n == 0 {
+                    m.remove(&user_id);
+                }
             }
             let reset_in_secs = seconds_until_utc_midnight();
             return Ok(Err(OciLimitDenial::DailyCap { reset_in_secs }));
@@ -124,20 +130,29 @@ mod tests {
             .bind(&email)
             .execute(pool)
             .await;
-        if res.is_err() { return None; }
+        if res.is_err() {
+            return None;
+        }
         Some(user)
     }
 
     async fn cleanup_user(pool: &PgPool, user: Uuid) {
         // ON DELETE CASCADE should drop pull-count rows.
         sqlx::query("DELETE FROM users WHERE id = $1")
-            .bind(user).execute(pool).await.ok();
+            .bind(user)
+            .execute(pool)
+            .await
+            .ok();
     }
 
     #[actix_rt::test]
     async fn guard_releases_slot_on_drop() {
-        let Some(pool) = maybe_pool().await else { return; };
-        let Some(user) = create_test_user(&pool).await else { return; };
+        let Some(pool) = maybe_pool().await else {
+            return;
+        };
+        let Some(user) = create_test_user(&pool).await else {
+            return;
+        };
 
         let limiter = OciLimiter::new(1, 50);
         {
@@ -155,8 +170,12 @@ mod tests {
 
     #[actix_rt::test]
     async fn daily_cap_denies_over_limit() {
-        let Some(pool) = maybe_pool().await else { return; };
-        let Some(user) = create_test_user(&pool).await else { return; };
+        let Some(pool) = maybe_pool().await else {
+            return;
+        };
+        let Some(user) = create_test_user(&pool).await else {
+            return;
+        };
 
         let limiter = OciLimiter::new(5, 2);
         let g1 = limiter.acquire(&pool, user).await.unwrap().unwrap();
@@ -173,7 +192,9 @@ mod tests {
         }
 
         let today = Utc::now().date_naive();
-        let cur = OciPullDailyCountRepository::current(&pool, user, today).await.unwrap();
+        let cur = OciPullDailyCountRepository::current(&pool, user, today)
+            .await
+            .unwrap();
         assert_eq!(cur, 2);
 
         cleanup_user(&pool, user).await;

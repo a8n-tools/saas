@@ -113,11 +113,10 @@ impl NotificationRepository {
 
     /// Count unread notifications
     pub async fn count_unread(pool: &PgPool) -> Result<i64, AppError> {
-        let count: (i64,) = sqlx::query_as(
-            "SELECT COUNT(*) FROM admin_notifications WHERE is_read = FALSE",
-        )
-        .fetch_one(pool)
-        .await?;
+        let count: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM admin_notifications WHERE is_read = FALSE")
+                .fetch_one(pool)
+                .await?;
 
         Ok(count.0)
     }

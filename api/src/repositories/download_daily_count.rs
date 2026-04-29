@@ -10,11 +10,7 @@ pub struct DownloadDailyCountRepository;
 
 impl DownloadDailyCountRepository {
     /// Increments the count for `(user_id, day)` by 1 and returns the new value.
-    pub async fn increment(
-        pool: &PgPool,
-        user_id: Uuid,
-        day: NaiveDate,
-    ) -> Result<i32, AppError> {
+    pub async fn increment(pool: &PgPool, user_id: Uuid, day: NaiveDate) -> Result<i32, AppError> {
         let (count,): (i32,) = sqlx::query_as(
             r#"
             INSERT INTO download_daily_counts (user_id, day, count)
@@ -32,11 +28,7 @@ impl DownloadDailyCountRepository {
     }
 
     /// Decrement on failed download (counted optimistically, roll back on failure).
-    pub async fn decrement(
-        pool: &PgPool,
-        user_id: Uuid,
-        day: NaiveDate,
-    ) -> Result<(), AppError> {
+    pub async fn decrement(pool: &PgPool, user_id: Uuid, day: NaiveDate) -> Result<(), AppError> {
         sqlx::query(
             r#"
             UPDATE download_daily_counts
