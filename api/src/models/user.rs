@@ -64,7 +64,10 @@ impl MembershipStatus {
 
     /// Check if the user has access to paid features
     pub fn has_access(&self) -> bool {
-        matches!(self, MembershipStatus::Active | MembershipStatus::GracePeriod)
+        matches!(
+            self,
+            MembershipStatus::Active | MembershipStatus::GracePeriod
+        )
     }
 }
 
@@ -313,7 +316,10 @@ mod tests {
     #[test]
     fn user_role_from_string() {
         assert_eq!(UserRole::from("admin".to_string()), UserRole::Admin);
-        assert_eq!(UserRole::from("subscriber".to_string()), UserRole::Subscriber);
+        assert_eq!(
+            UserRole::from("subscriber".to_string()),
+            UserRole::Subscriber
+        );
         assert_eq!(UserRole::from("unknown".to_string()), UserRole::Subscriber);
     }
 
@@ -345,11 +351,26 @@ mod tests {
 
     #[test]
     fn membership_status_from_string() {
-        assert_eq!(MembershipStatus::from("active".to_string()), MembershipStatus::Active);
-        assert_eq!(MembershipStatus::from("past_due".to_string()), MembershipStatus::PastDue);
-        assert_eq!(MembershipStatus::from("canceled".to_string()), MembershipStatus::Canceled);
-        assert_eq!(MembershipStatus::from("grace_period".to_string()), MembershipStatus::GracePeriod);
-        assert_eq!(MembershipStatus::from("unknown".to_string()), MembershipStatus::None);
+        assert_eq!(
+            MembershipStatus::from("active".to_string()),
+            MembershipStatus::Active
+        );
+        assert_eq!(
+            MembershipStatus::from("past_due".to_string()),
+            MembershipStatus::PastDue
+        );
+        assert_eq!(
+            MembershipStatus::from("canceled".to_string()),
+            MembershipStatus::Canceled
+        );
+        assert_eq!(
+            MembershipStatus::from("grace_period".to_string()),
+            MembershipStatus::GracePeriod
+        );
+        assert_eq!(
+            MembershipStatus::from("unknown".to_string()),
+            MembershipStatus::None
+        );
     }
 
     // -- User methods --
@@ -426,14 +447,30 @@ mod tests {
 
     #[test]
     fn subscription_tier_from_str() {
-        assert_eq!(SubscriptionTier::from("lifetime"), SubscriptionTier::Lifetime);
+        assert_eq!(
+            SubscriptionTier::from("lifetime"),
+            SubscriptionTier::Lifetime
+        );
         assert_eq!(SubscriptionTier::from("free"), SubscriptionTier::Free);
-        assert_eq!(SubscriptionTier::from("early_adopter"), SubscriptionTier::EarlyAdopter);
-        assert_eq!(SubscriptionTier::from("standard"), SubscriptionTier::Standard);
-        assert_eq!(SubscriptionTier::from("unknown"), SubscriptionTier::Standard);
+        assert_eq!(
+            SubscriptionTier::from("early_adopter"),
+            SubscriptionTier::EarlyAdopter
+        );
+        assert_eq!(
+            SubscriptionTier::from("standard"),
+            SubscriptionTier::Standard
+        );
+        assert_eq!(
+            SubscriptionTier::from("unknown"),
+            SubscriptionTier::Standard
+        );
     }
 
-    fn user_with_tier(lifetime_member: bool, trial_ends_at: Option<DateTime<Utc>>, subscription_tier: &str) -> User {
+    fn user_with_tier(
+        lifetime_member: bool,
+        trial_ends_at: Option<DateTime<Utc>>,
+        subscription_tier: &str,
+    ) -> User {
         let mut user = test_user();
         user.membership_status = "none".to_string();
         user.lifetime_member = lifetime_member;
@@ -497,7 +534,12 @@ mod tests {
     // Tiers are assigned based on per-tier counts, not total user count.
     // This ensures slots fill correctly even if users existed before the tier system.
 
-    fn tier_for_counts(lifetime_count: i64, early_adopter_count: i64, lifetime_slots: i64, early_adopter_slots: i64) -> SubscriptionTier {
+    fn tier_for_counts(
+        lifetime_count: i64,
+        early_adopter_count: i64,
+        lifetime_slots: i64,
+        early_adopter_slots: i64,
+    ) -> SubscriptionTier {
         if lifetime_count < lifetime_slots {
             SubscriptionTier::Lifetime
         } else if early_adopter_count < early_adopter_slots {

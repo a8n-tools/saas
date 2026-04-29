@@ -148,10 +148,7 @@ impl StripeConfigResponse {
             _ => None,
         };
 
-        let app_tag = config
-            .app_tag
-            .clone()
-            .unwrap_or_else(Self::default_app_tag);
+        let app_tag = config.app_tag.clone().unwrap_or_else(Self::default_app_tag);
 
         Ok(Self {
             secret_key_masked: secret_key_plain.as_deref().map(mask_secret),
@@ -169,7 +166,9 @@ impl StripeConfigResponse {
     pub fn from_env() -> Self {
         use std::env;
         let secret_key = env::var("STRIPE_SECRET_KEY").ok().filter(|s| !s.is_empty());
-        let webhook_secret = env::var("STRIPE_WEBHOOK_SECRET").ok().filter(|s| !s.is_empty());
+        let webhook_secret = env::var("STRIPE_WEBHOOK_SECRET")
+            .ok()
+            .filter(|s| !s.is_empty());
 
         Self {
             secret_key_masked: secret_key.as_deref().map(mask_secret),

@@ -103,7 +103,9 @@ impl AuditAction {
             AuditAction::TwoFactorDisabled => "two_factor_disabled",
             AuditAction::TwoFactorVerified => "two_factor_verified",
             AuditAction::TwoFactorRecoveryCodeUsed => "two_factor_recovery_code_used",
-            AuditAction::TwoFactorRecoveryCodesRegenerated => "two_factor_recovery_codes_regenerated",
+            AuditAction::TwoFactorRecoveryCodesRegenerated => {
+                "two_factor_recovery_codes_regenerated"
+            }
             AuditAction::EmailVerificationRequested => "email_verification_requested",
             AuditAction::EmailVerified => "email_verified",
             AuditAction::FeedbackSubmitted => "feedback_submitted",
@@ -345,21 +347,51 @@ mod tests {
         // Spot-check a few
         assert_eq!(AuditAction::UserLogin.as_str(), "user_login");
         assert_eq!(AuditAction::UserRegistered.as_str(), "user_registered");
-        assert_eq!(AuditAction::AdminUserImpersonated.as_str(), "admin_user_impersonated");
-        assert_eq!(AuditAction::FeedbackSubmitted.as_str(), "feedback_submitted");
-        assert_eq!(AuditAction::ApplicationDeleted.as_str(), "application_deleted");
-        assert_eq!(AuditAction::AdminUserRoleChanged.as_str(), "admin_user_role_changed");
+        assert_eq!(
+            AuditAction::AdminUserImpersonated.as_str(),
+            "admin_user_impersonated"
+        );
+        assert_eq!(
+            AuditAction::FeedbackSubmitted.as_str(),
+            "feedback_submitted"
+        );
+        assert_eq!(
+            AuditAction::ApplicationDeleted.as_str(),
+            "application_deleted"
+        );
+        assert_eq!(
+            AuditAction::AdminUserRoleChanged.as_str(),
+            "admin_user_role_changed"
+        );
         assert_eq!(AuditAction::AdminUserDeleted.as_str(), "admin_user_deleted");
-        assert_eq!(AuditAction::ApplicationUpdated.as_str(), "application_updated");
+        assert_eq!(
+            AuditAction::ApplicationUpdated.as_str(),
+            "application_updated"
+        );
     }
 
     #[test]
     fn audit_action_download_variants() {
-        assert_eq!(AuditAction::DownloadRequested.as_str(), "download_requested");
-        assert_eq!(AuditAction::DownloadCompleted.as_str(), "download_completed");
-        assert_eq!(AuditAction::DownloadDeniedMembership.as_str(), "download_denied_membership");
-        assert_eq!(AuditAction::DownloadDeniedRateLimit.as_str(), "download_denied_rate_limit");
-        assert_eq!(AuditAction::DownloadFailedUpstream.as_str(), "download_failed_upstream");
+        assert_eq!(
+            AuditAction::DownloadRequested.as_str(),
+            "download_requested"
+        );
+        assert_eq!(
+            AuditAction::DownloadCompleted.as_str(),
+            "download_completed"
+        );
+        assert_eq!(
+            AuditAction::DownloadDeniedMembership.as_str(),
+            "download_denied_membership"
+        );
+        assert_eq!(
+            AuditAction::DownloadDeniedRateLimit.as_str(),
+            "download_denied_rate_limit"
+        );
+        assert_eq!(
+            AuditAction::DownloadFailedUpstream.as_str(),
+            "download_failed_upstream"
+        );
 
         assert!(!AuditAction::DownloadRequested.is_admin_action());
         assert!(!AuditAction::DownloadCompleted.is_admin_action());
@@ -367,13 +399,25 @@ mod tests {
 
     #[test]
     fn audit_action_oci_variants() {
-        assert_eq!(AuditAction::OciLoginSucceeded.as_str(), "oci_login_succeeded");
+        assert_eq!(
+            AuditAction::OciLoginSucceeded.as_str(),
+            "oci_login_succeeded"
+        );
         assert_eq!(AuditAction::OciLoginFailed.as_str(), "oci_login_failed");
         assert_eq!(AuditAction::OciPullRequested.as_str(), "oci_pull_requested");
         assert_eq!(AuditAction::OciPullCompleted.as_str(), "oci_pull_completed");
-        assert_eq!(AuditAction::OciPullFailedUpstream.as_str(), "oci_pull_failed_upstream");
-        assert_eq!(AuditAction::OciPullDeniedRateLimit.as_str(), "oci_pull_denied_rate_limit");
-        assert_eq!(AuditAction::OciPullDeniedScope.as_str(), "oci_pull_denied_scope");
+        assert_eq!(
+            AuditAction::OciPullFailedUpstream.as_str(),
+            "oci_pull_failed_upstream"
+        );
+        assert_eq!(
+            AuditAction::OciPullDeniedRateLimit.as_str(),
+            "oci_pull_denied_rate_limit"
+        );
+        assert_eq!(
+            AuditAction::OciPullDeniedScope.as_str(),
+            "oci_pull_denied_scope"
+        );
 
         assert!(!AuditAction::OciPullRequested.is_admin_action());
         assert!(!AuditAction::OciLoginFailed.is_admin_action());
@@ -449,7 +493,10 @@ mod tests {
             .with_old_values(serde_json::json!({"role": "subscriber"}))
             .with_new_values(serde_json::json!({"role": "admin"}));
 
-        assert_eq!(log.old_values, Some(serde_json::json!({"role": "subscriber"})));
+        assert_eq!(
+            log.old_values,
+            Some(serde_json::json!({"role": "subscriber"}))
+        );
         assert_eq!(log.new_values, Some(serde_json::json!({"role": "admin"})));
     }
 
