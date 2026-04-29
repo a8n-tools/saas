@@ -22,12 +22,10 @@ use a8n_api::{
     repositories::{FeedbackRepository, RateLimitRepository, UserRepository},
     routes,
     services::{
-        oidc_keys::OidcKeySet,
-        oidc_provider::OidcProvider,
-        AuthService, BlobCache, DownloadCache, DownloadLimiter, EmailService, EncryptionKeySet,
-        ForgejoClient, ForgejoRegistryClient, JwtConfig, JwtService, ManifestCache, OciLimiter,
-        OciTokenService, PasswordService, ReleaseCache, StripeConfig, StripeService, TotpService,
-        WebhookService,
+        oidc_keys::OidcKeySet, oidc_provider::OidcProvider, AuthService, BlobCache, DownloadCache,
+        DownloadLimiter, EmailService, EncryptionKeySet, ForgejoClient, ForgejoRegistryClient,
+        JwtConfig, JwtService, ManifestCache, OciLimiter, OciTokenService, PasswordService,
+        ReleaseCache, StripeConfig, StripeService, TotpService, WebhookService,
     },
 };
 
@@ -101,13 +99,10 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // Test database connection
-    sqlx::query("SELECT 1")
-        .execute(&pool)
-        .await
-        .map_err(|e| {
-            error!(error = %e, "Database health check failed");
-            e
-        })?;
+    sqlx::query("SELECT 1").execute(&pool).await.map_err(|e| {
+        error!(error = %e, "Database health check failed");
+        e
+    })?;
 
     info!("Database health check passed");
 
@@ -140,18 +135,19 @@ async fn main() -> anyhow::Result<()> {
     let tier_config = Arc::new(std::sync::RwLock::new(tier_config));
 
     // Initialize Auth service
-    let auth_service = Arc::new(AuthService::new(pool.clone(), (*jwt_service).clone(), tier_config.clone()));
+    let auth_service = Arc::new(AuthService::new(
+        pool.clone(),
+        (*jwt_service).clone(),
+        tier_config.clone(),
+    ));
 
     info!("Auth service initialized");
 
     // Initialize Email service
-    let email_service = Arc::new(
-        EmailService::new(config.email.clone())
-            .unwrap_or_else(|e| {
-                tracing::warn!(error = %e, "Failed to initialize email service, using dev mode");
-                EmailService::new_dev()
-            })
-    );
+    let email_service = Arc::new(EmailService::new(config.email.clone()).unwrap_or_else(|e| {
+        tracing::warn!(error = %e, "Failed to initialize email service, using dev mode");
+        EmailService::new_dev()
+    }));
 
     info!(enabled = config.email.enabled, "Email service initialized");
 
@@ -192,14 +188,16 @@ async fn main() -> anyhow::Result<()> {
 
     // Initialize Forgejo download services (optional — degrade gracefully when unconfigured)
     let forgejo_client = config.download.forgejo_base_url.as_ref().and_then(|base| {
-        config.download.forgejo_api_token.as_ref().map(|token| {
-            Arc::new(ForgejoClient::new(base.clone(), token.clone()))
-        })
+        config
+            .download
+            .forgejo_api_token
+            .as_ref()
+            .map(|token| Arc::new(ForgejoClient::new(base.clone(), token.clone())))
     });
 
-    let release_cache = forgejo_client.clone().map(|c| {
-        Arc::new(ReleaseCache::new(c, config.download.release_cache_ttl_secs))
-    });
+    let release_cache = forgejo_client
+        .clone()
+        .map(|c| Arc::new(ReleaseCache::new(c, config.download.release_cache_ttl_secs)));
 
     let download_cache = forgejo_client.clone().map(|c| {
         Arc::new(DownloadCache::new(
@@ -228,15 +226,18 @@ async fn main() -> anyhow::Result<()> {
     );
 
     // Initialize OCI registry services (optional — degrade gracefully when Forgejo is unconfigured)
-    let forgejo_registry_client: Option<Arc<ForgejoRegistryClient>> = config.download.forgejo_base_url.as_ref().and_then(|base| {
-        config.download.forgejo_api_token.as_ref().map(|token| {
-            Arc::new(ForgejoRegistryClient::new(base.clone(), token.clone()))
-        })
-    });
+    let forgejo_registry_client: Option<Arc<ForgejoRegistryClient>> =
+        config.download.forgejo_base_url.as_ref().and_then(|base| {
+            config
+                .download
+                .forgejo_api_token
+                .as_ref()
+                .map(|token| Arc::new(ForgejoRegistryClient::new(base.clone(), token.clone())))
+        });
 
-    let manifest_cache: Option<Arc<ManifestCache>> = forgejo_registry_client.as_ref().map(|_| {
-        Arc::new(ManifestCache::new(config.oci.manifest_cache_ttl_secs))
-    });
+    let manifest_cache: Option<Arc<ManifestCache>> = forgejo_registry_client
+        .as_ref()
+        .map(|_| Arc::new(ManifestCache::new(config.oci.manifest_cache_ttl_secs)));
 
     let blob_cache: Option<Arc<BlobCache>> = forgejo_registry_client.clone().map(|c| {
         Arc::new(BlobCache::new(
@@ -445,9 +446,7 @@ async fn main() -> anyhow::Result<()> {
                 actix_web::http::header::CONTENT_TYPE,
                 actix_web::http::header::COOKIE,
             ])
-            .expose_headers(vec![
-                actix_web::http::header::SET_COOKIE,
-            ])
+            .expose_headers(vec![actix_web::http::header::SET_COOKIE])
             .supports_credentials()
             .max_age(3600);
 
@@ -484,6 +483,7 @@ async fn main() -> anyhow::Result<()> {
             .app_data(web::Data::new(forgejo_registry_client.clone()))
             // OIDC provider (None when OIDC_ISSUER is not set; handlers return 404)
             .app_data(web::Data::new(oidc_provider.clone()))
+            .app_data(web::Data::new(tier_config.clone()))
             // Configure routes
             .configure(routes::configure)
     })
@@ -517,7 +517,9 @@ async fn main() -> anyhow::Result<()> {
                 .wrap(Logger::default())
                 .wrap(SecurityHeaders)
                 .wrap(RequestIdMiddleware)
-                .wrap(a8n_api::middleware::OciWwwAuthenticate { cfg: std::sync::Arc::new(cfg_oci.clone()) })
+                .wrap(a8n_api::middleware::OciWwwAuthenticate {
+                    cfg: std::sync::Arc::new(cfg_oci.clone()),
+                })
                 .app_data(web::Data::new(pool_oci.clone()))
                 // Raw Arc for the OciBearerUser extractor
                 .app_data(ots.clone())
@@ -545,8 +547,8 @@ async fn main() -> anyhow::Result<()> {
 
 /// Initialize tracing subscriber with compact human-readable output
 fn init_tracing(log_level: &str) {
-    let env_filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new(log_level));
+    let env_filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_level));
 
     tracing_subscriber::registry()
         .with(env_filter)
