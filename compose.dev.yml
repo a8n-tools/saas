@@ -27,6 +27,7 @@ services:
       context: ./api
       dockerfile: Dockerfile
     container_name: saas-api-${USER}
+    command: ["/app/target/debug/a8n-api"]
     restart: unless-stopped
     environment:
       # scheme://username:password@host:port/path/file.ext
@@ -68,6 +69,11 @@ services:
       OCI_CONCURRENT_MANIFESTS_PER_USER: ${OCI_CONCURRENT_MANIFESTS_PER_USER:-2}
       OCI_PULLS_PER_USER_PER_DAY: ${OCI_PULLS_PER_USER_PER_DAY:-50}
       OCI_TOKEN_TTL_SECS: ${OCI_TOKEN_TTL_SECS:-900}
+      # OIDC Provider
+      OIDC_ISSUER: https://${USER}-api.a8n.run
+      OIDC_JWT_PRIVATE_KEY_PATH: /run/secrets/oidc/dev-2026.pem
+      OIDC_JWT_ACTIVE_KID: dev-2026
+      OIDC_JWT_PUBLIC_KEYS_DIR: /run/secrets/oidc
     ports:
       - "18081:18081"
     volumes:
@@ -79,6 +85,7 @@ services:
       - api_target:/app/target
       - downloads_cache:/var/cache/a8n-downloads
       - oci_cache:/var/cache/a8n-oci
+      - ./secrets:/run/secrets/oidc:ro
     networks:
       - default # Use default network for internal communication with Postgres
       - network-traefik-public
