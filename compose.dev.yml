@@ -4,7 +4,7 @@ services:
   # PostgreSQL Database
   postgres:
     image: postgres:16-alpine
-    container_name: saas-postgres-${USER}
+    container_name: dev-saas-postgres-${USER}
     restart: unless-stopped
     environment:
       POSTGRES_USER: a8n
@@ -26,7 +26,7 @@ services:
     build:
       context: ./api
       dockerfile: Dockerfile
-    container_name: saas-api-${USER}
+    container_name: dev-saas-api-${USER}
     command: ["/app/target/debug/a8n-api"]
     restart: unless-stopped
     environment:
@@ -111,7 +111,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: saas-frontend-${USER}
+    container_name: dev-saas-frontend-${USER}
     restart: unless-stopped
     environment:
       # Use Docker service name for internal proxy requests
