@@ -627,6 +627,7 @@ pub async fn logout(
     provider: web::Data<Option<Arc<OidcProvider>>>,
     query: web::Query<LogoutQuery>,
     user: OptionalUser,
+    config: web::Data<crate::config::Config>,
 ) -> Result<HttpResponse, AppError> {
     // Clone the Arc so we can move it into the background task.
     let provider_arc: Arc<OidcProvider> = match provider.as_ref().as_ref() {
@@ -686,9 +687,14 @@ pub async fn logout(
             }
     }
 
-    Ok(HttpResponse::Found()
-        .append_header(("Location", redirect))
-        .finish())
+    let secure = config.is_production();
+    let cookie_domain = config.cookie_domain.as_deref();
+    let mut response = HttpResponse::Found();
+    response.append_header(("Location", redirect));
+    for cookie in crate::middleware::auth::AuthCookies::clear(secure, cookie_domain) {
+        response.cookie(cookie);
+    }
+    Ok(response.finish())
 }
 
 // ── Private helpers ───────────────────────────────────────────────────────────
