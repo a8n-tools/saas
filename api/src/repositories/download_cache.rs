@@ -83,10 +83,7 @@ impl DownloadCacheRepository {
         Ok((row, replaced))
     }
 
-    pub async fn touch(
-        pool: &PgPool,
-        id: Uuid,
-    ) -> Result<(), AppError> {
+    pub async fn touch(pool: &PgPool, id: Uuid) -> Result<(), AppError> {
         let res = sqlx::query("UPDATE download_cache SET last_accessed_at = NOW() WHERE id = $1")
             .bind(id)
             .execute(pool)
@@ -119,33 +116,24 @@ impl DownloadCacheRepository {
     }
 
     /// Returns true if any row still references this SHA (after a delete).
-    pub async fn sha_referenced(
-        pool: &PgPool,
-        content_sha256: &str,
-    ) -> Result<bool, AppError> {
-        let (count,): (i64,) = sqlx::query_as(
-            "SELECT COUNT(*) FROM download_cache WHERE content_sha256 = $1",
-        )
-        .bind(content_sha256)
-        .fetch_one(pool)
-        .await?;
+    pub async fn sha_referenced(pool: &PgPool, content_sha256: &str) -> Result<bool, AppError> {
+        let (count,): (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM download_cache WHERE content_sha256 = $1")
+                .bind(content_sha256)
+                .fetch_one(pool)
+                .await?;
         Ok(count > 0)
     }
 
     pub async fn total_bytes(pool: &PgPool) -> Result<i64, AppError> {
-        let (total,): (Option<i64>,) = sqlx::query_as(
-            "SELECT SUM(size_bytes) FROM download_cache",
-        )
-        .fetch_one(pool)
-        .await?;
+        let (total,): (Option<i64>,) = sqlx::query_as("SELECT SUM(size_bytes) FROM download_cache")
+            .fetch_one(pool)
+            .await?;
         Ok(total.unwrap_or(0))
     }
 
     /// Returns up to `limit` oldest-by-last-accessed rows.
-    pub async fn list_lru(
-        pool: &PgPool,
-        limit: i64,
-    ) -> Result<Vec<DownloadCacheRow>, AppError> {
+    pub async fn list_lru(pool: &PgPool, limit: i64) -> Result<Vec<DownloadCacheRow>, AppError> {
         let rows = sqlx::query_as::<_, DownloadCacheRow>(
             "SELECT * FROM download_cache ORDER BY last_accessed_at ASC LIMIT $1",
         )

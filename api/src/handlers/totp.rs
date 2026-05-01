@@ -78,9 +78,7 @@ pub async fn setup_2fa(
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
 
-    let info = totp_service
-        .begin_setup(user.0.sub, &user.0.email)
-        .await?;
+    let info = totp_service.begin_setup(user.0.sub, &user.0.email).await?;
 
     Ok(success(
         SetupResponse {
@@ -103,9 +101,7 @@ pub async fn confirm_2fa(
     let request_id = get_request_id(&req);
     let ip_address = extract_client_ip(&req);
 
-    let codes = totp_service
-        .confirm_setup(user.0.sub, &body.code)
-        .await?;
+    let codes = totp_service.confirm_setup(user.0.sub, &body.code).await?;
 
     // Audit log
     let ip = ip_address.map(ipnetwork::IpNetwork::from);
@@ -136,10 +132,16 @@ pub async fn verify_2fa(
 
     // Rate limit by IP
     let ip_key = ip_address.map(|ip| ip.to_string()).unwrap_or_default();
-    check_rate_limit(&pool, &format!("2fa_verify:{}", ip_key), &RateLimitConfig::LOGIN).await?;
+    check_rate_limit(
+        &pool,
+        &format!("2fa_verify:{}", ip_key),
+        &RateLimitConfig::LOGIN,
+    )
+    .await?;
 
     // Verify challenge token to get user_id
-    let jwt_service = req.app_data::<Arc<crate::services::JwtService>>()
+    let jwt_service = req
+        .app_data::<Arc<crate::services::JwtService>>()
         .ok_or(AppError::internal("JWT service not available"))?;
     let claims = jwt_service.verify_2fa_challenge_token(&body.challenge_token)?;
     let user_id = claims.sub;
@@ -202,7 +204,11 @@ pub async fn verify_2fa(
         resp.cookie(cookie);
     }
     Ok(resp
-        .cookie(AuthCookies::access_token(&tokens.access_token, secure, cookie_domain))
+        .cookie(AuthCookies::access_token(
+            &tokens.access_token,
+            secure,
+            cookie_domain,
+        ))
         .cookie(AuthCookies::refresh_token(
             &tokens.refresh_token,
             secure,
@@ -238,10 +244,10 @@ pub async fn disable_2fa(
         .await?
         .ok_or(AppError::not_found("User"))?;
 
-    let password_hash = db_user
-        .password_hash
-        .as_ref()
-        .ok_or(AppError::validation("password", "No password set for this account"))?;
+    let password_hash = db_user.password_hash.as_ref().ok_or(AppError::validation(
+        "password",
+        "No password set for this account",
+    ))?;
 
     let password_service = PasswordService::new();
     if !password_service.verify(&body.password, password_hash)? {
@@ -280,10 +286,10 @@ pub async fn regenerate_recovery_codes(
         .await?
         .ok_or(AppError::not_found("User"))?;
 
-    let password_hash = db_user
-        .password_hash
-        .as_ref()
-        .ok_or(AppError::validation("password", "No password set for this account"))?;
+    let password_hash = db_user.password_hash.as_ref().ok_or(AppError::validation(
+        "password",
+        "No password set for this account",
+    ))?;
 
     let password_service = PasswordService::new();
     if !password_service.verify(&body.password, password_hash)? {

@@ -51,7 +51,6 @@ pub enum AppError {
     DatabaseError { message: String },
 
     // ── OIDC / OAuth 2.1 error responses (RFC 6749 §5.2) ─────────────────────
-
     #[error("invalid_grant: {0}")]
     OidcInvalidGrant(String),
 
@@ -234,16 +233,13 @@ impl ResponseError for AppError {
         let request_id = RequestId::new().0;
 
         let details = match self {
-            AppError::ValidationError { field, .. } => {
-                Some(serde_json::json!({ "field": field }))
-            }
+            AppError::ValidationError { field, .. } => Some(serde_json::json!({ "field": field })),
             AppError::RateLimited { retry_after } => {
                 Some(serde_json::json!({ "retry_after": retry_after }))
             }
             AppError::RateLimitedCoded {
                 retry_after_secs, ..
-            } => retry_after_secs
-                .map(|n| serde_json::json!({ "retry_after": n })),
+            } => retry_after_secs.map(|n| serde_json::json!({ "retry_after": n })),
             _ => None,
         };
 
@@ -252,14 +248,10 @@ impl ResponseError for AppError {
             AppError::InvalidCredentials => {
                 "The email or password you entered is incorrect.".to_string()
             }
-            AppError::TokenExpired => {
-                "Your session has expired. Please log in again.".to_string()
-            }
+            AppError::TokenExpired => "Your session has expired. Please log in again.".to_string(),
             AppError::Unauthorized => "You need to log in to access this.".to_string(),
             AppError::Forbidden => "You don't have permission to do this.".to_string(),
-            AppError::NotFound { .. } => {
-                "The requested resource could not be found.".to_string()
-            }
+            AppError::NotFound { .. } => "The requested resource could not be found.".to_string(),
             AppError::Conflict { message } => message.clone(),
             AppError::RateLimited { retry_after } => {
                 format!(
@@ -277,7 +269,8 @@ impl ResponseError for AppError {
                 None => "Too many requests. Please try again later.".to_string(),
             },
             AppError::Upstream { .. } => {
-                "The upstream service is temporarily unavailable. Please try again shortly.".to_string()
+                "The upstream service is temporarily unavailable. Please try again shortly."
+                    .to_string()
             }
             AppError::InternalError { .. } | AppError::DatabaseError { .. } => {
                 "An unexpected error occurred. Please try again later.".to_string()
@@ -363,7 +356,10 @@ mod tests {
             AppError::validation("email", "invalid").error_code(),
             "VALIDATION_ERROR"
         );
-        assert_eq!(AppError::InvalidCredentials.error_code(), "INVALID_CREDENTIALS");
+        assert_eq!(
+            AppError::InvalidCredentials.error_code(),
+            "INVALID_CREDENTIALS"
+        );
         assert_eq!(AppError::TokenExpired.error_code(), "TOKEN_EXPIRED");
         assert_eq!(AppError::Unauthorized.error_code(), "UNAUTHORIZED");
         assert_eq!(AppError::Forbidden.error_code(), "FORBIDDEN");
@@ -393,11 +389,23 @@ mod tests {
             AppError::InvalidCredentials.status_code(),
             StatusCode::UNAUTHORIZED
         );
-        assert_eq!(AppError::TokenExpired.status_code(), StatusCode::UNAUTHORIZED);
-        assert_eq!(AppError::Unauthorized.status_code(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            AppError::TokenExpired.status_code(),
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            AppError::Unauthorized.status_code(),
+            StatusCode::UNAUTHORIZED
+        );
         assert_eq!(AppError::Forbidden.status_code(), StatusCode::FORBIDDEN);
-        assert_eq!(AppError::not_found("user").status_code(), StatusCode::NOT_FOUND);
-        assert_eq!(AppError::conflict("exists").status_code(), StatusCode::CONFLICT);
+        assert_eq!(
+            AppError::not_found("user").status_code(),
+            StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            AppError::conflict("exists").status_code(),
+            StatusCode::CONFLICT
+        );
         assert_eq!(
             AppError::RateLimited { retry_after: 60 }.status_code(),
             StatusCode::TOO_MANY_REQUESTS
@@ -444,7 +452,10 @@ mod tests {
             AppError::validation("email", "invalid").to_string(),
             "Validation error on field 'email': invalid"
         );
-        assert_eq!(AppError::InvalidCredentials.to_string(), "Invalid credentials");
+        assert_eq!(
+            AppError::InvalidCredentials.to_string(),
+            "Invalid credentials"
+        );
         assert_eq!(AppError::TokenExpired.to_string(), "Token has expired");
         assert_eq!(AppError::Unauthorized.to_string(), "Unauthorized");
         assert_eq!(AppError::Forbidden.to_string(), "Forbidden");
@@ -452,10 +463,7 @@ mod tests {
             AppError::not_found("user").to_string(),
             "Resource not found: user"
         );
-        assert_eq!(
-            AppError::conflict("exists").to_string(),
-            "Conflict: exists"
-        );
+        assert_eq!(AppError::conflict("exists").to_string(), "Conflict: exists");
         assert_eq!(
             AppError::RateLimited { retry_after: 60 }.to_string(),
             "Rate limited, retry after 60 seconds"
@@ -517,7 +525,9 @@ mod tests {
         let resp = err.error_response();
         assert_eq!(resp.status().as_u16(), 429);
         assert_eq!(
-            resp.headers().get("retry-after").and_then(|v| v.to_str().ok()),
+            resp.headers()
+                .get("retry-after")
+                .and_then(|v| v.to_str().ok()),
             Some("3600"),
         );
     }

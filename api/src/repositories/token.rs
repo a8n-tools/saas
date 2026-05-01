@@ -1,8 +1,8 @@
 //! Token repository for refresh tokens, magic links, and password resets
 
 use chrono::{DateTime, Utc};
-use sqlx::PgPool;
 use sqlx::postgres::Postgres;
+use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::errors::AppError;

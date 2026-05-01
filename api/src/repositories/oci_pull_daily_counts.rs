@@ -75,13 +75,15 @@ mod tests {
 
     #[actix_rt::test]
     async fn increment_creates_and_bumps() {
-        let Some(pool) = maybe_pool().await else { return; };
+        let Some(pool) = maybe_pool().await else {
+            return;
+        };
 
         // Insert a test user with only required columns; let DB defaults fill the rest.
         let user_id = Uuid::new_v4();
         let email = format!("oci-count-test-{}@example.com", user_id);
         let res = sqlx::query(
-            "INSERT INTO users (id, email, password_hash) VALUES ($1, $2, 'placeholder')"
+            "INSERT INTO users (id, email, password_hash) VALUES ($1, $2, 'placeholder')",
         )
         .bind(user_id)
         .bind(&email)
@@ -102,29 +104,45 @@ mod tests {
             .ok();
 
         assert_eq!(
-            OciPullDailyCountRepository::increment(&pool, user_id, today).await.unwrap(),
+            OciPullDailyCountRepository::increment(&pool, user_id, today)
+                .await
+                .unwrap(),
             1
         );
         assert_eq!(
-            OciPullDailyCountRepository::increment(&pool, user_id, today).await.unwrap(),
+            OciPullDailyCountRepository::increment(&pool, user_id, today)
+                .await
+                .unwrap(),
             2
         );
         assert_eq!(
-            OciPullDailyCountRepository::current(&pool, user_id, today).await.unwrap(),
+            OciPullDailyCountRepository::current(&pool, user_id, today)
+                .await
+                .unwrap(),
             2
         );
 
-        OciPullDailyCountRepository::decrement(&pool, user_id, today).await.unwrap();
+        OciPullDailyCountRepository::decrement(&pool, user_id, today)
+            .await
+            .unwrap();
         assert_eq!(
-            OciPullDailyCountRepository::current(&pool, user_id, today).await.unwrap(),
+            OciPullDailyCountRepository::current(&pool, user_id, today)
+                .await
+                .unwrap(),
             1
         );
 
         // Decrement twice more — hitting GREATEST floor.
-        OciPullDailyCountRepository::decrement(&pool, user_id, today).await.unwrap();
-        OciPullDailyCountRepository::decrement(&pool, user_id, today).await.unwrap();
+        OciPullDailyCountRepository::decrement(&pool, user_id, today)
+            .await
+            .unwrap();
+        OciPullDailyCountRepository::decrement(&pool, user_id, today)
+            .await
+            .unwrap();
         assert_eq!(
-            OciPullDailyCountRepository::current(&pool, user_id, today).await.unwrap(),
+            OciPullDailyCountRepository::current(&pool, user_id, today)
+                .await
+                .unwrap(),
             0
         );
 

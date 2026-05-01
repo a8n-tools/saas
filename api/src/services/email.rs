@@ -2,9 +2,8 @@
 
 use chrono::{DateTime, Datelike, Utc};
 use lettre::{
-    message::header::ContentType,
-    transport::smtp::authentication::Credentials,
-    AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor,
+    message::header::ContentType, transport::smtp::authentication::Credentials, AsyncSmtpTransport,
+    AsyncTransport, Message, Tokio1Executor,
 };
 use tera::{Context, Tera};
 
@@ -26,30 +25,26 @@ impl EmailService {
     /// Create a new email service
     pub fn new(config: EmailConfig) -> Result<Self, AppError> {
         let transport = if config.enabled {
-            let creds = Credentials::new(
-                config.smtp_username.clone(),
-                config.smtp_password.clone(),
-            );
+            let creds =
+                Credentials::new(config.smtp_username.clone(), config.smtp_password.clone());
 
             let transport = match config.smtp_tls {
-                SmtpTls::Implicit => {
-                    AsyncSmtpTransport::<Tokio1Executor>::relay(&config.smtp_host)
-                        .map_err(|e| AppError::internal(format!("SMTP connection error: {}", e)))?
-                        .port(config.smtp_port)
-                        .credentials(creds)
-                        .tls(lettre::transport::smtp::client::Tls::Wrapper(
-                            lettre::transport::smtp::client::TlsParameters::new(config.smtp_host.clone())
-                                .map_err(|e| AppError::internal(format!("TLS error: {}", e)))?,
-                        ))
-                        .build()
-                }
-                SmtpTls::Starttls => {
-                    AsyncSmtpTransport::<Tokio1Executor>::relay(&config.smtp_host)
-                        .map_err(|e| AppError::internal(format!("SMTP connection error: {}", e)))?
-                        .port(config.smtp_port)
-                        .credentials(creds)
-                        .build()
-                }
+                SmtpTls::Implicit => AsyncSmtpTransport::<Tokio1Executor>::relay(&config.smtp_host)
+                    .map_err(|e| AppError::internal(format!("SMTP connection error: {}", e)))?
+                    .port(config.smtp_port)
+                    .credentials(creds)
+                    .tls(lettre::transport::smtp::client::Tls::Wrapper(
+                        lettre::transport::smtp::client::TlsParameters::new(
+                            config.smtp_host.clone(),
+                        )
+                        .map_err(|e| AppError::internal(format!("TLS error: {}", e)))?,
+                    ))
+                    .build(),
+                SmtpTls::Starttls => AsyncSmtpTransport::<Tokio1Executor>::relay(&config.smtp_host)
+                    .map_err(|e| AppError::internal(format!("SMTP connection error: {}", e)))?
+                    .port(config.smtp_port)
+                    .credentials(creds)
+                    .build(),
             };
 
             Some(transport)
@@ -61,83 +56,208 @@ impl EmailService {
         let mut templates = Tera::default();
 
         // Register base template
-        templates.add_raw_template("base.html", include_str!("../../templates/emails/base.html"))
+        templates
+            .add_raw_template(
+                "base.html",
+                include_str!("../../templates/emails/base.html"),
+            )
             .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
-        templates.add_raw_template("base.txt", include_str!("../../templates/emails/base.txt"))
+        templates
+            .add_raw_template("base.txt", include_str!("../../templates/emails/base.txt"))
             .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
 
         // Register email templates
-        templates.add_raw_template("magic_link.html", include_str!("../../templates/emails/magic_link.html"))
+        templates
+            .add_raw_template(
+                "magic_link.html",
+                include_str!("../../templates/emails/magic_link.html"),
+            )
             .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
-        templates.add_raw_template("magic_link.txt", include_str!("../../templates/emails/magic_link.txt"))
-            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
-
-        templates.add_raw_template("password_reset.html", include_str!("../../templates/emails/password_reset.html"))
-            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
-        templates.add_raw_template("password_reset.txt", include_str!("../../templates/emails/password_reset.txt"))
-            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
-
-        templates.add_raw_template("welcome.html", include_str!("../../templates/emails/welcome.html"))
-            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
-        templates.add_raw_template("welcome.txt", include_str!("../../templates/emails/welcome.txt"))
+        templates
+            .add_raw_template(
+                "magic_link.txt",
+                include_str!("../../templates/emails/magic_link.txt"),
+            )
             .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
 
-        templates.add_raw_template("account_created.html", include_str!("../../templates/emails/account_created.html"))
+        templates
+            .add_raw_template(
+                "password_reset.html",
+                include_str!("../../templates/emails/password_reset.html"),
+            )
             .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
-        templates.add_raw_template("account_created.txt", include_str!("../../templates/emails/account_created.txt"))
-            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
-
-        templates.add_raw_template("payment_failed.html", include_str!("../../templates/emails/payment_failed.html"))
-            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
-        templates.add_raw_template("payment_failed.txt", include_str!("../../templates/emails/payment_failed.txt"))
-            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
-
-        templates.add_raw_template("grace_period_reminder.html", include_str!("../../templates/emails/grace_period_reminder.html"))
-            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
-        templates.add_raw_template("grace_period_reminder.txt", include_str!("../../templates/emails/grace_period_reminder.txt"))
+        templates
+            .add_raw_template(
+                "password_reset.txt",
+                include_str!("../../templates/emails/password_reset.txt"),
+            )
             .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
 
-        templates.add_raw_template("membership_canceled.html", include_str!("../../templates/emails/membership_canceled.html"))
+        templates
+            .add_raw_template(
+                "welcome.html",
+                include_str!("../../templates/emails/welcome.html"),
+            )
             .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
-        templates.add_raw_template("membership_canceled.txt", include_str!("../../templates/emails/membership_canceled.txt"))
-            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
-
-        templates.add_raw_template("payment_succeeded.html", include_str!("../../templates/emails/payment_succeeded.html"))
-            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
-        templates.add_raw_template("payment_succeeded.txt", include_str!("../../templates/emails/payment_succeeded.txt"))
-            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
-
-        templates.add_raw_template("password_changed.html", include_str!("../../templates/emails/password_changed.html"))
-            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
-        templates.add_raw_template("password_changed.txt", include_str!("../../templates/emails/password_changed.txt"))
+        templates
+            .add_raw_template(
+                "welcome.txt",
+                include_str!("../../templates/emails/welcome.txt"),
+            )
             .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
 
-        templates.add_raw_template("email_change_verify.html", include_str!("../../templates/emails/email_change_verify.html"))
+        templates
+            .add_raw_template(
+                "account_created.html",
+                include_str!("../../templates/emails/account_created.html"),
+            )
             .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
-        templates.add_raw_template("email_change_verify.txt", include_str!("../../templates/emails/email_change_verify.txt"))
-            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
-
-        templates.add_raw_template("email_change_notification.html", include_str!("../../templates/emails/email_change_notification.html"))
-            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
-        templates.add_raw_template("email_change_notification.txt", include_str!("../../templates/emails/email_change_notification.txt"))
-            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
-
-        templates.add_raw_template("email_verify.html", include_str!("../../templates/emails/email_verify.html"))
-            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
-        templates.add_raw_template("email_verify.txt", include_str!("../../templates/emails/email_verify.txt"))
-            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
-        templates.add_raw_template("admin_feedback_notification.html", include_str!("../../templates/emails/admin_feedback_notification.html"))
-            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
-        templates.add_raw_template("admin_feedback_notification.txt", include_str!("../../templates/emails/admin_feedback_notification.txt"))
-            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
-        templates.add_raw_template("feedback_response.html", include_str!("../../templates/emails/feedback_response.html"))
-            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
-        templates.add_raw_template("feedback_response.txt", include_str!("../../templates/emails/feedback_response.txt"))
+        templates
+            .add_raw_template(
+                "account_created.txt",
+                include_str!("../../templates/emails/account_created.txt"),
+            )
             .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
 
-        templates.add_raw_template("admin_invite.html", include_str!("../../templates/emails/admin_invite.html"))
+        templates
+            .add_raw_template(
+                "payment_failed.html",
+                include_str!("../../templates/emails/payment_failed.html"),
+            )
             .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
-        templates.add_raw_template("admin_invite.txt", include_str!("../../templates/emails/admin_invite.txt"))
+        templates
+            .add_raw_template(
+                "payment_failed.txt",
+                include_str!("../../templates/emails/payment_failed.txt"),
+            )
+            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
+
+        templates
+            .add_raw_template(
+                "grace_period_reminder.html",
+                include_str!("../../templates/emails/grace_period_reminder.html"),
+            )
+            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
+        templates
+            .add_raw_template(
+                "grace_period_reminder.txt",
+                include_str!("../../templates/emails/grace_period_reminder.txt"),
+            )
+            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
+
+        templates
+            .add_raw_template(
+                "membership_canceled.html",
+                include_str!("../../templates/emails/membership_canceled.html"),
+            )
+            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
+        templates
+            .add_raw_template(
+                "membership_canceled.txt",
+                include_str!("../../templates/emails/membership_canceled.txt"),
+            )
+            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
+
+        templates
+            .add_raw_template(
+                "payment_succeeded.html",
+                include_str!("../../templates/emails/payment_succeeded.html"),
+            )
+            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
+        templates
+            .add_raw_template(
+                "payment_succeeded.txt",
+                include_str!("../../templates/emails/payment_succeeded.txt"),
+            )
+            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
+
+        templates
+            .add_raw_template(
+                "password_changed.html",
+                include_str!("../../templates/emails/password_changed.html"),
+            )
+            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
+        templates
+            .add_raw_template(
+                "password_changed.txt",
+                include_str!("../../templates/emails/password_changed.txt"),
+            )
+            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
+
+        templates
+            .add_raw_template(
+                "email_change_verify.html",
+                include_str!("../../templates/emails/email_change_verify.html"),
+            )
+            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
+        templates
+            .add_raw_template(
+                "email_change_verify.txt",
+                include_str!("../../templates/emails/email_change_verify.txt"),
+            )
+            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
+
+        templates
+            .add_raw_template(
+                "email_change_notification.html",
+                include_str!("../../templates/emails/email_change_notification.html"),
+            )
+            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
+        templates
+            .add_raw_template(
+                "email_change_notification.txt",
+                include_str!("../../templates/emails/email_change_notification.txt"),
+            )
+            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
+
+        templates
+            .add_raw_template(
+                "email_verify.html",
+                include_str!("../../templates/emails/email_verify.html"),
+            )
+            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
+        templates
+            .add_raw_template(
+                "email_verify.txt",
+                include_str!("../../templates/emails/email_verify.txt"),
+            )
+            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
+        templates
+            .add_raw_template(
+                "admin_feedback_notification.html",
+                include_str!("../../templates/emails/admin_feedback_notification.html"),
+            )
+            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
+        templates
+            .add_raw_template(
+                "admin_feedback_notification.txt",
+                include_str!("../../templates/emails/admin_feedback_notification.txt"),
+            )
+            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
+        templates
+            .add_raw_template(
+                "feedback_response.html",
+                include_str!("../../templates/emails/feedback_response.html"),
+            )
+            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
+        templates
+            .add_raw_template(
+                "feedback_response.txt",
+                include_str!("../../templates/emails/feedback_response.txt"),
+            )
+            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
+
+        templates
+            .add_raw_template(
+                "admin_invite.html",
+                include_str!("../../templates/emails/admin_invite.html"),
+            )
+            .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
+        templates
+            .add_raw_template(
+                "admin_invite.txt",
+                include_str!("../../templates/emails/admin_invite.txt"),
+            )
             .map_err(|e| AppError::internal(format!("Template error: {}", e)))?;
 
         Ok(Self {
@@ -185,8 +305,13 @@ impl EmailService {
 
         if let Some(ref transport) = self.transport {
             let email = Message::builder()
-                .from(from.parse().map_err(|e| AppError::internal(format!("Invalid from address: {}", e)))?)
-                .to(to.parse().map_err(|e| AppError::internal(format!("Invalid to address: {}", e)))?)
+                .from(
+                    from.parse()
+                        .map_err(|e| AppError::internal(format!("Invalid from address: {}", e)))?,
+                )
+                .to(to
+                    .parse()
+                    .map_err(|e| AppError::internal(format!("Invalid to address: {}", e)))?)
                 .subject(subject)
                 .multipart(
                     lettre::message::MultiPart::alternative()
@@ -222,10 +347,12 @@ impl EmailService {
 
     /// Render a template
     fn render_template(&self, name: &str, context: &Context) -> Result<(String, String), AppError> {
-        let html = self.templates
+        let html = self
+            .templates
             .render(&format!("{}.html", name), context)
             .map_err(|e| AppError::internal(format!("Template render error: {}", e)))?;
-        let text = self.templates
+        let text = self
+            .templates
             .render(&format!("{}.txt", name), context)
             .map_err(|e| AppError::internal(format!("Template render error: {}", e)))?;
         Ok((html, text))
@@ -253,10 +380,7 @@ impl EmailService {
 
     /// Send magic link email
     pub async fn send_magic_link(&self, email: &str, token: &str) -> Result<(), AppError> {
-        let magic_link_url = format!(
-            "{}/magic-link?token={}",
-            self.config.base_url, token
-        );
+        let magic_link_url = format!("{}/magic-link?token={}", self.config.base_url, token);
 
         if !self.config.enabled {
             tracing::info!(
@@ -271,7 +395,13 @@ impl EmailService {
         context.insert("magic_link_url", &magic_link_url);
 
         let (html, text) = self.render_template("magic_link", &context)?;
-        self.send_email(email, &format!("Sign in to {}", self.config.app_name), html, text).await
+        self.send_email(
+            email,
+            &format!("Sign in to {}", self.config.app_name),
+            html,
+            text,
+        )
+        .await
     }
 
     /// Send password reset email
@@ -294,7 +424,13 @@ impl EmailService {
         context.insert("reset_url", &reset_url);
 
         let (html, text) = self.render_template("password_reset", &context)?;
-        self.send_email(email, &format!("Reset your {} password", self.config.app_name), html, text).await
+        self.send_email(
+            email,
+            &format!("Reset your {} password", self.config.app_name),
+            html,
+            text,
+        )
+        .await
     }
 
     /// Send account creation email
@@ -305,10 +441,19 @@ impl EmailService {
         }
 
         let mut context = self.base_context();
-        context.insert("dashboard_url", &format!("{}/dashboard", self.config.base_url));
+        context.insert(
+            "dashboard_url",
+            &format!("{}/dashboard", self.config.base_url),
+        );
 
         let (html, text) = self.render_template("account_created", &context)?;
-        self.send_email(email, &format!("Welcome to {}!", self.config.app_name), html, text).await
+        self.send_email(
+            email,
+            &format!("Welcome to {}!", self.config.app_name),
+            html,
+            text,
+        )
+        .await
     }
 
     /// Send password changed notification email
@@ -319,10 +464,19 @@ impl EmailService {
         }
 
         let mut context = self.base_context();
-        context.insert("dashboard_url", &format!("{}/dashboard", self.config.base_url));
+        context.insert(
+            "dashboard_url",
+            &format!("{}/dashboard", self.config.base_url),
+        );
 
         let (html, text) = self.render_template("password_changed", &context)?;
-        self.send_email(email, &format!("Your {} password was changed", self.config.app_name), html, text).await
+        self.send_email(
+            email,
+            &format!("Your {} password was changed", self.config.app_name),
+            html,
+            text,
+        )
+        .await
     }
 
     /// Send welcome email after membership activation
@@ -333,15 +487,28 @@ impl EmailService {
         }
 
         let mut context = self.base_context();
-        context.insert("dashboard_url", &format!("{}/dashboard", self.config.base_url));
+        context.insert(
+            "dashboard_url",
+            &format!("{}/dashboard", self.config.base_url),
+        );
         context.insert("price", &format!("{:.2}", price_cents as f64 / 100.0));
 
         let (html, text) = self.render_template("welcome", &context)?;
-        self.send_email(email, &format!("Welcome to {}!", self.config.app_name), html, text).await
+        self.send_email(
+            email,
+            &format!("Welcome to {}!", self.config.app_name),
+            html,
+            text,
+        )
+        .await
     }
 
     /// Send payment failed email
-    pub async fn send_payment_failed(&self, email: &str, days_remaining: i32) -> Result<(), AppError> {
+    pub async fn send_payment_failed(
+        &self,
+        email: &str,
+        days_remaining: i32,
+    ) -> Result<(), AppError> {
         if !self.config.enabled {
             tracing::info!(
                 email = %email,
@@ -352,15 +519,23 @@ impl EmailService {
         }
 
         let mut context = self.base_context();
-        context.insert("billing_url", &format!("{}/dashboard/membership", self.config.base_url));
+        context.insert(
+            "billing_url",
+            &format!("{}/dashboard/membership", self.config.base_url),
+        );
         context.insert("days_remaining", &days_remaining);
 
         let (html, text) = self.render_template("payment_failed", &context)?;
-        self.send_email(email, "Action required: Payment failed", html, text).await
+        self.send_email(email, "Action required: Payment failed", html, text)
+            .await
     }
 
     /// Send grace period reminder email
-    pub async fn send_grace_period_reminder(&self, email: &str, days_remaining: i32) -> Result<(), AppError> {
+    pub async fn send_grace_period_reminder(
+        &self,
+        email: &str,
+        days_remaining: i32,
+    ) -> Result<(), AppError> {
         if !self.config.enabled {
             tracing::info!(
                 email = %email,
@@ -371,7 +546,10 @@ impl EmailService {
         }
 
         let mut context = self.base_context();
-        context.insert("billing_url", &format!("{}/dashboard/membership", self.config.base_url));
+        context.insert(
+            "billing_url",
+            &format!("{}/dashboard/membership", self.config.base_url),
+        );
         context.insert("days_remaining", &days_remaining);
 
         let (html, text) = self.render_template("grace_period_reminder", &context)?;
@@ -380,11 +558,16 @@ impl EmailService {
             &format!("Only {} days left to update payment", days_remaining),
             html,
             text,
-        ).await
+        )
+        .await
     }
 
     /// Send membership canceled email
-    pub async fn send_membership_canceled(&self, email: &str, end_date: DateTime<Utc>) -> Result<(), AppError> {
+    pub async fn send_membership_canceled(
+        &self,
+        email: &str,
+        end_date: DateTime<Utc>,
+    ) -> Result<(), AppError> {
         if !self.config.enabled {
             tracing::info!(email = %email, end_date = %end_date, "Membership canceled email (dev mode)");
             return Ok(());
@@ -392,10 +575,19 @@ impl EmailService {
 
         let mut context = self.base_context();
         context.insert("end_date", &end_date.format("%B %d, %Y").to_string());
-        context.insert("resubscribe_url", &format!("{}/pricing", self.config.base_url));
+        context.insert(
+            "resubscribe_url",
+            &format!("{}/pricing", self.config.base_url),
+        );
 
         let (html, text) = self.render_template("membership_canceled", &context)?;
-        self.send_email(email, &format!("Your {} membership has been canceled", self.config.app_name), html, text).await
+        self.send_email(
+            email,
+            &format!("Your {} membership has been canceled", self.config.app_name),
+            html,
+            text,
+        )
+        .await
     }
 
     /// Send email change verification email (to new address)
@@ -418,11 +610,21 @@ impl EmailService {
         context.insert("verify_url", &verify_url);
 
         let (html, text) = self.render_template("email_change_verify", &context)?;
-        self.send_email(email, &format!("Verify your new {} email address", self.config.app_name), html, text).await
+        self.send_email(
+            email,
+            &format!("Verify your new {} email address", self.config.app_name),
+            html,
+            text,
+        )
+        .await
     }
 
     /// Send email change notification (to old address)
-    pub async fn send_email_change_notification(&self, old_email: &str, new_email: &str) -> Result<(), AppError> {
+    pub async fn send_email_change_notification(
+        &self,
+        old_email: &str,
+        new_email: &str,
+    ) -> Result<(), AppError> {
         if !self.config.enabled {
             tracing::info!(old_email = %old_email, new_email = %new_email, "Email change notification (dev mode - not sending)");
             return Ok(());
@@ -430,10 +632,19 @@ impl EmailService {
 
         let mut context = self.base_context();
         context.insert("new_email", new_email);
-        context.insert("dashboard_url", &format!("{}/dashboard", self.config.base_url));
+        context.insert(
+            "dashboard_url",
+            &format!("{}/dashboard", self.config.base_url),
+        );
 
         let (html, text) = self.render_template("email_change_notification", &context)?;
-        self.send_email(old_email, &format!("Your {} email address was changed", self.config.app_name), html, text).await
+        self.send_email(
+            old_email,
+            &format!("Your {} email address was changed", self.config.app_name),
+            html,
+            text,
+        )
+        .await
     }
 
     /// Send email verification link
@@ -456,11 +667,21 @@ impl EmailService {
         context.insert("verify_url", &verify_url);
 
         let (html, text) = self.render_template("email_verify", &context)?;
-        self.send_email(email, &format!("Verify your {} email address", self.config.app_name), html, text).await
+        self.send_email(
+            email,
+            &format!("Verify your {} email address", self.config.app_name),
+            html,
+            text,
+        )
+        .await
     }
 
     /// Send payment succeeded (receipt) email
-    pub async fn send_payment_succeeded(&self, email: &str, amount_cents: i32) -> Result<(), AppError> {
+    pub async fn send_payment_succeeded(
+        &self,
+        email: &str,
+        amount_cents: i32,
+    ) -> Result<(), AppError> {
         if !self.config.enabled {
             tracing::info!(email = %email, amount = amount_cents, "Payment succeeded email (dev mode)");
             return Ok(());
@@ -468,10 +689,19 @@ impl EmailService {
 
         let mut context = self.base_context();
         context.insert("amount", &format!("{:.2}", amount_cents as f64 / 100.0));
-        context.insert("dashboard_url", &format!("{}/dashboard", self.config.base_url));
+        context.insert(
+            "dashboard_url",
+            &format!("{}/dashboard", self.config.base_url),
+        );
 
         let (html, text) = self.render_template("payment_succeeded", &context)?;
-        self.send_email(email, &format!("Payment received - {}", self.config.app_name), html, text).await
+        self.send_email(
+            email,
+            &format!("Payment received - {}", self.config.app_name),
+            html,
+            text,
+        )
+        .await
     }
 
     /// Notify admins about newly submitted feedback
@@ -517,9 +747,15 @@ impl EmailService {
         }
 
         let mut context = self.base_context();
-        context.insert("subject_line", &feedback.subject.as_deref().unwrap_or("Your feedback"));
+        context.insert(
+            "subject_line",
+            &feedback.subject.as_deref().unwrap_or("Your feedback"),
+        );
         context.insert("original_message", &feedback.message);
-        context.insert("response_message", &feedback.admin_response.as_deref().unwrap_or(""));
+        context.insert(
+            "response_message",
+            &feedback.admin_response.as_deref().unwrap_or(""),
+        );
 
         let (html, text) = self.render_template("feedback_response", &context)?;
         self.send_email(
@@ -533,10 +769,7 @@ impl EmailService {
 
     /// Send admin invite email
     pub async fn send_admin_invite(&self, email: &str, token: &str) -> Result<(), AppError> {
-        let invite_url = format!(
-            "{}/invite/accept?token={}",
-            self.config.base_url, token
-        );
+        let invite_url = format!("{}/invite/accept?token={}", self.config.base_url, token);
 
         if !self.config.enabled {
             tracing::info!(
@@ -553,7 +786,10 @@ impl EmailService {
         let (html, text) = self.render_template("admin_invite", &context)?;
         self.send_email(
             email,
-            &format!("You've been invited to join {} as an admin", self.config.app_name),
+            &format!(
+                "You've been invited to join {} as an admin",
+                self.config.app_name
+            ),
             html,
             text,
         )

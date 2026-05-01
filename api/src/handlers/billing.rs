@@ -8,13 +8,12 @@ use sqlx::PgPool;
 use std::sync::Arc;
 
 use crate::errors::AppError;
+use crate::middleware::extract_client_ip;
 use crate::middleware::AuthenticatedUser;
 use crate::models::RateLimitConfig;
 use crate::repositories::{RateLimitRepository, UserRepository};
 use crate::responses::{get_request_id, success};
 use crate::services::StripeService;
-use crate::middleware::extract_client_ip;
-
 
 /// Request body for SetupIntent creation
 #[derive(Debug, Deserialize)]

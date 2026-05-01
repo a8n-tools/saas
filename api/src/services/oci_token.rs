@@ -104,7 +104,12 @@ mod tests {
             exp: (now + Duration::seconds(900)).timestamp(),
             iss: "a8n".into(),
         };
-        let bad = encode(&Header::new(Algorithm::HS256), &bad_claims, &cfg.encoding_key).unwrap();
+        let bad = encode(
+            &Header::new(Algorithm::HS256),
+            &bad_claims,
+            &cfg.encoding_key,
+        )
+        .unwrap();
 
         let svc = svc();
         assert!(matches!(svc.verify(&bad), Err(OciError::Unauthorized)));

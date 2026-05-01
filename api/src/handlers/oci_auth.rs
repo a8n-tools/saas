@@ -14,7 +14,9 @@ use std::sync::{Arc, OnceLock};
 use crate::errors::OciError;
 use crate::middleware::extract_client_ip;
 use crate::models::{AuditAction, CreateAuditLog, RateLimitConfig, User};
-use crate::repositories::{ApplicationRepository, AuditLogRepository, RateLimitRepository, UserRepository};
+use crate::repositories::{
+    ApplicationRepository, AuditLogRepository, RateLimitRepository, UserRepository,
+};
 use crate::services::{OciTokenService, PasswordService};
 
 #[derive(Debug, Deserialize)]
@@ -38,9 +40,7 @@ pub struct TokenResponse {
 fn has_member_access(user: &User) -> bool {
     user.role == "admin"
         || user.lifetime_member
-        || user
-            .trial_ends_at
-            .map_or(false, |t| t > Utc::now())
+        || user.trial_ends_at.map_or(false, |t| t > Utc::now())
         || user.membership_status == "active"
         || user.membership_status == "grace_period"
 }
@@ -196,12 +196,7 @@ fn parse_repository_pull_scope(scope: &str) -> Option<String> {
     Some(slug.to_string())
 }
 
-async fn audit_failed(
-    pool: &PgPool,
-    email: &str,
-    ip: Option<IpNetwork>,
-    reason: &str,
-) {
+async fn audit_failed(pool: &PgPool, email: &str, ip: Option<IpNetwork>, reason: &str) {
     let log = CreateAuditLog::new(AuditAction::OciLoginFailed)
         .with_ip(ip)
         .with_metadata(serde_json::json!({ "email": email, "reason": reason }));

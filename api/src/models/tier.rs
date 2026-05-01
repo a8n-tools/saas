@@ -12,6 +12,12 @@ pub struct TierConfigRow {
     pub early_adopter_slots: Option<i64>,
     pub early_adopter_trial_days: Option<i64>,
     pub standard_trial_days: Option<i64>,
+    pub free_price_id: Option<String>,
+    pub early_adopter_price_id: Option<String>,
+    pub standard_price_id: Option<String>,
+    pub lifetime_product_id: Option<String>,
+    pub early_adopter_product_id: Option<String>,
+    pub standard_product_id: Option<String>,
     pub updated_at: DateTime<Utc>,
     pub updated_by: Option<Uuid>,
 }
@@ -23,6 +29,12 @@ pub struct TierConfigResponse {
     pub early_adopter_slots: i64,
     pub early_adopter_trial_days: i64,
     pub standard_trial_days: i64,
+    pub free_price_id: Option<String>,
+    pub early_adopter_price_id: Option<String>,
+    pub standard_price_id: Option<String>,
+    pub lifetime_product_id: Option<String>,
+    pub early_adopter_product_id: Option<String>,
+    pub standard_product_id: Option<String>,
     /// Whether values come from "database" or "environment"
     pub source: &'static str,
     /// How many lifetime slots are currently filled

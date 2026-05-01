@@ -304,7 +304,9 @@ impl OidcProvider {
         .fetch_optional(&self.pool)
         .await
         .map_err(|e| AppError::internal(format!("DB error loading auth code: {e}")))?
-        .ok_or(AppError::OidcInvalidGrant("unknown authorization code".into()))?;
+        .ok_or(AppError::OidcInvalidGrant(
+            "unknown authorization code".into(),
+        ))?;
 
         // Already consumed — revoke the family if tokens were issued.
         if row.consumed_at.is_some() || row.revoked_at.is_some() {
@@ -315,7 +317,9 @@ impl OidcProvider {
 
         // Expiry
         if row.expires_at < Utc::now() {
-            return Err(AppError::OidcInvalidGrant("authorization code expired".into()));
+            return Err(AppError::OidcInvalidGrant(
+                "authorization code expired".into(),
+            ));
         }
 
         // client_id binding
@@ -335,7 +339,9 @@ impl OidcProvider {
             URL_SAFE_NO_PAD.encode(h.finalize())
         };
         if challenge_computed != row.code_challenge {
-            return Err(AppError::OidcInvalidGrant("PKCE verification failed".into()));
+            return Err(AppError::OidcInvalidGrant(
+                "PKCE verification failed".into(),
+            ));
         }
 
         // Mark consumed
@@ -429,8 +435,16 @@ impl OidcProvider {
             nonce: nonce.to_string(),
             azp: client.client_id.to_string(),
             at_hash,
-            email: if include_profile { Some(user.email.clone()) } else { None },
-            email_verified: if include_profile { Some(user.email_verified) } else { None },
+            email: if include_profile {
+                Some(user.email.clone())
+            } else {
+                None
+            },
+            email_verified: if include_profile {
+                Some(user.email_verified)
+            } else {
+                None
+            },
             membership_status: if include_profile {
                 Some(user.membership_status.clone())
             } else {
@@ -609,7 +623,9 @@ impl OidcProvider {
         .fetch_optional(&mut *tx)
         .await
         .map_err(|e| AppError::internal(format!("Failed to load client during rotation: {e}")))?
-        .ok_or(AppError::OidcInvalidGrant("client not found or disabled".into()))?;
+        .ok_or(AppError::OidcInvalidGrant(
+            "client not found or disabled".into(),
+        ))?;
 
         // Issue new refresh token
         let raw_new = generate_opaque_token(32);
@@ -643,9 +659,9 @@ impl OidcProvider {
         .await
         .map_err(|e| AppError::internal(format!("Failed to insert new refresh token: {e}")))?;
 
-        tx.commit()
-            .await
-            .map_err(|e| AppError::internal(format!("Failed to commit rotation transaction: {e}")))?;
+        tx.commit().await.map_err(|e| {
+            AppError::internal(format!("Failed to commit rotation transaction: {e}"))
+        })?;
 
         Ok(RotatedTokens {
             raw_refresh: raw_new,
@@ -719,7 +735,9 @@ impl OidcProvider {
         )
         .fetch_all(&self.pool)
         .await
-        .map_err(|e| AppError::internal(format!("Failed to query sessions for backchannel: {e}")))?;
+        .map_err(|e| {
+            AppError::internal(format!("Failed to query sessions for backchannel: {e}"))
+        })?;
 
         // Revoke all active op-sessions (refresh families cascade via FK).
         sqlx::query!(
@@ -767,7 +785,9 @@ impl OidcProvider {
         events.insert(
             LIFECYCLE_EVENT_KEY.to_string(),
             LifecycleEventPayload {
-                subject: LifecycleSubject { id: user_id.to_string() },
+                subject: LifecycleSubject {
+                    id: user_id.to_string(),
+                },
                 event_type: event_type.to_string(),
                 reason: None,
             },
@@ -799,7 +819,10 @@ impl OidcProvider {
         .await
         .map_err(|e| AppError::internal(format!("Failed to query lifecycle event targets: {e}")))?;
 
-        Ok(rows.into_iter().map(|r| (r.client_id, r.lifecycle_event_uri)).collect())
+        Ok(rows
+            .into_iter()
+            .map(|r| (r.client_id, r.lifecycle_event_uri))
+            .collect())
     }
 
     // ── Entitlement check ─────────────────────────────────────────────────────
@@ -983,9 +1006,7 @@ fn sha256_bytes(input: &[u8]) -> Vec<u8> {
 fn user_has_member_access(user: &User) -> bool {
     user.role == "admin"
         || user.lifetime_member
-        || user
-            .trial_ends_at
-            .map_or(false, |t| t > Utc::now())
+        || user.trial_ends_at.map_or(false, |t| t > Utc::now())
         || user.membership_status == "active"
         || user.membership_status == "grace_period"
 }

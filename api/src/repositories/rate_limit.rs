@@ -49,7 +49,11 @@ impl RateLimitRepository {
     }
 
     /// Check rate limit without incrementing
-    pub async fn check(pool: &PgPool, key: &str, config: &RateLimitConfig) -> Result<(i32, bool), AppError> {
+    pub async fn check(
+        pool: &PgPool,
+        key: &str,
+        config: &RateLimitConfig,
+    ) -> Result<(i32, bool), AppError> {
         let window_start = Utc::now() - Duration::seconds(config.window_seconds);
 
         let result = sqlx::query_as::<_, (i32,)>(

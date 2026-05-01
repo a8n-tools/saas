@@ -9,14 +9,16 @@ use uuid::Uuid;
 
 use std::sync::{Arc, RwLock};
 
+use crate::config::TierConfig;
 use crate::errors::AppError;
 use crate::models::{
     AuditAction, CreateAdminInvite, CreateAuditLog, CreateEmailChangeRequest,
     CreateEmailVerificationToken, CreateMagicLinkToken, CreatePasswordResetToken,
     CreateRefreshToken, CreateUser, SubscriptionTier, User, UserResponse, UserRole,
 };
-use crate::config::TierConfig;
-use crate::repositories::{AuditLogRepository, InviteRepository, TotpRepository, TokenRepository, UserRepository};
+use crate::repositories::{
+    AuditLogRepository, InviteRepository, TokenRepository, TotpRepository, UserRepository,
+};
 use crate::services::{JwtService, PasswordService};
 
 /// Authentication tokens returned after login
@@ -36,7 +38,10 @@ pub enum LoginResult {
 /// Result of magic link verification
 pub enum MagicLinkResult {
     Success(AuthTokens, UserResponse, bool),
-    TwoFactorRequired { challenge_token: String, is_new_user: bool },
+    TwoFactorRequired {
+        challenge_token: String,
+        is_new_user: bool,
+    },
 }
 
 /// Result of accepting an admin invite
@@ -78,7 +83,8 @@ impl AuthService {
     ) -> Result<UserResponse, AppError> {
         // Validate password strength
         self.password.validate_strength(&password)?;
-        self.password.validate_not_contains_email(&password, &email)?;
+        self.password
+            .validate_not_contains_email(&password, &email)?;
 
         // Check if email already exists
         if UserRepository::find_by_email(&self.pool, &email)
@@ -160,7 +166,9 @@ impl AuthService {
         }
 
         // Create tokens
-        let tokens = self.create_tokens(&user, device_info.clone(), ip_address).await?;
+        let tokens = self
+            .create_tokens(&user, device_info.clone(), ip_address)
+            .await?;
 
         // Update last login
         UserRepository::update_last_login(&self.pool, user.id).await?;
@@ -202,42 +210,45 @@ impl AuthService {
         let token_hash = self.jwt.hash_token(&refresh_token);
 
         // Find token in database
-        let stored_token = match TokenRepository::find_refresh_token_by_hash(&self.pool, &token_hash).await? {
-            Some(token) => token,
-            None => {
-                // Diagnostic: check if the token exists at all (revoked/expired)
-                match TokenRepository::find_refresh_token_by_hash_any(&self.pool, &token_hash).await {
-                    Ok(Some(stale)) => {
-                        tracing::warn!(
-                            user_id = %claims.sub,
-                            token_id = %claims.jti,
-                            hash_prefix = %&token_hash[..8],
-                            revoked_at = ?stale.revoked_at,
-                            expires_at = %stale.expires_at,
-                            created_at = %stale.created_at,
-                            "token_refresh: token exists in DB but is revoked or expired"
-                        );
+        let stored_token =
+            match TokenRepository::find_refresh_token_by_hash(&self.pool, &token_hash).await? {
+                Some(token) => token,
+                None => {
+                    // Diagnostic: check if the token exists at all (revoked/expired)
+                    match TokenRepository::find_refresh_token_by_hash_any(&self.pool, &token_hash)
+                        .await
+                    {
+                        Ok(Some(stale)) => {
+                            tracing::warn!(
+                                user_id = %claims.sub,
+                                token_id = %claims.jti,
+                                hash_prefix = %&token_hash[..8],
+                                revoked_at = ?stale.revoked_at,
+                                expires_at = %stale.expires_at,
+                                created_at = %stale.created_at,
+                                "token_refresh: token exists in DB but is revoked or expired"
+                            );
+                        }
+                        Ok(None) => {
+                            tracing::warn!(
+                                user_id = %claims.sub,
+                                token_id = %claims.jti,
+                                hash_prefix = %&token_hash[..8],
+                                "token_refresh: token hash does not exist in DB at all"
+                            );
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                user_id = %claims.sub,
+                                token_id = %claims.jti,
+                                error = %e,
+                                "token_refresh: diagnostic query failed"
+                            );
+                        }
                     }
-                    Ok(None) => {
-                        tracing::warn!(
-                            user_id = %claims.sub,
-                            token_id = %claims.jti,
-                            hash_prefix = %&token_hash[..8],
-                            "token_refresh: token hash does not exist in DB at all"
-                        );
-                    }
-                    Err(e) => {
-                        tracing::warn!(
-                            user_id = %claims.sub,
-                            token_id = %claims.jti,
-                            error = %e,
-                            "token_refresh: diagnostic query failed"
-                        );
-                    }
+                    return Err(AppError::InvalidCredentials);
                 }
-                return Err(AppError::InvalidCredentials);
-            }
-        };
+            };
 
         // Check if token is valid
         if !stored_token.is_valid() {
@@ -292,7 +303,11 @@ impl AuthService {
     }
 
     /// Logout from all sessions
-    pub async fn logout_all(&self, user_id: Uuid, ip_address: Option<IpAddr>) -> Result<(), AppError> {
+    pub async fn logout_all(
+        &self,
+        user_id: Uuid,
+        ip_address: Option<IpAddr>,
+    ) -> Result<(), AppError> {
         TokenRepository::revoke_all_user_refresh_tokens(&self.pool, user_id).await?;
 
         // Get user for audit log
@@ -340,16 +355,17 @@ impl AuthService {
         tracing::info!(email = %email, "Magic link requested");
 
         // Audit log
-        let audit_log = if let Ok(Some(user)) = UserRepository::find_by_email(&self.pool, &email).await {
-            CreateAuditLog::new(AuditAction::MagicLinkRequested)
-                .with_actor(user.id, &user.email, &user.role)
-                .with_ip(ip)
-                .with_metadata(serde_json::json!({ "email_known": true }))
-        } else {
-            CreateAuditLog::new(AuditAction::MagicLinkRequested)
-                .with_ip(ip)
-                .with_metadata(serde_json::json!({ "email_known": false, "email": email }))
-        };
+        let audit_log =
+            if let Ok(Some(user)) = UserRepository::find_by_email(&self.pool, &email).await {
+                CreateAuditLog::new(AuditAction::MagicLinkRequested)
+                    .with_actor(user.id, &user.email, &user.role)
+                    .with_ip(ip)
+                    .with_metadata(serde_json::json!({ "email_known": true }))
+            } else {
+                CreateAuditLog::new(AuditAction::MagicLinkRequested)
+                    .with_ip(ip)
+                    .with_metadata(serde_json::json!({ "email_known": false, "email": email }))
+            };
         // Non-critical — don't fail the request if audit logging fails
         if let Err(e) = AuditLogRepository::create(&self.pool, audit_log).await {
             tracing::error!(error = %e, "Failed to create audit log for magic link request");
@@ -383,34 +399,35 @@ impl AuthService {
         TokenRepository::mark_magic_link_token_used(&self.pool, magic_token.id).await?;
 
         // Find or create user
-        let (user, is_new_user) = match UserRepository::find_by_email(&self.pool, &magic_token.email).await? {
-            Some(user) => {
-                // Set email as verified
-                UserRepository::set_email_verified(&self.pool, user.id).await?;
-                let user = UserRepository::find_by_id(&self.pool, user.id)
-                    .await?
-                    .ok_or(AppError::not_found("User"))?;
-                (user, false)
-            }
-            None => {
-                // Create new user (passwordless)
-                let user = UserRepository::create(
-                    &self.pool,
-                    CreateUser {
-                        email: magic_token.email.clone(),
-                        password_hash: None,
-                        role: UserRole::Subscriber,
-                    },
-                )
-                .await?;
-                // Set email as verified since they proved ownership via magic link
-                UserRepository::set_email_verified(&self.pool, user.id).await?;
-                let user = UserRepository::find_by_id(&self.pool, user.id)
-                    .await?
-                    .ok_or(AppError::not_found("User"))?;
-                (user, true)
-            }
-        };
+        let (user, is_new_user) =
+            match UserRepository::find_by_email(&self.pool, &magic_token.email).await? {
+                Some(user) => {
+                    // Set email as verified
+                    UserRepository::set_email_verified(&self.pool, user.id).await?;
+                    let user = UserRepository::find_by_id(&self.pool, user.id)
+                        .await?
+                        .ok_or(AppError::not_found("User"))?;
+                    (user, false)
+                }
+                None => {
+                    // Create new user (passwordless)
+                    let user = UserRepository::create(
+                        &self.pool,
+                        CreateUser {
+                            email: magic_token.email.clone(),
+                            password_hash: None,
+                            role: UserRole::Subscriber,
+                        },
+                    )
+                    .await?;
+                    // Set email as verified since they proved ownership via magic link
+                    UserRepository::set_email_verified(&self.pool, user.id).await?;
+                    let user = UserRepository::find_by_id(&self.pool, user.id)
+                        .await?
+                        .ok_or(AppError::not_found("User"))?;
+                    (user, true)
+                }
+            };
 
         // Check if 2FA is enabled AND actually configured
         if user.two_factor_enabled {
@@ -419,7 +436,10 @@ impl AuthService {
 
             if has_verified_totp {
                 let challenge_token = self.jwt.create_2fa_challenge_token(user.id)?;
-                return Ok(MagicLinkResult::TwoFactorRequired { challenge_token, is_new_user });
+                return Ok(MagicLinkResult::TwoFactorRequired {
+                    challenge_token,
+                    is_new_user,
+                });
             }
 
             // Flag is true but no verified TOTP exists — reset the flag
@@ -442,7 +462,11 @@ impl AuthService {
         )
         .await?;
 
-        Ok(MagicLinkResult::Success(tokens, UserResponse::from(user), is_new_user))
+        Ok(MagicLinkResult::Success(
+            tokens,
+            UserResponse::from(user),
+            is_new_user,
+        ))
     }
 
     /// Complete 2FA login after challenge token + TOTP/recovery code verification
@@ -466,7 +490,9 @@ impl AuthService {
         }
 
         // Create tokens
-        let tokens = self.create_tokens(&user, device_info.clone(), ip_address).await?;
+        let tokens = self
+            .create_tokens(&user, device_info.clone(), ip_address)
+            .await?;
 
         // Update last login
         UserRepository::update_last_login(&self.pool, user.id).await?;
@@ -537,9 +563,10 @@ impl AuthService {
     pub async fn verify_reset_token(&self, token: String) -> Result<Uuid, AppError> {
         let token_hash = self.jwt.hash_token(&token);
 
-        let reset_token = TokenRepository::find_password_reset_token_by_hash(&self.pool, &token_hash)
-            .await?
-            .ok_or(AppError::InvalidCredentials)?;
+        let reset_token =
+            TokenRepository::find_password_reset_token_by_hash(&self.pool, &token_hash)
+                .await?
+                .ok_or(AppError::InvalidCredentials)?;
 
         if !reset_token.is_valid() {
             return Err(AppError::TokenExpired);
@@ -564,9 +591,10 @@ impl AuthService {
         let token_hash = self.jwt.hash_token(&token);
 
         // Find and validate token
-        let reset_token = TokenRepository::find_password_reset_token_by_hash(&self.pool, &token_hash)
-            .await?
-            .ok_or(AppError::InvalidCredentials)?;
+        let reset_token =
+            TokenRepository::find_password_reset_token_by_hash(&self.pool, &token_hash)
+                .await?
+                .ok_or(AppError::InvalidCredentials)?;
 
         if !reset_token.is_valid() {
             return Err(AppError::TokenExpired);
@@ -578,7 +606,8 @@ impl AuthService {
             .ok_or(AppError::not_found("User"))?;
 
         // Validate password doesn't contain email
-        self.password.validate_not_contains_email(&new_password, &user.email)?;
+        self.password
+            .validate_not_contains_email(&new_password, &user.email)?;
 
         // Hash new password
         let password_hash = self.password.hash(&new_password)?;
@@ -618,18 +647,22 @@ impl AuthService {
             .ok_or(AppError::not_found("User"))?;
 
         // Verify current password
-        let password_hash = user
-            .password_hash
-            .as_ref()
-            .ok_or(AppError::validation("password", "No password set for this account"))?;
+        let password_hash = user.password_hash.as_ref().ok_or(AppError::validation(
+            "password",
+            "No password set for this account",
+        ))?;
 
         if !self.password.verify(&current_password, password_hash)? {
-            return Err(AppError::validation("current_password", "Current password is incorrect"));
+            return Err(AppError::validation(
+                "current_password",
+                "Current password is incorrect",
+            ));
         }
 
         // Validate new password
         self.password.validate_strength(&new_password)?;
-        self.password.validate_not_contains_email(&new_password, &user.email)?;
+        self.password
+            .validate_not_contains_email(&new_password, &user.email)?;
 
         // Hash and update
         let new_hash = self.password.hash(&new_password)?;
@@ -669,7 +702,10 @@ impl AuthService {
 
         // Check if new email is same as current
         if user.email.to_lowercase() == new_email.to_lowercase() {
-            return Err(AppError::validation("email", "New email must be different from current email"));
+            return Err(AppError::validation(
+                "email",
+                "New email must be different from current email",
+            ));
         }
 
         // Check if new email is already taken
@@ -682,11 +718,16 @@ impl AuthService {
 
         // If user has a password, require it for verification
         if user.password_hash.is_some() {
-            let password = current_password
-                .ok_or(AppError::validation("current_password", "Password is required to change email"))?;
+            let password = current_password.ok_or(AppError::validation(
+                "current_password",
+                "Password is required to change email",
+            ))?;
             let password_hash = user.password_hash.as_ref().unwrap();
             if !self.password.verify(&password, password_hash)? {
-                return Err(AppError::validation("current_password", "Current password is incorrect"));
+                return Err(AppError::validation(
+                    "current_password",
+                    "Current password is incorrect",
+                ));
             }
         }
 
@@ -695,7 +736,9 @@ impl AuthService {
         if user.email_verified {
             // Rate limit: 3 requests per hour
             let since = Utc::now() - Duration::hours(1);
-            let count = TokenRepository::count_recent_email_change_requests(&self.pool, user_id, since).await?;
+            let count =
+                TokenRepository::count_recent_email_change_requests(&self.pool, user_id, since)
+                    .await?;
             if count >= 3 {
                 return Err(AppError::RateLimited { retry_after: 3600 });
             }
@@ -744,11 +787,11 @@ impl AuthService {
 
             // Re-check email availability inside the transaction
             let existing: Option<(Uuid,)> = sqlx::query_as(
-                "SELECT id FROM users WHERE LOWER(email) = LOWER($1) AND deleted_at IS NULL"
+                "SELECT id FROM users WHERE LOWER(email) = LOWER($1) AND deleted_at IS NULL",
             )
-                .bind(&new_email)
-                .fetch_optional(&mut *tx)
-                .await?;
+            .bind(&new_email)
+            .fetch_optional(&mut *tx)
+            .await?;
             if existing.is_some() {
                 return Err(AppError::conflict("Email already registered"));
             }
@@ -774,7 +817,9 @@ impl AuthService {
                 CreateAuditLog::new(AuditAction::EmailChangeCompleted)
                     .with_actor(user.id, &user.email, &user.role)
                     .with_ip(ip)
-                    .with_metadata(serde_json::json!({ "new_email": new_email, "immediate": true })),
+                    .with_metadata(
+                        serde_json::json!({ "new_email": new_email, "immediate": true }),
+                    ),
             )
             .await?;
 
@@ -808,33 +853,34 @@ impl AuthService {
         let mut tx = self.pool.begin().await?;
 
         // Lock the user row to prevent concurrent email changes
-        let user: User = sqlx::query_as(
-            "SELECT * FROM users WHERE id = $1 AND deleted_at IS NULL FOR UPDATE"
-        )
-            .bind(request.user_id)
-            .fetch_optional(&mut *tx)
-            .await?
-            .ok_or(AppError::not_found("User"))?;
+        let user: User =
+            sqlx::query_as("SELECT * FROM users WHERE id = $1 AND deleted_at IS NULL FOR UPDATE")
+                .bind(request.user_id)
+                .fetch_optional(&mut *tx)
+                .await?
+                .ok_or(AppError::not_found("User"))?;
 
         let old_email = user.email.clone();
 
         // Re-check email availability inside the transaction
         let existing: Option<(Uuid,)> = sqlx::query_as(
-            "SELECT id FROM users WHERE LOWER(email) = LOWER($1) AND deleted_at IS NULL"
+            "SELECT id FROM users WHERE LOWER(email) = LOWER($1) AND deleted_at IS NULL",
         )
-            .bind(&new_email)
-            .fetch_optional(&mut *tx)
-            .await?;
+        .bind(&new_email)
+        .fetch_optional(&mut *tx)
+        .await?;
         if existing.is_some() {
             return Err(AppError::conflict("Email already registered"));
         }
 
         // Update email (set verified since they proved ownership)
-        sqlx::query("UPDATE users SET email = $1, email_verified = TRUE, updated_at = NOW() WHERE id = $2")
-            .bind(&new_email)
-            .bind(user.id)
-            .execute(&mut *tx)
-            .await?;
+        sqlx::query(
+            "UPDATE users SET email = $1, email_verified = TRUE, updated_at = NOW() WHERE id = $2",
+        )
+        .bind(&new_email)
+        .bind(user.id)
+        .execute(&mut *tx)
+        .await?;
 
         // Confirm the request
         sqlx::query("UPDATE email_change_requests SET confirmed_at = NOW() WHERE id = $1")
@@ -856,7 +902,9 @@ impl AuthService {
             CreateAuditLog::new(AuditAction::EmailChangeCompleted)
                 .with_actor(user.id, &old_email, &user.role)
                 .with_ip(ip)
-                .with_metadata(serde_json::json!({ "old_email": old_email, "new_email": new_email })),
+                .with_metadata(
+                    serde_json::json!({ "old_email": old_email, "new_email": new_email }),
+                ),
         )
         .await?;
 
@@ -970,7 +1018,11 @@ impl AuthService {
             UserRepository::count_tier_assignments(&mut *tx).await?;
 
         // Snapshot tier config under the lock so values are consistent
-        let tc = self.tier_config.read().expect("TierConfig lock poisoned").clone();
+        let tc = self
+            .tier_config
+            .read()
+            .expect("TierConfig lock poisoned")
+            .clone();
 
         let tier = if lifetime_count < tc.lifetime_slots {
             SubscriptionTier::Lifetime
@@ -985,12 +1037,10 @@ impl AuthService {
             .await?;
 
         // Set email_verified and assign tier in the same transaction
-        sqlx::query(
-            "UPDATE users SET email_verified = TRUE, updated_at = NOW() WHERE id = $1",
-        )
-        .bind(user.id)
-        .execute(&mut *tx)
-        .await?;
+        sqlx::query("UPDATE users SET email_verified = TRUE, updated_at = NOW() WHERE id = $1")
+            .bind(user.id)
+            .execute(&mut *tx)
+            .await?;
 
         UserRepository::assign_subscription_tier(
             &mut *tx,
@@ -998,7 +1048,8 @@ impl AuthService {
             &tier,
             tc.early_adopter_trial_days,
             tc.standard_trial_days,
-        ).await?;
+        )
+        .await?;
 
         tx.commit().await?;
 
@@ -1097,11 +1148,14 @@ impl AuthService {
             Some(user) => {
                 // Existing non-admin user — upgrade to admin
                 InviteRepository::mark_accepted(&self.pool, invite.id).await?;
-                let updated_user = UserRepository::update_role(&self.pool, user.id, "admin").await?;
+                let updated_user =
+                    UserRepository::update_role(&self.pool, user.id, "admin").await?;
                 UserRepository::set_email_verified(&self.pool, user.id).await?;
 
                 // Create auth tokens
-                let tokens = self.create_tokens(&updated_user, device_info, ip_address).await?;
+                let tokens = self
+                    .create_tokens(&updated_user, device_info, ip_address)
+                    .await?;
                 UserRepository::update_last_login(&self.pool, user.id).await?;
 
                 // Audit log
@@ -1122,7 +1176,10 @@ impl AuthService {
                     .await?
                     .ok_or(AppError::not_found("User"))?;
 
-                Ok(AcceptInviteResult::Success(tokens, UserResponse::from(refreshed)))
+                Ok(AcceptInviteResult::Success(
+                    tokens,
+                    UserResponse::from(refreshed),
+                ))
             }
             None => {
                 // New user — need password
@@ -1137,7 +1194,8 @@ impl AuthService {
 
                 // Validate password
                 self.password.validate_strength(&password)?;
-                self.password.validate_not_contains_email(&password, &invite.email)?;
+                self.password
+                    .validate_not_contains_email(&password, &invite.email)?;
                 let password_hash = self.password.hash(&password)?;
 
                 // Create user as admin
@@ -1177,7 +1235,10 @@ impl AuthService {
                     .await?
                     .ok_or(AppError::not_found("User"))?;
 
-                Ok(AcceptInviteResult::Success(tokens, UserResponse::from(refreshed)))
+                Ok(AcceptInviteResult::Success(
+                    tokens,
+                    UserResponse::from(refreshed),
+                ))
             }
         }
     }
@@ -1267,7 +1328,9 @@ mod tests {
     fn generate_secure_token_url_safe() {
         let token = generate_secure_token(64);
         // URL-safe base64 only contains [A-Za-z0-9_-]
-        assert!(token.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-'));
+        assert!(token
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-'));
     }
 
     #[test]
@@ -1276,11 +1339,9 @@ mod tests {
             let token = generate_secure_token(len);
             assert!(!token.is_empty());
             // Decode back to verify it's valid base64
-            let decoded = base64::Engine::decode(
-                &base64::engine::general_purpose::URL_SAFE_NO_PAD,
-                &token,
-            )
-            .unwrap();
+            let decoded =
+                base64::Engine::decode(&base64::engine::general_purpose::URL_SAFE_NO_PAD, &token)
+                    .unwrap();
             assert_eq!(decoded.len(), len);
         }
     }

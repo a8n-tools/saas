@@ -101,9 +101,7 @@ impl AuditLogRepository {
             .fetch_all(pool)
             .await?;
 
-        let total: (i64,) = sqlx::query_as(&count_query)
-            .fetch_one(pool)
-            .await?;
+        let total: (i64,) = sqlx::query_as(&count_query).fetch_one(pool).await?;
 
         Ok((logs, total.0))
     }
@@ -151,11 +149,10 @@ impl AuditLogRepository {
         .fetch_all(pool)
         .await?;
 
-        let total: (i64,) = sqlx::query_as(
-            "SELECT COUNT(*) FROM audit_logs WHERE is_admin_action = TRUE",
-        )
-        .fetch_one(pool)
-        .await?;
+        let total: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM audit_logs WHERE is_admin_action = TRUE")
+                .fetch_one(pool)
+                .await?;
 
         Ok((logs, total.0))
     }

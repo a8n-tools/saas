@@ -82,9 +82,9 @@ impl DownloadCache {
         release_tag: &str,
         asset: &ReleaseAsset,
     ) -> Result<Arc<DownloadCacheRow>, DownloadCacheError> {
-        if let Some(row) = DownloadCacheRepository::find(
-            &self.pool, app_id, release_tag, &asset.name,
-        ).await? {
+        if let Some(row) =
+            DownloadCacheRepository::find(&self.pool, app_id, release_tag, &asset.name).await?
+        {
             let path = self.file_path(&row.content_sha256);
             if fs::metadata(&path).await.is_ok() {
                 DownloadCacheRepository::touch(&self.pool, row.id).await?;
@@ -156,7 +156,8 @@ impl DownloadCache {
             &sha,
             total,
             &asset.content_type,
-        ).await?;
+        )
+        .await?;
 
         // If the upsert replaced an existing row with a different SHA, the
         // old on-disk file may now be orphaned.
@@ -188,7 +189,10 @@ impl DownloadCache {
         let mut hasher = Sha256::new();
         let mut total: i64 = 0;
 
-        let mut stream = self.client.download_asset(&asset.browser_download_url).await?;
+        let mut stream = self
+            .client
+            .download_asset(&asset.browser_download_url)
+            .await?;
         while let Some(chunk) = stream.next().await {
             let bytes = chunk.map_err(|e| {
                 DownloadCacheError::Io(std::io::Error::new(std::io::ErrorKind::Other, e))

@@ -94,7 +94,11 @@ impl EmailConfig {
         let has_smtp = !smtp_host.is_empty() && smtp_host != "localhost";
 
         // SMTP_TLS: "implicit" (port 465) or "starttls" (port 587)
-        let smtp_tls = match env::var("SMTP_TLS").unwrap_or_default().to_lowercase().as_str() {
+        let smtp_tls = match env::var("SMTP_TLS")
+            .unwrap_or_default()
+            .to_lowercase()
+            .as_str()
+        {
             "starttls" => SmtpTls::Starttls,
             // Default to implicit TLS (port 465)
             _ => SmtpTls::Implicit,
@@ -206,6 +210,18 @@ pub struct TierConfig {
     pub early_adopter_trial_days: i64,
     /// Trial duration in days for standard tier
     pub standard_trial_days: i64,
+    /// Stripe Price ID for lifetime members ($0 recurring). Falls back to STRIPE_FREE_PRICE_ID env var.
+    pub free_price_id: Option<String>,
+    /// Stripe Price ID unlocked after early adopter trial ends.
+    pub early_adopter_price_id: Option<String>,
+    /// Stripe Price ID unlocked after standard trial ends.
+    pub standard_price_id: Option<String>,
+    /// Stripe Product ID that maps to the Lifetime tier.
+    pub lifetime_product_id: Option<String>,
+    /// Stripe Product ID that maps to the Early Adopter tier.
+    pub early_adopter_product_id: Option<String>,
+    /// Stripe Product ID that maps to the Standard tier.
+    pub standard_product_id: Option<String>,
 }
 
 impl TierConfig {
@@ -228,6 +244,14 @@ impl TierConfig {
                 .ok()
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(30),
+            free_price_id: env::var("STRIPE_FREE_PRICE_ID")
+                .ok()
+                .filter(|s| !s.is_empty()),
+            early_adopter_price_id: None,
+            standard_price_id: None,
+            lifetime_product_id: None,
+            early_adopter_product_id: None,
+            standard_product_id: None,
         }
     }
 
@@ -242,6 +266,13 @@ impl TierConfig {
                 .early_adopter_trial_days
                 .unwrap_or(env.early_adopter_trial_days),
             standard_trial_days: row.standard_trial_days.unwrap_or(env.standard_trial_days),
+            // free_price_id: DB value takes precedence; fall back to STRIPE_FREE_PRICE_ID env var
+            free_price_id: row.free_price_id.clone().or(env.free_price_id),
+            early_adopter_price_id: row.early_adopter_price_id.clone(),
+            standard_price_id: row.standard_price_id.clone(),
+            lifetime_product_id: row.lifetime_product_id.clone(),
+            early_adopter_product_id: row.early_adopter_product_id.clone(),
+            standard_product_id: row.standard_product_id.clone(),
         }
     }
 
@@ -251,6 +282,12 @@ impl TierConfig {
             || row.early_adopter_slots.is_some()
             || row.early_adopter_trial_days.is_some()
             || row.standard_trial_days.is_some()
+            || row.free_price_id.is_some()
+            || row.early_adopter_price_id.is_some()
+            || row.standard_price_id.is_some()
+            || row.lifetime_product_id.is_some()
+            || row.early_adopter_product_id.is_some()
+            || row.standard_product_id.is_some()
     }
 }
 
@@ -431,12 +468,17 @@ impl Config {
         let port = env::var("APP_PORT")
             .unwrap_or_else(|_| "4000".to_string())
             .parse::<u16>()
-            .map_err(|_| ConfigError::InvalidValue("APP_PORT".to_string(), "must be a valid port number".to_string()))?;
+            .map_err(|_| {
+                ConfigError::InvalidValue(
+                    "APP_PORT".to_string(),
+                    "must be a valid port number".to_string(),
+                )
+            })?;
 
         let log_level = env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string());
 
-        let cors_origin = env::var("CORS_ORIGIN")
-            .unwrap_or_else(|_| "http://localhost:5173".to_string());
+        let cors_origin =
+            env::var("CORS_ORIGIN").unwrap_or_else(|_| "http://localhost:5173".to_string());
 
         let environment = env::var("ENVIRONMENT").unwrap_or_else(|_| "production".to_string());
         let app_name = env::var("APP_NAME").unwrap_or_else(|_| "localhost".to_string());
@@ -451,8 +493,10 @@ impl Config {
 
         let totp_encryption_key = Self::load_totp_encryption_key(&environment);
         let stripe_encryption_key = Self::load_stripe_encryption_key(&environment);
-        let totp_encryption_key_prev = Self::load_optional_encryption_key("TOTP_ENCRYPTION_KEY_PREV");
-        let stripe_encryption_key_prev = Self::load_optional_encryption_key("STRIPE_ENCRYPTION_KEY_PREV");
+        let totp_encryption_key_prev =
+            Self::load_optional_encryption_key("TOTP_ENCRYPTION_KEY_PREV");
+        let stripe_encryption_key_prev =
+            Self::load_optional_encryption_key("STRIPE_ENCRYPTION_KEY_PREV");
         let totp_key_version: i16 = env::var("TOTP_KEY_VERSION")
             .ok()
             .and_then(|v| v.parse().ok())
@@ -510,8 +554,8 @@ impl Config {
     fn load_totp_encryption_key(environment: &str) -> [u8; 32] {
         match env::var("TOTP_ENCRYPTION_KEY") {
             Ok(hex_str) => {
-                let bytes = hex::decode(hex_str.trim())
-                    .expect("TOTP_ENCRYPTION_KEY must be valid hex");
+                let bytes =
+                    hex::decode(hex_str.trim()).expect("TOTP_ENCRYPTION_KEY must be valid hex");
                 let key: [u8; 32] = bytes
                     .try_into()
                     .expect("TOTP_ENCRYPTION_KEY must be exactly 32 bytes (64 hex chars)");
@@ -531,8 +575,8 @@ impl Config {
     fn load_stripe_encryption_key(environment: &str) -> [u8; 32] {
         match env::var("STRIPE_ENCRYPTION_KEY") {
             Ok(hex_str) => {
-                let bytes = hex::decode(hex_str.trim())
-                    .expect("STRIPE_ENCRYPTION_KEY must be valid hex");
+                let bytes =
+                    hex::decode(hex_str.trim()).expect("STRIPE_ENCRYPTION_KEY must be valid hex");
                 let key: [u8; 32] = bytes
                     .try_into()
                     .expect("STRIPE_ENCRYPTION_KEY must be exactly 32 bytes (64 hex chars)");
@@ -687,7 +731,10 @@ mod tests {
         env::set_var("FORGEJO_API_TOKEN", "test-token");
         let cfg = DownloadConfig::from_env();
         assert!(cfg.enabled());
-        assert_eq!(cfg.forgejo_base_url.as_deref(), Some("https://git.example.com"));
+        assert_eq!(
+            cfg.forgejo_base_url.as_deref(),
+            Some("https://git.example.com")
+        );
         env::remove_var("FORGEJO_BASE_URL");
         env::remove_var("FORGEJO_API_TOKEN");
     }
@@ -698,8 +745,18 @@ mod tests {
         // Key versions use: env::var("X").ok().and_then(|v| v.parse().ok()).unwrap_or(1)
         assert_eq!("3".parse::<i16>().unwrap(), 3);
         assert_eq!("7".parse::<i16>().unwrap(), 7);
-        assert_eq!(None::<String>.and_then(|v: String| v.parse::<i16>().ok()).unwrap_or(1), 1);
-        assert_eq!(Some("invalid".to_string()).and_then(|v| v.parse::<i16>().ok()).unwrap_or(1), 1);
+        assert_eq!(
+            None::<String>
+                .and_then(|v: String| v.parse::<i16>().ok())
+                .unwrap_or(1),
+            1
+        );
+        assert_eq!(
+            Some("invalid".to_string())
+                .and_then(|v| v.parse::<i16>().ok())
+                .unwrap_or(1),
+            1
+        );
     }
 
     #[test]

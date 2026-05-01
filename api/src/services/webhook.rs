@@ -99,8 +99,8 @@ impl WebhookService {
     }
 
     fn sign(&self, payload: &str) -> String {
-        let mut mac =
-            HmacSha256::new_from_slice(self.signing_secret.as_bytes()).expect("HMAC accepts any key size");
+        let mut mac = HmacSha256::new_from_slice(self.signing_secret.as_bytes())
+            .expect("HMAC accepts any key size");
         mac.update(payload.as_bytes());
         let result = mac.finalize();
         hex::encode(result.into_bytes())

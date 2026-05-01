@@ -19,7 +19,30 @@
       "Bash(grep -r SetupIntent ~/.cargo/registry/src/index.crates.io-*/async-stripe-0.37.*/src/ --include=*.rs -l)",
       "Bash(find:*)",
       "Bash(grep -rn setup_intent /home/long/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-stripe-0.37.3/src/ --include=*.rs)",
-      "Bash(cargo update:*)"
+      "Bash(cargo update:*)",
+      "Bash(cargo generate-lockfile *)",
+      "Bash(curl *)",
+      "Bash(echo \"Exit: $?\")",
+      "Bash(just migrate *)",
+      "Bash(cargo install *)",
+      "Bash(docker port saas-postgres-long *)",
+      "Bash(docker inspect saas-postgres-long *)",
+      "Bash(docker restart saas-api-long *)",
+      "Bash(timeout 300 bash *)",
+      "Bash(openssl genpkey *)",
+      "Bash(sudo chown *)",
+      "Bash(docker run --rm -v /home/long/saas/secrets:/out alpine sh -c ' *)",
+      "Bash(grep -v \"^$\")",
+      "Bash(docker run *)",
+      "Bash(xargs cat *)",
+      "Bash(cargo fmt *)",
+      "Bash(cargo clippy *)",
+      "Bash(SQLX_OFFLINE=true cargo clippy)",
+      "Bash(grep -E \"^error|^warning: \\\\`a8n\")",
+      "Bash(openssl dgst *)",
+      "Bash(xxd -p -c 1000)",
+      "Bash(grep \"^warning: \\\\`a8n\")",
+      "Bash(git -C /home/long/saas status --short secrets/)"
     ]
   }
 }
