@@ -215,3 +215,7 @@ Cargo.lock
 # End of https://www.toptal.com/developers/gitignore/api/rust,dotenv,visualstudiocode,jetbrains
 
 data/
+# Cryptographic key material — never commit
+secrets/
+*.pem
+*.key
