@@ -1,7 +1,8 @@
 -- Register Rusty Links as a confidential OIDC client.
 -- The client_secret_hash must be updated with a real Argon2id hash before deploying.
 -- Generate the plaintext secret with: openssl rand -hex 32
--- Then hash it with: just oauth-client-secret-hash <secret>
+-- Then hash it (Argon2id m=65536 t=3 p=4, matching PasswordService) with:
+--   python3 -c "from argon2 import PasswordHasher, Type; print(PasswordHasher(type=Type.ID, memory_cost=65536, time_cost=3, parallelism=4).hash('<secret>'))"
 -- The plaintext secret goes into OIDC_CLIENT_SECRET in the Rusty Links environment.
 
 INSERT INTO oauth_clients (
