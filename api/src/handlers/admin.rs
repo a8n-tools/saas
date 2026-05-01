@@ -13,18 +13,21 @@ use chrono::{Duration, Utc};
 use crate::config::Config;
 use crate::errors::AppError;
 use crate::middleware::{AdminUser, AuthenticatedUser};
+use crate::models::stripe::encrypt_secret;
 use crate::models::{
-    AuditAction, CreateAuditLog, CreateApplication, CreatePasswordResetToken, CreateRefreshToken,
+    AuditAction, CreateApplication, CreateAuditLog, CreatePasswordResetToken, CreateRefreshToken,
     DeleteApplicationRequest, MembershipStatus, StripeConfigResponse, SwapApplicationOrderRequest,
     UpdateApplication, UserResponse,
 };
-use crate::models::stripe::encrypt_secret;
 use crate::repositories::{
-    ApplicationRepository, AuditLogRepository, InviteRepository,
-    NotificationRepository, StripeConfigRepository, TokenRepository, TotpRepository, UserRepository,
+    ApplicationRepository, AuditLogRepository, InviteRepository, NotificationRepository,
+    StripeConfigRepository, TokenRepository, TotpRepository, UserRepository,
 };
-use crate::responses::{get_request_id, created, paginated, success, success_no_data};
-use crate::services::{AuthService, DownloadCache, EmailService, EncryptionKeySet, JwtService, ManifestCache, PasswordService, ReleaseCache, StripeConfig, StripeService, TotpService, WebhookService};
+use crate::responses::{created, get_request_id, paginated, success, success_no_data};
+use crate::services::{
+    AuthService, DownloadCache, EmailService, EncryptionKeySet, JwtService, ManifestCache,
+    PasswordService, ReleaseCache, StripeConfig, StripeService, TotpService, WebhookService,
+};
 use crate::validation;
 
 // =============================================================================
@@ -52,7 +55,10 @@ pub async fn list_users(
 
     let page = query.page.unwrap_or(1).max(1);
     let per_page = query.per_page.unwrap_or(20).min(100);
-    let status_filter = query.status.as_ref().map(|s| MembershipStatus::from(s.as_str()));
+    let status_filter = query
+        .status
+        .as_ref()
+        .map(|s| MembershipStatus::from(s.as_str()));
 
     let (users, total) = UserRepository::list_paginated(
         &pool,
@@ -149,7 +155,10 @@ pub async fn delete_user(
 
     // Prevent self-deletion
     if admin.0.sub == user_id {
-        return Err(AppError::validation("user_id", "Cannot delete your own account"));
+        return Err(AppError::validation(
+            "user_id",
+            "Cannot delete your own account",
+        ));
     }
 
     // Check if user exists
@@ -208,12 +217,18 @@ pub async fn update_user_role(
     // Validate role
     let valid_roles = ["subscriber", "admin"];
     if !valid_roles.contains(&body.role.as_str()) {
-        return Err(AppError::validation("role", "Invalid role. Must be 'subscriber' or 'admin'"));
+        return Err(AppError::validation(
+            "role",
+            "Invalid role. Must be 'subscriber' or 'admin'",
+        ));
     }
 
     // Prevent changing own role
     if admin.0.sub == user_id {
-        return Err(AppError::validation("user_id", "Cannot change your own role"));
+        return Err(AppError::validation(
+            "user_id",
+            "Cannot change your own role",
+        ));
     }
 
     let target_user = UserRepository::find_by_id(&pool, user_id)
@@ -268,8 +283,8 @@ pub async fn grant_membership(
     let request_id = get_request_id(&req);
 
     // Grant free tier — sets lifetime_member=true and subscription_status='active'
-    let user = UserRepository::grant_free_membership(pool.get_ref(), body.user_id, admin.0.sub)
-        .await?;
+    let user =
+        UserRepository::grant_free_membership(pool.get_ref(), body.user_id, admin.0.sub).await?;
 
     // Create $0 Stripe subscription for invoice generation
     if let Some(free_price_id) = stripe.free_price_id() {
@@ -281,14 +296,22 @@ pub async fn grant_membership(
                 id
             }
         };
-        stripe.create_free_subscription(&customer_id, &free_price_id).await?;
+        stripe
+            .create_free_subscription(&customer_id, &free_price_id)
+            .await?;
     }
 
     // Lock price at $0 if requested
     let price_locked = body.price_locked.unwrap_or(false);
     let locked_amount = body.locked_price_amount.unwrap_or(0);
     if price_locked {
-        UserRepository::lock_price(pool.get_ref(), body.user_id, "price_admin_grant", locked_amount).await?;
+        UserRepository::lock_price(
+            pool.get_ref(),
+            body.user_id,
+            "price_admin_grant",
+            locked_amount,
+        )
+        .await?;
     }
 
     let audit_log = CreateAuditLog::new(AuditAction::AdminMembershipGranted)
@@ -314,8 +337,12 @@ pub async fn revoke_membership(
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
 
-    UserRepository::update_membership_status(pool.get_ref(), body.user_id, MembershipStatus::Canceled)
-        .await?;
+    UserRepository::update_membership_status(
+        pool.get_ref(),
+        body.user_id,
+        MembershipStatus::Canceled,
+    )
+    .await?;
 
     // Reset tier to standard so the slot opens back up for the next user
     UserRepository::reset_subscription_tier(pool.get_ref(), body.user_id).await?;
@@ -427,7 +454,10 @@ pub async fn list_all_applications(
 
     let apps = ApplicationRepository::list_all(&pool).await?;
 
-    Ok(success(serde_json::json!({ "applications": apps }), request_id))
+    Ok(success(
+        serde_json::json!({ "applications": apps }),
+        request_id,
+    ))
 }
 
 /// PUT /v1/admin/applications/{app_id}/swap-order
@@ -446,7 +476,10 @@ pub async fn swap_application_order(
 
     let apps = ApplicationRepository::list_all(&pool).await?;
 
-    Ok(success(serde_json::json!({ "applications": apps }), request_id))
+    Ok(success(
+        serde_json::json!({ "applications": apps }),
+        request_id,
+    ))
 }
 
 /// PUT /v1/admin/applications/{app_id}
@@ -471,9 +504,15 @@ pub async fn update_application(
         .ok_or(AppError::not_found("Application"))?;
 
     // All-or-nothing Forgejo validation on merged values
-    let merged_owner = body.forgejo_owner.as_ref().or(old_app.forgejo_owner.as_ref());
+    let merged_owner = body
+        .forgejo_owner
+        .as_ref()
+        .or(old_app.forgejo_owner.as_ref());
     let merged_repo = body.forgejo_repo.as_ref().or(old_app.forgejo_repo.as_ref());
-    let merged_tag = body.pinned_release_tag.as_ref().or(old_app.pinned_release_tag.as_ref());
+    let merged_tag = body
+        .pinned_release_tag
+        .as_ref()
+        .or(old_app.pinned_release_tag.as_ref());
     let forgejo_any = merged_owner.is_some() || merged_repo.is_some() || merged_tag.is_some();
     let forgejo_all = merged_owner.is_some() && merged_repo.is_some() && merged_tag.is_some();
     if forgejo_any && !forgejo_all {
@@ -484,11 +523,22 @@ pub async fn update_application(
     }
 
     // All-or-nothing OCI validation on merged values
-    let merged_oci_owner = body.oci_image_owner.as_ref().or(old_app.oci_image_owner.as_ref());
-    let merged_oci_name = body.oci_image_name.as_ref().or(old_app.oci_image_name.as_ref());
-    let merged_oci_tag = body.pinned_image_tag.as_ref().or(old_app.pinned_image_tag.as_ref());
-    let oci_any = merged_oci_owner.is_some() || merged_oci_name.is_some() || merged_oci_tag.is_some();
-    let oci_all = merged_oci_owner.is_some() && merged_oci_name.is_some() && merged_oci_tag.is_some();
+    let merged_oci_owner = body
+        .oci_image_owner
+        .as_ref()
+        .or(old_app.oci_image_owner.as_ref());
+    let merged_oci_name = body
+        .oci_image_name
+        .as_ref()
+        .or(old_app.oci_image_name.as_ref());
+    let merged_oci_tag = body
+        .pinned_image_tag
+        .as_ref()
+        .or(old_app.pinned_image_tag.as_ref());
+    let oci_any =
+        merged_oci_owner.is_some() || merged_oci_name.is_some() || merged_oci_tag.is_some();
+    let oci_all =
+        merged_oci_owner.is_some() && merged_oci_name.is_some() && merged_oci_tag.is_some();
     if oci_any && !oci_all {
         return Err(AppError::validation(
             "oci",
@@ -589,15 +639,24 @@ pub async fn create_application(
         return Err(AppError::validation("slug", "Slug is required"));
     }
     if body.display_name.trim().is_empty() {
-        return Err(AppError::validation("display_name", "Display name is required"));
+        return Err(AppError::validation(
+            "display_name",
+            "Display name is required",
+        ));
     }
     if body.container_name.trim().is_empty() {
-        return Err(AppError::validation("container_name", "Container name is required"));
+        return Err(AppError::validation(
+            "container_name",
+            "Container name is required",
+        ));
     }
 
     // Validate slug format
     validation::validate_slug(&body.slug).map_err(|_| {
-        AppError::validation("slug", "Slug must contain only lowercase letters, numbers, and hyphens")
+        AppError::validation(
+            "slug",
+            "Slug must contain only lowercase letters, numbers, and hyphens",
+        )
     })?;
 
     // Check slug uniqueness
@@ -605,7 +664,9 @@ pub async fn create_application(
         .await?
         .is_some()
     {
-        return Err(AppError::conflict("An application with this slug already exists"));
+        return Err(AppError::conflict(
+            "An application with this slug already exists",
+        ));
     }
 
     let app = ApplicationRepository::create(&pool, &body).await?;
@@ -655,7 +716,9 @@ pub async fn delete_application(
     let totp_valid = totp_service
         .verify_code(admin.0.sub, &body.totp_code)
         .await
-        .map_err(|_| AppError::validation("totp_code", "2FA must be enabled to delete applications"))?;
+        .map_err(|_| {
+            AppError::validation("totp_code", "2FA must be enabled to delete applications")
+        })?;
     if !totp_valid {
         return Err(AppError::validation("totp_code", "Invalid 2FA code"));
     }
@@ -715,8 +778,8 @@ pub async fn list_audit_logs(
         query.user_id,
         query.action.as_deref(),
         query.admin_only.unwrap_or(false),
-        None,  // start_date
-        None,  // end_date
+        None, // start_date
+        None, // end_date
     )
     .await?;
 
@@ -748,10 +811,9 @@ pub async fn get_dashboard_stats(
     let request_id = get_request_id(&req);
 
     // Get user counts by status
-    let total_users: (i64,) =
-        sqlx::query_as("SELECT COUNT(*) FROM users WHERE deleted_at IS NULL")
-            .fetch_one(pool.get_ref())
-            .await?;
+    let total_users: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users WHERE deleted_at IS NULL")
+        .fetch_one(pool.get_ref())
+        .await?;
 
     let active_members: (i64,) = sqlx::query_as(
         "SELECT COUNT(*) FROM users WHERE subscription_status = 'active' AND deleted_at IS NULL",
@@ -771,10 +833,9 @@ pub async fn get_dashboard_stats(
     .fetch_one(pool.get_ref())
     .await?;
 
-    let total_applications: (i64,) =
-        sqlx::query_as("SELECT COUNT(*) FROM applications")
-            .fetch_one(pool.get_ref())
-            .await?;
+    let total_applications: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM applications")
+        .fetch_one(pool.get_ref())
+        .await?;
 
     let active_applications: (i64,) =
         sqlx::query_as("SELECT COUNT(*) FROM applications WHERE is_active = TRUE")
@@ -833,7 +894,9 @@ pub async fn admin_reset_password(
     .await?;
 
     // Send password reset email
-    email_service.send_password_reset(&user.email, &raw_token).await?;
+    email_service
+        .send_password_reset(&user.email, &raw_token)
+        .await?;
 
     // Log admin action
     let audit_log = CreateAuditLog::new(AuditAction::AdminPasswordReset)
@@ -863,7 +926,10 @@ pub async fn impersonate_user(
 
     // Prevent self-impersonation
     if admin_user_id == target_user_id {
-        return Err(AppError::validation("user_id", "Cannot impersonate yourself"));
+        return Err(AppError::validation(
+            "user_id",
+            "Cannot impersonate yourself",
+        ));
     }
 
     // Find the target user
@@ -991,9 +1057,7 @@ pub async fn send_test_email(
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
 
-    email_service
-        .send_welcome(&user.0.email, 300)
-        .await?;
+    email_service.send_welcome(&user.0.email, 300).await?;
 
     tracing::info!(email = %user.0.email, "Test email sent");
 
@@ -1072,7 +1136,10 @@ pub async fn create_admin_invite(
         }
     });
 
-    Ok(created(serde_json::json!({ "email": body.email }), request_id))
+    Ok(created(
+        serde_json::json!({ "email": body.email }),
+        request_id,
+    ))
 }
 
 /// GET /v1/admin/invites
@@ -1201,9 +1268,7 @@ pub async fn get_stripe_config(
 
     let db = StripeConfigRepository::get(&pool).await?;
 
-    let response = if db.secret_key.is_some()
-        || db.webhook_secret.is_some()
-    {
+    let response = if db.secret_key.is_some() || db.webhook_secret.is_some() {
         match StripeConfigResponse::from_db(&db, &stripe_key_set) {
             Ok(resp) => resp,
             Err(_) => {
@@ -1238,7 +1303,11 @@ pub async fn update_stripe_config(
     // Treat empty strings the same as None — user left the field blank
     let secret_key_plain = body.secret_key.as_deref().filter(|s| !s.is_empty());
     let webhook_secret_plain = body.webhook_secret.as_deref().filter(|s| !s.is_empty());
-    let app_tag = body.app_tag.as_deref().filter(|s| !s.is_empty()).map(|s| s.to_string());
+    let app_tag = body
+        .app_tag
+        .as_deref()
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string());
 
     // Encrypt secrets before storing
     let (secret_key_enc, secret_key_nonce, key_version) = match secret_key_plain {
@@ -1290,7 +1359,10 @@ pub async fn update_stripe_config(
         }));
     AuditLogRepository::create(&pool, audit_log).await?;
 
-    Ok(success(StripeConfigResponse::from_db(&updated, &stripe_key_set)?, request_id))
+    Ok(success(
+        StripeConfigResponse::from_db(&updated, &stripe_key_set)?,
+        request_id,
+    ))
 }
 
 // =============================================================================
@@ -1322,7 +1394,9 @@ pub async fn grant_lifetime_membership(
                 id
             }
         };
-        stripe.create_free_subscription(&customer_id, &free_price_id).await?;
+        stripe
+            .create_free_subscription(&customer_id, &free_price_id)
+            .await?;
     }
 
     AuditLogRepository::create(
@@ -1350,6 +1424,12 @@ pub struct UpdateTierConfigRequest {
     pub early_adopter_slots: Option<i64>,
     pub early_adopter_trial_days: Option<i64>,
     pub standard_trial_days: Option<i64>,
+    pub free_price_id: Option<String>,
+    pub early_adopter_price_id: Option<String>,
+    pub standard_price_id: Option<String>,
+    pub lifetime_product_id: Option<String>,
+    pub early_adopter_product_id: Option<String>,
+    pub standard_product_id: Option<String>,
 }
 
 /// GET /v1/admin/tier-config
@@ -1381,6 +1461,12 @@ pub async fn get_tier_config(
             early_adopter_slots: resolved.early_adopter_slots,
             early_adopter_trial_days: resolved.early_adopter_trial_days,
             standard_trial_days: resolved.standard_trial_days,
+            free_price_id: resolved.free_price_id,
+            early_adopter_price_id: resolved.early_adopter_price_id,
+            standard_price_id: resolved.standard_price_id,
+            lifetime_product_id: resolved.lifetime_product_id,
+            early_adopter_product_id: resolved.early_adopter_product_id,
+            standard_product_id: resolved.standard_product_id,
             source,
             lifetime_slots_used: lifetime_used,
             early_adopter_slots_used: early_adopter_used,
@@ -1408,22 +1494,34 @@ pub async fn update_tier_config(
     // Validate: all provided values must be positive
     if let Some(v) = body.lifetime_slots {
         if v < 0 {
-            return Err(AppError::validation("lifetime_slots", "Must be non-negative"));
+            return Err(AppError::validation(
+                "lifetime_slots",
+                "Must be non-negative",
+            ));
         }
     }
     if let Some(v) = body.early_adopter_slots {
         if v < 0 {
-            return Err(AppError::validation("early_adopter_slots", "Must be non-negative"));
+            return Err(AppError::validation(
+                "early_adopter_slots",
+                "Must be non-negative",
+            ));
         }
     }
     if let Some(v) = body.early_adopter_trial_days {
         if v < 0 {
-            return Err(AppError::validation("early_adopter_trial_days", "Must be non-negative"));
+            return Err(AppError::validation(
+                "early_adopter_trial_days",
+                "Must be non-negative",
+            ));
         }
     }
     if let Some(v) = body.standard_trial_days {
         if v < 0 {
-            return Err(AppError::validation("standard_trial_days", "Must be non-negative"));
+            return Err(AppError::validation(
+                "standard_trial_days",
+                "Must be non-negative",
+            ));
         }
     }
 
@@ -1433,6 +1531,12 @@ pub async fn update_tier_config(
         body.early_adopter_slots,
         body.early_adopter_trial_days,
         body.standard_trial_days,
+        body.free_price_id.clone(),
+        body.early_adopter_price_id.clone(),
+        body.standard_price_id.clone(),
+        body.lifetime_product_id.clone(),
+        body.early_adopter_product_id.clone(),
+        body.standard_product_id.clone(),
         admin.0.sub,
     )
     .await?;
@@ -1455,16 +1559,28 @@ pub async fn update_tier_config(
                 "early_adopter_slots": body.early_adopter_slots,
                 "early_adopter_trial_days": body.early_adopter_trial_days,
                 "standard_trial_days": body.standard_trial_days,
+                "free_price_id": body.free_price_id,
+                "early_adopter_price_id": body.early_adopter_price_id,
+                "standard_price_id": body.standard_price_id,
+                "lifetime_product_id": body.lifetime_product_id,
+                "early_adopter_product_id": body.early_adopter_product_id,
+                "standard_product_id": body.standard_product_id,
             })),
     )
     .await?;
 
     Ok(success(
         TierConfigResponse {
-            lifetime_slots: TierConfig::from_db_row(&row).lifetime_slots,
-            early_adopter_slots: TierConfig::from_db_row(&row).early_adopter_slots,
-            early_adopter_trial_days: TierConfig::from_db_row(&row).early_adopter_trial_days,
-            standard_trial_days: TierConfig::from_db_row(&row).standard_trial_days,
+            lifetime_slots: resolved.lifetime_slots,
+            early_adopter_slots: resolved.early_adopter_slots,
+            early_adopter_trial_days: resolved.early_adopter_trial_days,
+            standard_trial_days: resolved.standard_trial_days,
+            free_price_id: resolved.free_price_id,
+            early_adopter_price_id: resolved.early_adopter_price_id,
+            standard_price_id: resolved.standard_price_id,
+            lifetime_product_id: resolved.lifetime_product_id,
+            early_adopter_product_id: resolved.early_adopter_product_id,
+            standard_product_id: resolved.standard_product_id,
             source: "database",
             lifetime_slots_used: lifetime_used,
             early_adopter_slots_used: early_adopter_used,
@@ -1563,7 +1679,11 @@ async fn check_totp_key(pool: &PgPool, config: &Config) -> Result<KeyHealthCheck
 
 /// Dispatch a key health check by key_id. To add a new key, add a match arm here
 /// and a corresponding `check_*` helper above.
-async fn run_key_check(key_id: &str, pool: &PgPool, config: &Config) -> Result<KeyHealthCheck, AppError> {
+async fn run_key_check(
+    key_id: &str,
+    pool: &PgPool,
+    config: &Config,
+) -> Result<KeyHealthCheck, AppError> {
     match key_id {
         "stripe" => check_stripe_key(pool, config).await,
         "totp" => check_totp_key(pool, config).await,
@@ -1718,14 +1838,8 @@ pub async fn reencrypt_key(
                 // Re-encrypt with current key
                 let (new_ct, new_nonce, new_version) = key_set.encrypt(&plaintext)?;
                 // Update the row
-                TotpRepository::update_encryption(
-                    &pool,
-                    *id,
-                    &new_ct,
-                    &new_nonce,
-                    new_version,
-                )
-                .await?;
+                TotpRepository::update_encryption(&pool, *id, &new_ct, &new_nonce, new_version)
+                    .await?;
                 reencrypted += 1;
             }
 
@@ -1884,44 +1998,76 @@ mod tests {
 
     #[actix_rt::test]
     async fn admin_update_invalidates_manifest_cache_on_pin_change() {
-        let Some(pool) = maybe_pool().await else { return; };
+        let Some(pool) = maybe_pool().await else {
+            return;
+        };
         let slug = format!("oci-upd-{}", uuid::Uuid::new_v4());
-        sqlx::query(r#"
+        sqlx::query(
+            r#"
             INSERT INTO applications
             (name, slug, display_name, container_name,
              oci_image_owner, oci_image_name, pinned_image_tag)
             VALUES ($1, $1, $1, $1, 'a8n', 'rus', 'v1.0.0')
-        "#).bind(&slug).execute(&pool).await.unwrap();
+        "#,
+        )
+        .bind(&slug)
+        .execute(&pool)
+        .await
+        .unwrap();
 
         let app_row: (uuid::Uuid,) = sqlx::query_as("SELECT id FROM applications WHERE slug = $1")
-            .bind(&slug).fetch_one(&pool).await.unwrap();
+            .bind(&slug)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
         let app_id = app_row.0;
 
         let mc = Arc::new(ManifestCache::new(60));
-        mc.insert(app_id, "v1.0.0", crate::models::oci::CachedManifest {
-            bytes: bytes::Bytes::from_static(b"{}"),
-            media_type: "application/vnd.oci.image.manifest.v1+json".into(),
-            digest: "sha256:abc".into(),
-        }).await;
+        mc.insert(
+            app_id,
+            "v1.0.0",
+            crate::models::oci::CachedManifest {
+                bytes: bytes::Bytes::from_static(b"{}"),
+                media_type: "application/vnd.oci.image.manifest.v1+json".into(),
+                digest: "sha256:abc".into(),
+            },
+        )
+        .await;
         assert!(mc.get(app_id, "v1.0.0").await.is_some());
 
         let update = UpdateApplication {
-            display_name: None, description: None, icon_url: None,
-            source_code_url: None, version: None, subdomain: None,
-            container_name: None, health_check_url: None,
-            is_active: None, maintenance_mode: None, maintenance_message: None,
+            display_name: None,
+            description: None,
+            icon_url: None,
+            source_code_url: None,
+            version: None,
+            subdomain: None,
+            container_name: None,
+            health_check_url: None,
+            is_active: None,
+            maintenance_mode: None,
+            maintenance_message: None,
             webhook_url: None,
-            forgejo_owner: None, forgejo_repo: None, pinned_release_tag: None,
-            oci_image_owner: None, oci_image_name: None,
+            forgejo_owner: None,
+            forgejo_repo: None,
+            pinned_release_tag: None,
+            oci_image_owner: None,
+            oci_image_name: None,
             pinned_image_tag: Some("v2.0.0".into()),
         };
-        let _updated = crate::repositories::ApplicationRepository::update(&pool, app_id, &update).await.unwrap();
+        let _updated = crate::repositories::ApplicationRepository::update(&pool, app_id, &update)
+            .await
+            .unwrap();
 
         // Simulate the handler's invalidation path (we're not going through HTTP).
         mc.invalidate_app(app_id).await;
         assert!(mc.get(app_id, "v1.0.0").await.is_none());
 
-        sqlx::query("DELETE FROM applications WHERE id = $1").bind(app_id).execute(&pool).await.unwrap();
+        sqlx::query("DELETE FROM applications WHERE id = $1")
+            .bind(app_id)
+            .execute(&pool)
+            .await
+            .unwrap();
     }
 }
 

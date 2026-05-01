@@ -134,7 +134,10 @@ pub fn validate_slug(slug: &str) -> Result<(), ValidationError> {
         return Err(ValidationError::new("slug_required"));
     }
 
-    if !slug.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-') {
+    if !slug
+        .chars()
+        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+    {
         return Err(ValidationError::new("invalid_slug_format"));
     }
 

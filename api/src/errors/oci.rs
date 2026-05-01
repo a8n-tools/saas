@@ -74,7 +74,10 @@ impl ResponseError for OciError {
         let envelope = OciErrorEnvelope::single(self.code(), self.message());
         let mut builder = HttpResponse::build(self.status_code());
         builder.content_type("application/json");
-        if let Self::TooManyRequests { retry_after_secs: Some(secs) } = self {
+        if let Self::TooManyRequests {
+            retry_after_secs: Some(secs),
+        } = self
+        {
             builder.insert_header(("Retry-After", secs.to_string()));
         }
         builder.json(envelope)
@@ -87,16 +90,28 @@ mod tests {
 
     #[test]
     fn status_codes_match_spec() {
-        assert_eq!(OciError::Unauthorized.status_code(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            OciError::Unauthorized.status_code(),
+            StatusCode::UNAUTHORIZED
+        );
         assert_eq!(OciError::Denied.status_code(), StatusCode::FORBIDDEN);
-        assert_eq!(OciError::ManifestUnknown.status_code(), StatusCode::NOT_FOUND);
+        assert_eq!(
+            OciError::ManifestUnknown.status_code(),
+            StatusCode::NOT_FOUND
+        );
         assert_eq!(OciError::BlobUnknown.status_code(), StatusCode::NOT_FOUND);
         assert_eq!(
-            OciError::TooManyRequests { retry_after_secs: None }.status_code(),
+            OciError::TooManyRequests {
+                retry_after_secs: None
+            }
+            .status_code(),
             StatusCode::TOO_MANY_REQUESTS
         );
         assert_eq!(OciError::Upstream.status_code(), StatusCode::BAD_GATEWAY);
-        assert_eq!(OciError::Unsupported.status_code(), StatusCode::METHOD_NOT_ALLOWED);
+        assert_eq!(
+            OciError::Unsupported.status_code(),
+            StatusCode::METHOD_NOT_ALLOWED
+        );
     }
 
     #[test]
@@ -111,7 +126,10 @@ mod tests {
 
     #[test]
     fn retry_after_set_on_daily_cap() {
-        let resp = OciError::TooManyRequests { retry_after_secs: Some(3600) }.error_response();
+        let resp = OciError::TooManyRequests {
+            retry_after_secs: Some(3600),
+        }
+        .error_response();
         let val = resp.headers().get("Retry-After").unwrap();
         assert_eq!(val, "3600");
     }

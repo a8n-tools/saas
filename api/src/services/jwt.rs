@@ -330,7 +330,12 @@ mod tests {
         assert_ne!(hash1, token);
     }
 
-    fn test_claims(membership_status: &str, lifetime_member: bool, trial_ends_at: Option<i64>, role: &str) -> AccessTokenClaims {
+    fn test_claims(
+        membership_status: &str,
+        lifetime_member: bool,
+        trial_ends_at: Option<i64>,
+        role: &str,
+    ) -> AccessTokenClaims {
         AccessTokenClaims {
             sub: Uuid::new_v4(),
             email: "test@example.com".to_string(),

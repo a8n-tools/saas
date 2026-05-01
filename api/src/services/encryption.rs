@@ -115,7 +115,11 @@ mod tests {
         [0xBB; 32]
     }
 
-    fn make_key_set(current: [u8; 32], version: i16, previous: Option<[u8; 32]>) -> EncryptionKeySet {
+    fn make_key_set(
+        current: [u8; 32],
+        version: i16,
+        previous: Option<[u8; 32]>,
+    ) -> EncryptionKeySet {
         EncryptionKeySet {
             current,
             current_version: version,

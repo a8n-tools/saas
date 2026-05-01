@@ -188,16 +188,12 @@ impl ApplicationRepository {
     }
 
     /// Returns the previously-pinned tag for an application (for cache invalidation).
-    pub async fn get_pinned_tag(
-        pool: &PgPool,
-        app_id: Uuid,
-    ) -> Result<Option<String>, AppError> {
-        let row: Option<(Option<String>,)> = sqlx::query_as(
-            "SELECT pinned_release_tag FROM applications WHERE id = $1",
-        )
-        .bind(app_id)
-        .fetch_optional(pool)
-        .await?;
+    pub async fn get_pinned_tag(pool: &PgPool, app_id: Uuid) -> Result<Option<String>, AppError> {
+        let row: Option<(Option<String>,)> =
+            sqlx::query_as("SELECT pinned_release_tag FROM applications WHERE id = $1")
+                .bind(app_id)
+                .fetch_optional(pool)
+                .await?;
         Ok(row.and_then(|r| r.0))
     }
 
@@ -292,16 +288,27 @@ mod tests {
 
     #[actix_rt::test]
     async fn update_sets_oci_fields() {
-        let Some(pool) = maybe_pool().await else { return; };
+        let Some(pool) = maybe_pool().await else {
+            return;
+        };
         let slug = format!("test-oci-update-{}", uuid::Uuid::new_v4());
 
-        sqlx::query(r#"
+        sqlx::query(
+            r#"
             INSERT INTO applications (name, slug, display_name, container_name)
             VALUES ($1, $1, $1, $1)
-        "#).bind(&slug).execute(&pool).await.unwrap();
+        "#,
+        )
+        .bind(&slug)
+        .execute(&pool)
+        .await
+        .unwrap();
 
         let row: (uuid::Uuid,) = sqlx::query_as("SELECT id FROM applications WHERE slug = $1")
-            .bind(&slug).fetch_one(&pool).await.unwrap();
+            .bind(&slug)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
 
         let update = UpdateApplication {
             display_name: None,
@@ -324,14 +331,22 @@ mod tests {
             pinned_image_tag: Some("v1".into()),
         };
 
-        ApplicationRepository::update(&pool, row.0, &update).await.unwrap();
+        ApplicationRepository::update(&pool, row.0, &update)
+            .await
+            .unwrap();
 
         let reloaded = ApplicationRepository::find_by_slug(&pool, &slug)
-            .await.unwrap().expect("app exists");
+            .await
+            .unwrap()
+            .expect("app exists");
         assert_eq!(reloaded.oci_image_owner.as_deref(), Some("a8n"));
         assert_eq!(reloaded.oci_image_name.as_deref(), Some("rus"));
         assert_eq!(reloaded.pinned_image_tag.as_deref(), Some("v1"));
 
-        sqlx::query("DELETE FROM applications WHERE id = $1").bind(row.0).execute(&pool).await.unwrap();
+        sqlx::query("DELETE FROM applications WHERE id = $1")
+            .bind(row.0)
+            .execute(&pool)
+            .await
+            .unwrap();
     }
 }

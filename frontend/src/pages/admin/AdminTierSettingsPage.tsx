@@ -6,10 +6,19 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Settings, CheckCircle, AlertCircle } from 'lucide-react'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { CheckCircle, AlertCircle, Crown, Users, Star } from 'lucide-react'
 import { adminApi } from '@/api/admin'
 import type { UpdateTierConfigRequest } from '@/api/admin'
 import type { ApiError } from '@/types'
+
+const UNSET = '__unset__'
 
 export default function AdminTierSettingsPage() {
   const queryClient = useQueryClient()
@@ -21,6 +30,14 @@ export default function AdminTierSettingsPage() {
     queryKey: ['admin', 'tier-config'],
     queryFn: adminApi.getTierConfig,
   })
+
+  const { data: products = [] } = useQuery({
+    queryKey: ['admin', 'stripe-products'],
+    queryFn: adminApi.listStripeProducts,
+    retry: false,
+  })
+
+  const activeProducts = products.filter((p) => p.active)
 
   const updateMutation = useMutation({
     mutationFn: (data: UpdateTierConfigRequest) => adminApi.updateTierConfig(data),
@@ -48,15 +65,25 @@ export default function AdminTierSettingsPage() {
     if (form.early_adopter_slots !== undefined) payload.early_adopter_slots = form.early_adopter_slots
     if (form.early_adopter_trial_days !== undefined) payload.early_adopter_trial_days = form.early_adopter_trial_days
     if (form.standard_trial_days !== undefined) payload.standard_trial_days = form.standard_trial_days
+    if (form.lifetime_product_id !== undefined) payload.lifetime_product_id = form.lifetime_product_id
+    if (form.early_adopter_product_id !== undefined) payload.early_adopter_product_id = form.early_adopter_product_id
+    if (form.standard_product_id !== undefined) payload.standard_product_id = form.standard_product_id
 
     if (Object.keys(payload).length === 0) return
     updateMutation.mutate(payload)
   }
 
-  const setField = (field: keyof UpdateTierConfigRequest, value: string) => {
+  const setNumField = (field: keyof UpdateTierConfigRequest, value: string) => {
     const num = value === '' ? undefined : parseInt(value, 10)
     if (num !== undefined && isNaN(num)) return
     setForm((prev) => ({ ...prev, [field]: num }))
+  }
+
+  const setProductField = (
+    field: 'lifetime_product_id' | 'early_adopter_product_id' | 'standard_product_id',
+    value: string,
+  ) => {
+    setForm((prev) => ({ ...prev, [field]: value === UNSET ? undefined : value }))
   }
 
   if (isLoading) {
@@ -84,63 +111,52 @@ export default function AdminTierSettingsPage() {
         )}
       </div>
 
-      {config && (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Lifetime Slots
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold">
-                {config.lifetime_slots_used}
-                <span className="text-muted-foreground font-normal"> / {config.lifetime_slots}</span>
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                {config.lifetime_slots - config.lifetime_slots_used > 0
-                  ? `${config.lifetime_slots - config.lifetime_slots_used} remaining`
-                  : 'All slots filled'}
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Early Adopter Slots
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold">
-                {config.early_adopter_slots_used}
-                <span className="text-muted-foreground font-normal"> / {config.early_adopter_slots}</span>
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                {config.early_adopter_slots - config.early_adopter_slots_used > 0
-                  ? `${config.early_adopter_slots - config.early_adopter_slots_used} remaining`
-                  : 'All slots filled'}
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Lifetime tier card */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
-              <Settings className="h-4 w-4" />
-              Tier Thresholds
+              <Crown className="h-4 w-4" />
+              Lifetime
             </CardTitle>
             <CardDescription>
-              The first users to verify their email are assigned tiers in order: lifetime
-              (free forever), then early adopter (extended trial), then standard. Adjust
-              the slot counts and trial durations below. Changes take effect immediately
-              for the next user verification.
+              The first users to verify their email receive a free lifetime membership. Associate a
+              Stripe product so that subscription webhooks for that product automatically set the
+              Lifetime tier.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-5">
-            <div className="grid gap-5 sm:grid-cols-2">
+          <CardContent className="space-y-4">
+            {config && (
+              <p className="text-sm text-muted-foreground">
+                {config.lifetime_slots_used} / {config.lifetime_slots} slots used
+                {config.lifetime_slots - config.lifetime_slots_used > 0
+                  ? ` (${config.lifetime_slots - config.lifetime_slots_used} remaining)`
+                  : ' — all filled'}
+              </p>
+            )}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>Stripe Product</Label>
+                <Select
+                  value={form.lifetime_product_id ?? config?.lifetime_product_id ?? UNSET}
+                  onValueChange={(v) => setProductField('lifetime_product_id', v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Not configured" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={UNSET}>Not configured</SelectItem>
+                    {activeProducts.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Subscription webhooks for this product set tier to Lifetime
+                </p>
+              </div>
               <div className="space-y-1.5">
                 <Label htmlFor="lifetime_slots">Lifetime Slots</Label>
                 <Input
@@ -149,13 +165,60 @@ export default function AdminTierSettingsPage() {
                   min={0}
                   placeholder={String(config?.lifetime_slots ?? 5)}
                   value={form.lifetime_slots ?? ''}
-                  onChange={(e) => setField('lifetime_slots', e.target.value)}
+                  onChange={(e) => setNumField('lifetime_slots', e.target.value)}
                 />
                 <p className="text-xs text-muted-foreground">
                   Number of users who get free lifetime membership
                 </p>
               </div>
+            </div>
+          </CardContent>
+        </Card>
 
+        {/* Early Adopter tier card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Star className="h-4 w-4" />
+              Early Adopter
+            </CardTitle>
+            <CardDescription>
+              The next users after the lifetime slots receive an extended trial. Associate a Stripe
+              product so subscription webhooks automatically set the Early Adopter tier.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {config && (
+              <p className="text-sm text-muted-foreground">
+                {config.early_adopter_slots_used} / {config.early_adopter_slots} slots used
+                {config.early_adopter_slots - config.early_adopter_slots_used > 0
+                  ? ` (${config.early_adopter_slots - config.early_adopter_slots_used} remaining)`
+                  : ' — all filled'}
+              </p>
+            )}
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="space-y-1.5">
+                <Label>Stripe Product</Label>
+                <Select
+                  value={form.early_adopter_product_id ?? config?.early_adopter_product_id ?? UNSET}
+                  onValueChange={(v) => setProductField('early_adopter_product_id', v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Not configured" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={UNSET}>Not configured</SelectItem>
+                    {activeProducts.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Subscription webhooks for this product set tier to Early Adopter
+                </p>
+              </div>
               <div className="space-y-1.5">
                 <Label htmlFor="early_adopter_slots">Early Adopter Slots</Label>
                 <Input
@@ -164,65 +227,103 @@ export default function AdminTierSettingsPage() {
                   min={0}
                   placeholder={String(config?.early_adopter_slots ?? 5)}
                   value={form.early_adopter_slots ?? ''}
-                  onChange={(e) => setField('early_adopter_slots', e.target.value)}
+                  onChange={(e) => setNumField('early_adopter_slots', e.target.value)}
                 />
                 <p className="text-xs text-muted-foreground">
                   Number of users who get the early adopter trial
                 </p>
               </div>
-
               <div className="space-y-1.5">
-                <Label htmlFor="early_adopter_trial_days">Early Adopter Trial (days)</Label>
+                <Label htmlFor="early_adopter_trial_days">Trial (days)</Label>
                 <Input
                   id="early_adopter_trial_days"
                   type="number"
                   min={0}
                   placeholder={String(config?.early_adopter_trial_days ?? 90)}
                   value={form.early_adopter_trial_days ?? ''}
-                  onChange={(e) => setField('early_adopter_trial_days', e.target.value)}
+                  onChange={(e) => setNumField('early_adopter_trial_days', e.target.value)}
                 />
                 <p className="text-xs text-muted-foreground">
                   Trial duration for early adopter tier
                 </p>
               </div>
+            </div>
+          </CardContent>
+        </Card>
 
+        {/* Standard tier card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Users className="h-4 w-4" />
+              Standard
+            </CardTitle>
+            <CardDescription>
+              All remaining users receive a standard trial. Associate a Stripe product so
+              subscription webhooks automatically set the Standard tier.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label htmlFor="standard_trial_days">Standard Trial (days)</Label>
+                <Label>Stripe Product</Label>
+                <Select
+                  value={form.standard_product_id ?? config?.standard_product_id ?? UNSET}
+                  onValueChange={(v) => setProductField('standard_product_id', v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Not configured" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={UNSET}>Not configured</SelectItem>
+                    {activeProducts.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Subscription webhooks for this product set tier to Standard
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="standard_trial_days">Trial (days)</Label>
                 <Input
                   id="standard_trial_days"
                   type="number"
                   min={0}
                   placeholder={String(config?.standard_trial_days ?? 30)}
                   value={form.standard_trial_days ?? ''}
-                  onChange={(e) => setField('standard_trial_days', e.target.value)}
+                  onChange={(e) => setNumField('standard_trial_days', e.target.value)}
                 />
                 <p className="text-xs text-muted-foreground">
                   Trial duration for standard tier
                 </p>
               </div>
             </div>
-
-            {saveSuccess && (
-              <Alert>
-                <CheckCircle className="h-4 w-4" />
-                <AlertDescription>Tier configuration saved and applied.</AlertDescription>
-              </Alert>
-            )}
-
-            {saveError && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{saveError}</AlertDescription>
-              </Alert>
-            )}
-
-            <div className="flex justify-end">
-              <Button type="submit" disabled={updateMutation.isPending}>
-                {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
-              </Button>
-            </div>
           </CardContent>
         </Card>
+
+        {saveSuccess && (
+          <Alert>
+            <CheckCircle className="h-4 w-4" />
+            <AlertDescription>Tier configuration saved and applied.</AlertDescription>
+          </Alert>
+        )}
+
+        {saveError && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{saveError}</AlertDescription>
+          </Alert>
+        )}
+
+        <div className="flex justify-end">
+          <Button type="submit" disabled={updateMutation.isPending}>
+            {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
+          </Button>
+        </div>
       </form>
     </div>
   )

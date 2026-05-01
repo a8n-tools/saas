@@ -29,9 +29,16 @@ impl ManifestCache {
         self.cache.get(&(app_id, reference.to_string())).await
     }
 
-    pub async fn insert(&self, app_id: Uuid, reference: &str, value: CachedManifest) -> Arc<CachedManifest> {
+    pub async fn insert(
+        &self,
+        app_id: Uuid,
+        reference: &str,
+        value: CachedManifest,
+    ) -> Arc<CachedManifest> {
         let arc = Arc::new(value);
-        self.cache.insert((app_id, reference.to_string()), arc.clone()).await;
+        self.cache
+            .insert((app_id, reference.to_string()), arc.clone())
+            .await;
         arc
     }
 

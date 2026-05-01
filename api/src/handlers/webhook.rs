@@ -7,8 +7,11 @@ use chrono::{Duration, Utc};
 use sqlx::PgPool;
 use std::sync::Arc;
 
+use crate::config::TierConfig;
 use crate::errors::AppError;
-use crate::models::{AuditAction, AuditSeverity, CreateAuditLog, MembershipStatus};
+use crate::models::{
+    AuditAction, AuditSeverity, CreateAuditLog, MembershipStatus, SubscriptionTier,
+};
 use crate::repositories::{AuditLogRepository, UserRepository};
 use crate::services::{EmailService, StripeService};
 
@@ -20,6 +23,7 @@ pub async fn stripe_webhook(
     pool: web::Data<PgPool>,
     stripe: web::Data<Arc<StripeService>>,
     email: web::Data<Arc<EmailService>>,
+    tier_config: web::Data<Arc<std::sync::RwLock<TierConfig>>>,
 ) -> Result<HttpResponse, AppError> {
     // Get signature header
     let signature = req
@@ -35,8 +39,8 @@ pub async fn stripe_webhook(
     let payload = String::from_utf8(body.to_vec())
         .map_err(|_| AppError::validation("body", "Invalid UTF-8"))?;
 
-    let event: serde_json::Value = serde_json::from_str(&payload)
-        .map_err(|_| AppError::validation("body", "Invalid JSON"))?;
+    let event: serde_json::Value =
+        serde_json::from_str(&payload).map_err(|_| AppError::validation("body", "Invalid JSON"))?;
 
     let event_type = event["type"]
         .as_str()
@@ -44,16 +48,21 @@ pub async fn stripe_webhook(
 
     tracing::info!(event_type = %event_type, "Processing Stripe webhook");
 
+    let tc = tier_config
+        .read()
+        .expect("TierConfig lock poisoned")
+        .clone();
+
     // Route to appropriate handler
     match event_type {
         "checkout.session.completed" => {
             handle_checkout_completed(&event, &pool, &email).await?;
         }
         "customer.subscription.created" => {
-            handle_subscription_created(&event, &pool).await?;
+            handle_subscription_created(&event, &pool, &tc).await?;
         }
         "customer.subscription.updated" => {
-            handle_subscription_updated(&event, &pool).await?;
+            handle_subscription_updated(&event, &pool, &tc).await?;
         }
         "customer.subscription.deleted" => {
             handle_subscription_deleted(&event, &pool, &email).await?;
@@ -134,6 +143,7 @@ async fn handle_checkout_completed(
 async fn handle_subscription_created(
     event: &serde_json::Value,
     pool: &PgPool,
+    tc: &TierConfig,
 ) -> Result<(), AppError> {
     let subscription = &event["data"]["object"];
 
@@ -154,16 +164,28 @@ async fn handle_subscription_created(
         .as_str()
         .unwrap_or("unknown");
 
+    let product_id = subscription["items"]["data"][0]["price"]["product"]
+        .as_str()
+        .unwrap_or("unknown");
+
     let amount = subscription["items"]["data"][0]["price"]["unit_amount"]
         .as_i64()
         .unwrap_or(300) as i32;
 
-    // Update user membership status
-    UserRepository::update_membership_status(pool, user.id, MembershipStatus::Active).await?;
+    // Resolve tier from product ID mapping (None means no match — leave tier unchanged)
+    let resolved_tier = resolve_tier_for_product(product_id, tc);
+
+    let mut tx = pool.begin().await?;
+    UserRepository::update_membership_status(&mut *tx, user.id, MembershipStatus::Active).await?;
+    if let Some(ref tier) = resolved_tier {
+        UserRepository::upgrade_subscription_tier(&mut *tx, user.id, tier).await?;
+    }
+    tx.commit().await?;
 
     tracing::info!(
         user_id = %user.id,
         stripe_subscription_id = %stripe_subscription_id,
+        resolved_tier = ?resolved_tier,
         "Subscription created"
     );
 
@@ -173,7 +195,9 @@ async fn handle_subscription_created(
         .with_metadata(serde_json::json!({
             "stripe_subscription_id": stripe_subscription_id,
             "stripe_price_id": price_id,
+            "stripe_product_id": product_id,
             "amount": amount,
+            "resolved_tier": resolved_tier.as_ref().map(|t| t.as_str()),
         }));
     if let Err(e) = AuditLogRepository::create(pool, audit_log).await {
         tracing::error!(error = %e, user_id = %user.id, "Failed to create audit log for subscription created");
@@ -185,6 +209,7 @@ async fn handle_subscription_created(
 async fn handle_subscription_updated(
     event: &serde_json::Value,
     pool: &PgPool,
+    tc: &TierConfig,
 ) -> Result<(), AppError> {
     let subscription = &event["data"]["object"];
 
@@ -196,24 +221,37 @@ async fn handle_subscription_updated(
         .as_str()
         .ok_or(AppError::validation("customer", "Missing customer ID"))?;
 
-    let status = subscription["status"]
-        .as_str()
-        .unwrap_or("active");
+    let status = subscription["status"].as_str().unwrap_or("active");
 
     let cancel_at_period_end = subscription["cancel_at_period_end"]
         .as_bool()
         .unwrap_or(false);
 
+    let price_id = subscription["items"]["data"][0]["price"]["id"]
+        .as_str()
+        .unwrap_or("unknown");
+
+    let product_id = subscription["items"]["data"][0]["price"]["product"]
+        .as_str()
+        .unwrap_or("unknown");
+
     // Find user by customer ID
     if let Some(user) = UserRepository::find_by_stripe_customer_id(pool, customer_id).await? {
-        // Update user membership status
         let user_status = match status {
             "active" => MembershipStatus::Active,
             "past_due" => MembershipStatus::PastDue,
             "canceled" => MembershipStatus::Canceled,
             _ => MembershipStatus::Active,
         };
-        UserRepository::update_membership_status(pool, user.id, user_status).await?;
+
+        let resolved_tier = resolve_tier_for_product(product_id, tc);
+
+        let mut tx = pool.begin().await?;
+        UserRepository::update_membership_status(&mut *tx, user.id, user_status).await?;
+        if let Some(ref tier) = resolved_tier {
+            UserRepository::upgrade_subscription_tier(&mut *tx, user.id, tier).await?;
+        }
+        tx.commit().await?;
 
         tracing::info!(
             stripe_subscription_id = %stripe_subscription_id,
@@ -237,6 +275,9 @@ async fn handle_subscription_updated(
                 "stripe_subscription_id": stripe_subscription_id,
                 "status": status,
                 "cancel_at_period_end": cancel_at_period_end,
+                "stripe_price_id": price_id,
+                "stripe_product_id": product_id,
+                "resolved_tier": resolved_tier.as_ref().map(|t| t.as_str()),
             }));
         if let Err(e) = AuditLogRepository::create(pool, audit_log).await {
             tracing::error!(error = %e, "Failed to create audit log for subscription update");
@@ -263,8 +304,18 @@ async fn handle_subscription_deleted(
 
     // Find user by customer ID
     if let Some(user) = UserRepository::find_by_stripe_customer_id(pool, customer_id).await? {
+        if user.lifetime_member {
+            tracing::info!(
+                user_id = %user.id,
+                stripe_subscription_id = %stripe_subscription_id,
+                "Subscription deleted for lifetime member — skipping tier reset"
+            );
+            return Ok(());
+        }
+
         let mut tx = pool.begin().await?;
-        UserRepository::update_membership_status(&mut *tx, user.id, MembershipStatus::Canceled).await?;
+        UserRepository::update_membership_status(&mut *tx, user.id, MembershipStatus::Canceled)
+            .await?;
         UserRepository::reset_subscription_tier(&mut *tx, user.id).await?;
         UserRepository::clear_grace_period(&mut *tx, user.id).await?;
         tx.commit().await?;
@@ -276,7 +327,10 @@ async fn handle_subscription_deleted(
         );
 
         // Send cancellation email and audit log
-        if let Err(e) = email.send_membership_canceled(&user.email, Utc::now()).await {
+        if let Err(e) = email
+            .send_membership_canceled(&user.email, Utc::now())
+            .await
+        {
             tracing::error!(error = %e, user_id = %user.id, "Failed to send membership canceled email");
         }
 
@@ -315,16 +369,15 @@ async fn handle_payment_succeeded(
         }
     };
 
-    let amount = invoice["amount_paid"]
-        .as_i64()
-        .unwrap_or(0) as i32;
+    let amount = invoice["amount_paid"].as_i64().unwrap_or(0) as i32;
 
     // Clear any grace period if exists
     let had_grace_period = user.grace_period_start.is_some();
     if had_grace_period {
         let mut tx = pool.begin().await?;
         UserRepository::clear_grace_period(&mut *tx, user.id).await?;
-        UserRepository::update_membership_status(&mut *tx, user.id, MembershipStatus::Active).await?;
+        UserRepository::update_membership_status(&mut *tx, user.id, MembershipStatus::Active)
+            .await?;
         tx.commit().await?;
     }
 
@@ -384,9 +437,7 @@ async fn handle_payment_failed(
         }
     };
 
-    let amount = invoice["amount_due"]
-        .as_i64()
-        .unwrap_or(0) as i32;
+    let amount = invoice["amount_due"].as_i64().unwrap_or(0) as i32;
 
     // Audit log for payment failure
     let audit_log = CreateAuditLog::new(AuditAction::PaymentFailed)
@@ -408,7 +459,8 @@ async fn handle_payment_failed(
 
         let mut tx = pool.begin().await?;
         UserRepository::set_grace_period(&mut *tx, user.id, now, grace_end).await?;
-        UserRepository::update_membership_status(&mut *tx, user.id, MembershipStatus::GracePeriod).await?;
+        UserRepository::update_membership_status(&mut *tx, user.id, MembershipStatus::GracePeriod)
+            .await?;
         tx.commit().await?;
 
         tracing::info!(
@@ -436,4 +488,20 @@ async fn handle_payment_failed(
     }
 
     Ok(())
+}
+
+/// Map a Stripe product ID to its corresponding `SubscriptionTier` using the current tier config.
+/// Returns `None` if the product ID does not match any configured mapping, meaning tier is left
+/// unchanged and only `subscription_status` is updated by the caller.
+fn resolve_tier_for_product(product_id: &str, tc: &TierConfig) -> Option<SubscriptionTier> {
+    if tc.lifetime_product_id.as_deref() == Some(product_id) {
+        return Some(SubscriptionTier::Lifetime);
+    }
+    if tc.early_adopter_product_id.as_deref() == Some(product_id) {
+        return Some(SubscriptionTier::EarlyAdopter);
+    }
+    if tc.standard_product_id.as_deref() == Some(product_id) {
+        return Some(SubscriptionTier::Standard);
+    }
+    None
 }

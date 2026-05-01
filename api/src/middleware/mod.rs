@@ -11,8 +11,8 @@ pub mod security_headers;
 
 // Re-export commonly used items
 pub use auth::{
-    extract_client_ip, extract_device_info, AdminUser, AuthCookies, AuthenticatedUser,
-    MemberUser, OptionalUser,
+    extract_client_ip, extract_device_info, AdminUser, AuthCookies, AuthenticatedUser, MemberUser,
+    OptionalUser,
 };
 pub use auto_ban::{AutoBanMiddleware, AutoBanService};
 pub use oci_auth::OciBearerUser;

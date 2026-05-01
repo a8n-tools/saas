@@ -5,8 +5,6 @@
 pub mod auth;
 pub mod blob_cache;
 pub mod download_cache;
-pub mod oidc_keys;
-pub mod oidc_provider;
 pub mod download_limiter;
 pub mod email;
 pub mod encryption;
@@ -16,6 +14,8 @@ pub mod jwt;
 pub mod manifest_cache;
 pub mod oci_limiter;
 pub mod oci_token;
+pub mod oidc_keys;
+pub mod oidc_provider;
 pub mod password;
 pub mod release_cache;
 pub mod stripe;
@@ -31,7 +31,9 @@ pub use email::EmailService;
 pub use encryption::EncryptionKeySet;
 pub use forgejo::{ForgejoClient, ForgejoError};
 pub use forgejo_registry::{ForgejoRegistryClient, RegistryError};
-pub use jwt::{AccessTokenClaims, JwtConfig, JwtService, RefreshTokenClaims, TwoFactorChallengeClaims};
+pub use jwt::{
+    AccessTokenClaims, JwtConfig, JwtService, RefreshTokenClaims, TwoFactorChallengeClaims,
+};
 pub use manifest_cache::ManifestCache;
 pub use oci_limiter::{OciLimitDenial, OciLimiter, OciPullGuard};
 pub use oci_token::{OciTokenService, RegistryTokenClaims, REGISTRY_AUDIENCE};

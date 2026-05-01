@@ -47,7 +47,11 @@ fn validate_digest(digest: &str) -> Result<(), AppError> {
     let Some(hex) = digest.strip_prefix("sha256:") else {
         return Err(AppError::validation("digest", "invalid blob digest format"));
     };
-    if hex.len() != 64 || !hex.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) {
+    if hex.len() != 64
+        || !hex
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    {
         return Err(AppError::validation("digest", "invalid blob digest format"));
     }
     Ok(())
@@ -88,7 +92,8 @@ impl BlobCache {
     }
 
     fn partial_path(&self, digest: &str) -> PathBuf {
-        self.cache_dir.join(format!("{}.partial", digest.replace(':', "_")))
+        self.cache_dir
+            .join(format!("{}.partial", digest.replace(':', "_")))
     }
 
     /// Fetch blob (cache on miss), returning a BlobHandle with path on disk.
@@ -141,8 +146,11 @@ impl BlobCache {
 
         result.map_err(|s| AppError::internal(format!("blob cache fetch: {s}")))?;
 
-        let row = OciBlobCacheRepository::find(&self.pool, digest).await?
-            .ok_or_else(|| AppError::internal("blob cache inconsistent: row missing after fetch"))?;
+        let row = OciBlobCacheRepository::find(&self.pool, digest)
+            .await?
+            .ok_or_else(|| {
+                AppError::internal("blob cache inconsistent: row missing after fetch")
+            })?;
         Ok(BlobHandle {
             digest: row.content_digest,
             size_bytes: row.size_bytes,
@@ -151,33 +159,40 @@ impl BlobCache {
         })
     }
 
-    async fn fetch_and_store(
-        &self,
-        owner: &str,
-        name: &str,
-        digest: &str,
-    ) -> Result<(), AppError> {
+    async fn fetch_and_store(&self, owner: &str, name: &str, digest: &str) -> Result<(), AppError> {
         validate_digest(digest)?;
-        self.ensure_dir().await.map_err(|e| AppError::internal(format!("mkdir: {e}")))?;
+        self.ensure_dir()
+            .await
+            .map_err(|e| AppError::internal(format!("mkdir: {e}")))?;
         let partial = self.partial_path(digest);
         let final_ = self.final_path(digest);
 
         let result: Result<(Option<String>, u64), AppError> = async {
-            let mut upstream = self.client.get_blob(owner, name, digest).await
+            let mut upstream = self
+                .client
+                .get_blob(owner, name, digest)
+                .await
                 .map_err(map_registry_err)?;
-            let mut file = fs::File::create(&partial).await
+            let mut file = fs::File::create(&partial)
+                .await
                 .map_err(|e| AppError::internal(format!("partial create: {e}")))?;
             let mut hasher = Sha256::new();
             let mut total: u64 = 0;
             while let Some(chunk) = upstream.body.next().await {
-                let chunk: Bytes = chunk.map_err(|e| AppError::internal(format!("upstream stream: {e}")))?;
+                let chunk: Bytes =
+                    chunk.map_err(|e| AppError::internal(format!("upstream stream: {e}")))?;
                 hasher.update(&chunk);
-                file.write_all(&chunk).await
+                file.write_all(&chunk)
+                    .await
                     .map_err(|e| AppError::internal(format!("partial write: {e}")))?;
                 total += chunk.len() as u64;
             }
-            file.flush().await.map_err(|e| AppError::internal(format!("flush: {e}")))?;
-            file.sync_all().await.map_err(|e| AppError::internal(format!("sync: {e}")))?;
+            file.flush()
+                .await
+                .map_err(|e| AppError::internal(format!("flush: {e}")))?;
+            file.sync_all()
+                .await
+                .map_err(|e| AppError::internal(format!("sync: {e}")))?;
             drop(file);
 
             let computed = format!("sha256:{}", hex::encode(hasher.finalize()));
@@ -186,10 +201,12 @@ impl BlobCache {
                     "digest mismatch: upstream={computed}, expected={digest}"
                 )));
             }
-            fs::rename(&partial, &final_).await
+            fs::rename(&partial, &final_)
+                .await
                 .map_err(|e| AppError::internal(format!("rename: {e}")))?;
             Ok((upstream.media_type, total))
-        }.await;
+        }
+        .await;
 
         let (media_type, total) = match result {
             Ok(v) => v,
@@ -199,11 +216,15 @@ impl BlobCache {
             }
         };
 
-        OciBlobCacheRepository::upsert(&self.pool, &NewCachedBlob {
-            content_digest: digest.to_string(),
-            size_bytes: total as i64,
-            media_type,
-        }).await?;
+        OciBlobCacheRepository::upsert(
+            &self.pool,
+            &NewCachedBlob {
+                content_digest: digest.to_string(),
+                size_bytes: total as i64,
+                media_type,
+            },
+        )
+        .await?;
 
         let evictor = self.clone();
         tokio::spawn(async move {
@@ -223,7 +244,9 @@ impl BlobCache {
         }
         let rows = OciBlobCacheRepository::oldest(&self.pool, 100).await?;
         for row in rows {
-            if total <= self.max_bytes { break; }
+            if total <= self.max_bytes {
+                break;
+            }
             let path = self.final_path(&row.content_digest);
             let _ = fs::remove_file(&path).await;
             OciBlobCacheRepository::delete(&self.pool, &row.content_digest).await?;
@@ -279,7 +302,9 @@ mod tests {
 
     #[actix_rt::test]
     async fn fetches_and_stores_blob() {
-        let Some(pool) = maybe_pool().await else { return; };
+        let Some(pool) = maybe_pool().await else {
+            return;
+        };
         let server = MockServer::start().await;
         let body = format!("hello-oci-{}", uuid::Uuid::new_v4()).into_bytes();
         let digest = digest_of(&body);
@@ -298,7 +323,12 @@ mod tests {
 
         let client = Arc::new(ForgejoRegistryClient::new(server.uri(), "tok".into()));
         let tmp = tempfile::tempdir().unwrap();
-        let cache = BlobCache::new(client, tmp.path().to_str().unwrap(), 1_000_000, pool.clone());
+        let cache = BlobCache::new(
+            client,
+            tmp.path().to_str().unwrap(),
+            1_000_000,
+            pool.clone(),
+        );
 
         let handle = cache.get_or_fetch("a", "b", &digest).await.unwrap();
         assert_eq!(handle.size_bytes, body.len() as i64);
@@ -311,7 +341,9 @@ mod tests {
 
     #[actix_rt::test]
     async fn digest_mismatch_deletes_partial_and_no_row() {
-        let Some(pool) = maybe_pool().await else { return; };
+        let Some(pool) = maybe_pool().await else {
+            return;
+        };
         let server = MockServer::start().await;
         let body = format!("corrupt-{}", uuid::Uuid::new_v4()).into_bytes();
         let wrong_digest = digest_of(format!("something-else-{}", uuid::Uuid::new_v4()).as_bytes());
@@ -325,16 +357,29 @@ mod tests {
 
         let client = Arc::new(ForgejoRegistryClient::new(server.uri(), "tok".into()));
         let tmp = tempfile::tempdir().unwrap();
-        let cache = BlobCache::new(client, tmp.path().to_str().unwrap(), 1_000_000, pool.clone());
+        let cache = BlobCache::new(
+            client,
+            tmp.path().to_str().unwrap(),
+            1_000_000,
+            pool.clone(),
+        );
 
-        let err = cache.get_or_fetch("a", "b", &wrong_digest).await.unwrap_err();
+        let err = cache
+            .get_or_fetch("a", "b", &wrong_digest)
+            .await
+            .unwrap_err();
         let msg = err.to_string();
         assert!(
             msg.contains("digest mismatch") || msg.contains("blob cache fetch"),
             "unexpected error: {msg}"
         );
-        assert!(OciBlobCacheRepository::find(&pool, &wrong_digest).await.unwrap().is_none());
-        let partial = tmp.path().join(format!("{}.partial", wrong_digest.replace(':', "_")));
+        assert!(OciBlobCacheRepository::find(&pool, &wrong_digest)
+            .await
+            .unwrap()
+            .is_none());
+        let partial = tmp
+            .path()
+            .join(format!("{}.partial", wrong_digest.replace(':', "_")));
         let final_ = tmp.path().join(wrong_digest.replace(':', "_"));
         assert!(!partial.exists());
         assert!(!final_.exists());
@@ -342,7 +387,9 @@ mod tests {
 
     #[actix_rt::test]
     async fn single_flight_merges_concurrent_fetches() {
-        let Some(pool) = maybe_pool().await else { return; };
+        let Some(pool) = maybe_pool().await else {
+            return;
+        };
         let server = MockServer::start().await;
         let body = format!("dedup-{}", uuid::Uuid::new_v4()).into_bytes();
         let digest = digest_of(&body);
@@ -357,7 +404,12 @@ mod tests {
 
         let client = Arc::new(ForgejoRegistryClient::new(server.uri(), "tok".into()));
         let tmp = tempfile::tempdir().unwrap();
-        let cache = BlobCache::new(client, tmp.path().to_str().unwrap(), 1_000_000, pool.clone());
+        let cache = BlobCache::new(
+            client,
+            tmp.path().to_str().unwrap(),
+            1_000_000,
+            pool.clone(),
+        );
 
         let (a, b) = tokio::join!(
             cache.get_or_fetch("a", "b", &digest),
@@ -371,7 +423,9 @@ mod tests {
 
     #[actix_rt::test]
     async fn rejects_malformed_digest() {
-        let Some(pool) = maybe_pool().await else { return; };
+        let Some(pool) = maybe_pool().await else {
+            return;
+        };
         let server = MockServer::start().await;
         let client = Arc::new(ForgejoRegistryClient::new(server.uri(), "tok".into()));
         let tmp = tempfile::tempdir().unwrap();

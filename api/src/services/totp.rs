@@ -42,15 +42,11 @@ impl TotpService {
     }
 
     /// Begin 2FA setup: generate a TOTP secret and return the otpauth URI
-    pub async fn begin_setup(
-        &self,
-        user_id: Uuid,
-        email: &str,
-    ) -> Result<TotpSetupInfo, AppError> {
+    pub async fn begin_setup(&self, user_id: Uuid, email: &str) -> Result<TotpSetupInfo, AppError> {
         let secret = Secret::generate_secret();
-        let secret_bytes = secret.to_bytes().map_err(|e| {
-            AppError::internal(format!("Failed to generate TOTP secret: {}", e))
-        })?;
+        let secret_bytes = secret
+            .to_bytes()
+            .map_err(|e| AppError::internal(format!("Failed to generate TOTP secret: {}", e)))?;
 
         let totp = self.build_totp(&secret_bytes, email)?;
         let otpauth_uri = totp.get_url();
@@ -67,11 +63,7 @@ impl TotpService {
     }
 
     /// Confirm 2FA setup by verifying a TOTP code, then generate recovery codes
-    pub async fn confirm_setup(
-        &self,
-        user_id: Uuid,
-        code: &str,
-    ) -> Result<Vec<String>, AppError> {
+    pub async fn confirm_setup(&self, user_id: Uuid, code: &str) -> Result<Vec<String>, AppError> {
         let totp_record = TotpRepository::find_by_user_id(&self.pool, user_id)
             .await?
             .ok_or(AppError::not_found("TOTP configuration"))?;
@@ -118,11 +110,7 @@ impl TotpService {
 
     /// Verify a recovery code (marks it as used if valid).
     /// Supports both legacy unsalted SHA-256 hashes and new Argon2id hashes.
-    pub async fn verify_recovery_code(
-        &self,
-        user_id: Uuid,
-        code: &str,
-    ) -> Result<bool, AppError> {
+    pub async fn verify_recovery_code(&self, user_id: Uuid, code: &str) -> Result<bool, AppError> {
         let normalized = code.to_uppercase().replace('-', "");
 
         let unused_codes =
@@ -139,10 +127,7 @@ impl TotpService {
     }
 
     /// Regenerate recovery codes (requires 2FA to be enabled)
-    pub async fn regenerate_recovery_codes(
-        &self,
-        user_id: Uuid,
-    ) -> Result<Vec<String>, AppError> {
+    pub async fn regenerate_recovery_codes(&self, user_id: Uuid) -> Result<Vec<String>, AppError> {
         let totp_record = TotpRepository::find_by_user_id(&self.pool, user_id)
             .await?
             .ok_or(AppError::not_found("TOTP configuration"))?;
@@ -201,7 +186,9 @@ impl TotpService {
             Some(self.issuer.clone()),
             String::new(),
         )
-        .map_err(|e| AppError::internal(format!("Failed to create TOTP for verification: {}", e)))?;
+        .map_err(|e| {
+            AppError::internal(format!("Failed to create TOTP for verification: {}", e))
+        })?;
 
         totp.check_current(&code)
             .map_err(|e| AppError::internal(format!("System time error: {}", e)))
@@ -270,8 +257,7 @@ impl TotpService {
                 .map_err(|e| AppError::internal(format!("Invalid hash format: {}", e)))?;
             let params = Params::new(19 * 1024, 2, 1, None)
                 .map_err(|e| AppError::internal(format!("Argon2 params error: {}", e)))?;
-            let argon2 =
-                Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, params);
+            let argon2 = Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, params);
             Ok(argon2.verify_password(code.as_bytes(), &parsed).is_ok())
         }
     }

@@ -68,9 +68,8 @@ impl OidcKeySet {
                 "Failed to read OIDC private key {private_key_path}: {e}"
             ))
         })?;
-        let encoding_key = EncodingKey::from_ed_pem(&private_pem).map_err(|e| {
-            AppError::internal(format!("Failed to parse OIDC private key: {e}"))
-        })?;
+        let encoding_key = EncodingKey::from_ed_pem(&private_pem)
+            .map_err(|e| AppError::internal(format!("Failed to parse OIDC private key: {e}")))?;
 
         // Scan the public keys directory for *.pub.pem files.
         let dir = Path::new(public_keys_dir);
@@ -92,10 +91,7 @@ impl OidcKeySet {
             // kid = file name without ".pub.pem"
             let kid = file_name.trim_end_matches(".pub.pem").to_string();
             let pub_pem = std::fs::read(&path).map_err(|e| {
-                AppError::internal(format!(
-                    "Failed to read public key {}: {e}",
-                    path.display()
-                ))
+                AppError::internal(format!("Failed to read public key {}: {e}", path.display()))
             })?;
 
             let decoding_key = DecodingKey::from_ed_pem(&pub_pem).map_err(|e| {
@@ -179,7 +175,9 @@ pub fn ed25519_public_key_x(pub_pem: &[u8]) -> Result<String, String> {
     }
 
     // Validate the fixed header: 30 2A 30 05 06 03 2B 65 70 03 21 00
-    let expected_header: [u8; 12] = [0x30, 0x2A, 0x30, 0x05, 0x06, 0x03, 0x2B, 0x65, 0x70, 0x03, 0x21, 0x00];
+    let expected_header: [u8; 12] = [
+        0x30, 0x2A, 0x30, 0x05, 0x06, 0x03, 0x2B, 0x65, 0x70, 0x03, 0x21, 0x00,
+    ];
     if der[..12] != expected_header {
         return Err(format!(
             "unexpected DER header for Ed25519 SPKI: {:02X?}",
