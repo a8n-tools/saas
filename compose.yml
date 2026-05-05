@@ -1,5 +1,5 @@
 ---
-name: a8n-tools-dev
+name: a8n-tools-${USER}
 
 services:
 
@@ -8,7 +8,7 @@ services:
     build:
       context: ./frontend
     user: "${UID:?run export UID GID}:${GID:?run export UID GID}"
-    container_name: a8n-tools-frontend
+    container_name: dev-a8n-tools-frontend-${USER}
     restart: unless-stopped
     env_file:
       - path: ./frontend/.env
@@ -38,7 +38,7 @@ services:
     build:
       context: ./api
     user: "${UID:?run export UID GID}:${GID:?run export UID GID}"
-    container_name: a8n-tools-api
+    container_name: dev-a8n-tools-api-${USER}
     restart: unless-stopped
     env_file:
       - path: ./api/.env
@@ -110,7 +110,7 @@ services:
     # https://github.com/docker-library/postgres
     # https://www.postgresql.org/docs/17/libpq-envars.html
     image: docker.io/postgres:18.2-alpine3.23
-    container_name: a8n-tools-postgres
+    container_name: dev-a8n-tools-postgres-${USER}
     restart: unless-stopped
     # Use this to enable logging of all SQL statements.
     #command:
