@@ -75,7 +75,7 @@ services:
       OIDC_JWT_ACTIVE_KID: dev-2026
       OIDC_JWT_PUBLIC_KEYS_DIR: /run/secrets/oidc
     ports:
-      - "18081:18081"
+      - "${OCI_REGISTRY_HOST_PORT:-18081}:18081"
     volumes:
       - ./api/src:/app/src:ro
       - ./api/migrations:/app/migrations:ro

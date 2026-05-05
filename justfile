@@ -30,8 +30,28 @@ dev-detach: ensure-env
     @echo "  Frontend:  http://localhost:5173"
     @echo "  API:       http://localhost:18080"
 
+# Generate the dev OIDC signing keypair if missing (kid=dev-2026, Ed25519).
+# The repo intentionally does not ship these keys (commit d296c84); each
+# instance must generate its own. Without them the API crash-loops with
+# "Failed to read OIDC private key /run/secrets/oidc/dev-2026.pem".
+[private]
+ensure-oidc-keys:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -f secrets/dev-2026.pem ] && [ -f secrets/dev-2026.pub.pem ]; then
+        exit 0
+    fi
+    echo "Generating dev OIDC Ed25519 keypair (kid=dev-2026)..."
+    if [ ! -d secrets ] || [ ! -w secrets ]; then
+        docker run --rm -u 0 -v "$PWD:/work" alpine sh -c "mkdir -p /work/secrets && chown $(id -u):$(id -g) /work/secrets"
+    fi
+    docker run --rm -u "$(id -u):$(id -g)" -v "$PWD/secrets:/out" alpine/openssl genpkey -algorithm Ed25519 -out /out/dev-2026.pem
+    docker run --rm -u "$(id -u):$(id -g)" -v "$PWD/secrets:/out" alpine/openssl pkey -in /out/dev-2026.pem -pubout -out /out/dev-2026.pub.pem
+    chmod 600 secrets/dev-2026.pem
+    chmod 644 secrets/dev-2026.pub.pem
+
 # Start development environment on a8n.run (detached, Traefik-routed, for SSO testing)
-dev-sso: ensure-env
+dev-sso: ensure-env ensure-oidc-keys
     {{ compose }}up --build --detach
     @echo "  Frontend:  https://{{env('USER')}}-app.a8n.run"
     @echo "  API:       https://{{env('USER')}}-api.a8n.run"
