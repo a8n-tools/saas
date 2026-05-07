@@ -3,6 +3,14 @@ FROM rust:1.93-alpine AS builder
 
 WORKDIR /build
 
+# Build metadata (passed from CI; build.rs reads these env vars)
+ARG GIT_COMMIT=unknown
+ARG GIT_TAG=unknown
+ARG BUILD_DATE=unknown
+ENV GIT_COMMIT=${GIT_COMMIT} \
+    GIT_TAG=${GIT_TAG} \
+    BUILD_DATE=${BUILD_DATE}
+
 # Install build dependencies
 RUN apk add --no-cache musl-dev pkgconfig openssl-dev openssl-libs-static lld
 
@@ -29,6 +37,10 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 # Runtime stage
 FROM alpine:3.21
 
+ARG GIT_COMMIT=unknown
+ARG GIT_TAG=unknown
+ARG BUILD_DATE=unknown
+
 WORKDIR /app
 
 # Install runtime dependencies
@@ -49,7 +61,10 @@ RUN chown -R appuser:appuser /app
 
 USER appuser
 
-LABEL org.opencontainers.image.source=https://dev.a8n.run/a8n-tools/saas
+LABEL org.opencontainers.image.source=https://dev.a8n.run/a8n-tools/saas \
+      org.opencontainers.image.revision=${GIT_COMMIT} \
+      org.opencontainers.image.version=${GIT_TAG} \
+      org.opencontainers.image.created=${BUILD_DATE}
 
 EXPOSE 4000
 

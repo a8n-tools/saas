@@ -3,7 +3,13 @@ import ReactDOM from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter } from 'react-router-dom'
 import App from './App'
+import { buildInfo } from './buildInfo'
 import './styles/globals.css'
+
+// eslint-disable-next-line no-console
+console.info(
+  `a8n-frontend ${buildInfo.version} (tag=${buildInfo.gitTag}, commit=${buildInfo.commit}, built=${buildInfo.buildDate})`,
+)
 
 const queryClient = new QueryClient({
   defaultOptions: {

@@ -74,8 +74,16 @@ jobs:
           let cache_ref = $"($registry)/($image):buildcache"
           let cache_from = $"type=registry,ref=($cache_ref)"
           let cache_to = $"type=registry,ref=($cache_ref),mode=max"
-          print $"Building and pushing ($image) with tags: ($tags_str)"
-          ^docker buildx build --push --cache-from $cache_from --cache-to $cache_to ...$tag_args -f oci-build/api/Dockerfile api/
+          let git_commit = (^git rev-parse --short HEAD | str trim)
+          let git_tag = (^git describe --tags --always --dirty | str trim)
+          let build_date = (date now | format date "%Y-%m-%dT%H:%M:%SZ")
+          let build_args = [
+              --build-arg $"GIT_COMMIT=($git_commit)"
+              --build-arg $"GIT_TAG=($git_tag)"
+              --build-arg $"BUILD_DATE=($build_date)"
+          ]
+          print $"Building and pushing ($image) with tags: ($tags_str), commit=($git_commit), tag=($git_tag), date=($build_date)"
+          ^docker buildx build --push --cache-from $cache_from --cache-to $cache_to ...$build_args ...$tag_args -f oci-build/api/Dockerfile api/
 
       - name: Print image URLs
         shell: nu {0}
