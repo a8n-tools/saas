@@ -4,6 +4,12 @@ import path from 'path'
 
 export default defineConfig({
   plugins: [react()],
+  define: {
+    __APP_VERSION__: JSON.stringify('test'),
+    __GIT_COMMIT__: JSON.stringify('test'),
+    __GIT_TAG__: JSON.stringify('test'),
+    __BUILD_DATE__: JSON.stringify('1970-01-01T00:00:00Z'),
+  },
   test: {
     globals: true,
     environment: 'jsdom',
