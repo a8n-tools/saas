@@ -73,13 +73,13 @@ export function Header() {
             </>
           ) : (
             <>
-              <Link to="/login">
-                <Button variant="ghost" size="sm">
-                  Login
-                </Button>
-              </Link>
               <Link to="/register">
                 <Button size="sm">Get Started</Button>
+              </Link>
+              <Link to="/login">
+                <Button variant="outline" size="sm">
+                  Login
+                </Button>
               </Link>
             </>
           )}
