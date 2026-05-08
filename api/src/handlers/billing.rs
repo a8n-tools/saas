@@ -54,6 +54,15 @@ pub async fn create_setup_intent(
 
     crate::validation::validate_email(&body.email)?;
 
+    // Reject early if the email is already registered, so the user does not
+    // waste a step entering card details before discovering the conflict.
+    if UserRepository::find_by_email(&pool, &body.email)
+        .await?
+        .is_some()
+    {
+        return Err(AppError::conflict("Email already registered"));
+    }
+
     let (customer_id, client_secret) = stripe.create_setup_intent(&body.email).await?;
 
     Ok(success(
