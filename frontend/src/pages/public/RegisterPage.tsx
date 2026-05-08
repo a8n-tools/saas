@@ -56,9 +56,17 @@ interface StepTwoProps {
   stripeCustomerId: string
   onSuccess: () => void
   onBack: () => void
+  onRegistrationError: () => void
 }
 
-function CardAuthForm({ email, password, stripeCustomerId, onSuccess, onBack }: StepTwoProps) {
+function CardAuthForm({
+  email,
+  password,
+  stripeCustomerId,
+  onSuccess,
+  onBack,
+  onRegistrationError,
+}: StepTwoProps) {
   const stripe = useStripe()
   const elements = useElements()
   const { register: registerUser, error: storeError } = useAuthStore()
@@ -94,14 +102,19 @@ function CardAuthForm({ email, password, stripeCustomerId, onSuccess, onBack }: 
         return
       }
 
-      await registerUser(email, password, {
-        stripe_customer_id: stripeCustomerId,
-        payment_method_id: paymentMethodId,
-      })
-
-      onSuccess()
-    } catch {
-      // Registration errors are set in the auth store and read via storeError below
+      try {
+        await registerUser(email, password, {
+          stripe_customer_id: stripeCustomerId,
+          payment_method_id: paymentMethodId,
+        })
+        onSuccess()
+      } catch {
+        // Registration failed (e.g. email already registered). Unmount Stripe
+        // Elements by returning to step 1 so its iframes do not linger and
+        // potentially block clicks on the rest of the page. The error message
+        // is already in the auth store and will display on step 1.
+        onRegistrationError()
+      }
     } finally {
       setIsLoading(false)
     }
@@ -335,6 +348,11 @@ export function RegisterPage() {
                     stripeCustomerId={stripeCustomerId}
                     onSuccess={handleRegistrationSuccess}
                     onBack={() => setStep(1)}
+                    onRegistrationError={() => {
+                      setClientSecret(null)
+                      setStripeCustomerId(null)
+                      setStep(1)
+                    }}
                   />
                 </Elements>
               </CardContent>
