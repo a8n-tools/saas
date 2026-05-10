@@ -35,11 +35,36 @@ pub enum AppError {
     #[error("Rate limited, retry after {retry_after} seconds")]
     RateLimited { retry_after: u64 },
 
+    #[error("Rate limited ({code})")]
+    RateLimitedCoded {
+        code: String,
+        retry_after_secs: Option<i64>,
+    },
+
+    #[error("Upstream error: {message}")]
+    Upstream { message: String },
+
     #[error("Internal error: {message}")]
     InternalError { message: String },
 
     #[error("Database error: {message}")]
     DatabaseError { message: String },
+
+    // ── OIDC / OAuth 2.1 error responses (RFC 6749 §5.2) ─────────────────────
+    #[error("invalid_grant: {0}")]
+    OidcInvalidGrant(String),
+
+    #[error("invalid_client: {0}")]
+    OidcInvalidClient(String),
+
+    #[error("invalid_token: {0}")]
+    OidcInvalidToken(String),
+
+    #[error("invalid_request: {0}")]
+    OidcInvalidRequest(String),
+
+    #[error("Bad request: {0}")]
+    BadRequest(String),
 }
 
 impl AppError {
@@ -54,8 +79,40 @@ impl AppError {
             AppError::NotFound { .. } => "NOT_FOUND",
             AppError::Conflict { .. } => "CONFLICT",
             AppError::RateLimited { .. } => "RATE_LIMITED",
+            AppError::RateLimitedCoded { .. } => "RATE_LIMITED",
+            AppError::Upstream { .. } => "UPSTREAM_ERROR",
             AppError::InternalError { .. } => "INTERNAL_ERROR",
             AppError::DatabaseError { .. } => "DATABASE_ERROR",
+            AppError::OidcInvalidGrant(_) => "invalid_grant",
+            AppError::OidcInvalidClient(_) => "invalid_client",
+            AppError::OidcInvalidToken(_) => "invalid_token",
+            AppError::OidcInvalidRequest(_) => "invalid_request",
+            AppError::BadRequest(_) => "BAD_REQUEST",
+        }
+    }
+
+    /// Get a dynamic error code (may differ from the static `error_code()`
+    /// for variants that carry a code string)
+    pub fn dynamic_error_code(&self) -> String {
+        match self {
+            AppError::RateLimitedCoded { code, .. } => code.clone(),
+            other => other.error_code().to_string(),
+        }
+    }
+
+    /// Create a rate-limited error with a machine-readable code and optional
+    /// Retry-After duration in seconds.
+    pub fn rate_limited(code: &str, retry_after_secs: Option<i64>) -> Self {
+        AppError::RateLimitedCoded {
+            code: code.to_string(),
+            retry_after_secs,
+        }
+    }
+
+    /// Create an upstream (502) error with a friendly message.
+    pub fn upstream(message: impl Into<String>) -> Self {
+        AppError::Upstream {
+            message: message.into(),
         }
     }
 
@@ -86,6 +143,11 @@ impl AppError {
         AppError::InternalError {
             message: message.into(),
         }
+    }
+
+    /// Create a bad-request error (400).
+    pub fn bad_request(message: impl Into<String>) -> Self {
+        AppError::BadRequest(message.into())
     }
 }
 
@@ -124,21 +186,60 @@ impl ResponseError for AppError {
             AppError::NotFound { .. } => StatusCode::NOT_FOUND,
             AppError::Conflict { .. } => StatusCode::CONFLICT,
             AppError::RateLimited { .. } => StatusCode::TOO_MANY_REQUESTS,
+            AppError::RateLimitedCoded { .. } => StatusCode::TOO_MANY_REQUESTS,
+            AppError::Upstream { .. } => StatusCode::BAD_GATEWAY,
             AppError::InternalError { .. } => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::DatabaseError { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::OidcInvalidGrant(_) => StatusCode::BAD_REQUEST,
+            AppError::OidcInvalidClient(_) => StatusCode::UNAUTHORIZED,
+            AppError::OidcInvalidToken(_) => StatusCode::UNAUTHORIZED,
+            AppError::OidcInvalidRequest(_) => StatusCode::BAD_REQUEST,
+            AppError::BadRequest(_) => StatusCode::BAD_REQUEST,
         }
     }
 
     fn error_response(&self) -> HttpResponse {
+        // OIDC / OAuth 2.1 errors use RFC 6749 §5.2 JSON format directly.
+        match self {
+            AppError::OidcInvalidGrant(desc) => {
+                return HttpResponse::BadRequest().json(serde_json::json!({
+                    "error": "invalid_grant",
+                    "error_description": desc,
+                }));
+            }
+            AppError::OidcInvalidClient(desc) => {
+                return HttpResponse::Unauthorized()
+                    .insert_header(("WWW-Authenticate", "Basic realm=\"a8n-api\""))
+                    .json(serde_json::json!({
+                        "error": "invalid_client",
+                        "error_description": desc,
+                    }));
+            }
+            AppError::OidcInvalidToken(desc) => {
+                return HttpResponse::Unauthorized().json(serde_json::json!({
+                    "error": "invalid_token",
+                    "error_description": desc,
+                }));
+            }
+            AppError::OidcInvalidRequest(desc) => {
+                return HttpResponse::BadRequest().json(serde_json::json!({
+                    "error": "invalid_request",
+                    "error_description": desc,
+                }));
+            }
+            _ => {}
+        }
+
         let request_id = RequestId::new().0;
 
         let details = match self {
-            AppError::ValidationError { field, .. } => {
-                Some(serde_json::json!({ "field": field }))
-            }
+            AppError::ValidationError { field, .. } => Some(serde_json::json!({ "field": field })),
             AppError::RateLimited { retry_after } => {
                 Some(serde_json::json!({ "retry_after": retry_after }))
             }
+            AppError::RateLimitedCoded {
+                retry_after_secs, ..
+            } => retry_after_secs.map(|n| serde_json::json!({ "retry_after": n })),
             _ => None,
         };
 
@@ -147,14 +248,10 @@ impl ResponseError for AppError {
             AppError::InvalidCredentials => {
                 "The email or password you entered is incorrect.".to_string()
             }
-            AppError::TokenExpired => {
-                "Your session has expired. Please log in again.".to_string()
-            }
+            AppError::TokenExpired => "Your session has expired. Please log in again.".to_string(),
             AppError::Unauthorized => "You need to log in to access this.".to_string(),
             AppError::Forbidden => "You don't have permission to do this.".to_string(),
-            AppError::NotFound { .. } => {
-                "The requested resource could not be found.".to_string()
-            }
+            AppError::NotFound { .. } => "The requested resource could not be found.".to_string(),
             AppError::Conflict { message } => message.clone(),
             AppError::RateLimited { retry_after } => {
                 format!(
@@ -162,15 +259,34 @@ impl ResponseError for AppError {
                     retry_after
                 )
             }
+            AppError::RateLimitedCoded {
+                retry_after_secs, ..
+            } => match retry_after_secs {
+                Some(n) => format!(
+                    "Too many requests. Please wait {} seconds and try again.",
+                    n
+                ),
+                None => "Too many requests. Please try again later.".to_string(),
+            },
+            AppError::Upstream { .. } => {
+                "The upstream service is temporarily unavailable. Please try again shortly."
+                    .to_string()
+            }
             AppError::InternalError { .. } | AppError::DatabaseError { .. } => {
                 "An unexpected error occurred. Please try again later.".to_string()
             }
+            AppError::BadRequest(msg) => msg.clone(),
+            // OIDC variants handled above via early return.
+            AppError::OidcInvalidGrant(_)
+            | AppError::OidcInvalidClient(_)
+            | AppError::OidcInvalidToken(_)
+            | AppError::OidcInvalidRequest(_) => unreachable!(),
         };
 
         let error_response = ErrorResponse {
             success: false,
             error: ErrorDetails {
-                code: self.error_code().to_string(),
+                code: self.dynamic_error_code(),
                 message: client_message,
                 details,
             },
@@ -182,8 +298,20 @@ impl ResponseError for AppError {
 
         let mut response = HttpResponse::build(self.status_code());
 
-        if let AppError::RateLimited { retry_after } = self {
-            response.insert_header(("Retry-After", retry_after.to_string()));
+        match self {
+            AppError::RateLimited { retry_after } => {
+                response.insert_header(("Retry-After", retry_after.to_string()));
+            }
+            AppError::RateLimitedCoded {
+                code,
+                retry_after_secs,
+            } => {
+                response.insert_header(("x-error-code", code.as_str()));
+                if let Some(n) = retry_after_secs {
+                    response.insert_header(("Retry-After", n.to_string()));
+                }
+            }
+            _ => {}
         }
 
         response.json(error_response)
@@ -228,7 +356,10 @@ mod tests {
             AppError::validation("email", "invalid").error_code(),
             "VALIDATION_ERROR"
         );
-        assert_eq!(AppError::InvalidCredentials.error_code(), "INVALID_CREDENTIALS");
+        assert_eq!(
+            AppError::InvalidCredentials.error_code(),
+            "INVALID_CREDENTIALS"
+        );
         assert_eq!(AppError::TokenExpired.error_code(), "TOKEN_EXPIRED");
         assert_eq!(AppError::Unauthorized.error_code(), "UNAUTHORIZED");
         assert_eq!(AppError::Forbidden.error_code(), "FORBIDDEN");
@@ -258,11 +389,23 @@ mod tests {
             AppError::InvalidCredentials.status_code(),
             StatusCode::UNAUTHORIZED
         );
-        assert_eq!(AppError::TokenExpired.status_code(), StatusCode::UNAUTHORIZED);
-        assert_eq!(AppError::Unauthorized.status_code(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            AppError::TokenExpired.status_code(),
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            AppError::Unauthorized.status_code(),
+            StatusCode::UNAUTHORIZED
+        );
         assert_eq!(AppError::Forbidden.status_code(), StatusCode::FORBIDDEN);
-        assert_eq!(AppError::not_found("user").status_code(), StatusCode::NOT_FOUND);
-        assert_eq!(AppError::conflict("exists").status_code(), StatusCode::CONFLICT);
+        assert_eq!(
+            AppError::not_found("user").status_code(),
+            StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            AppError::conflict("exists").status_code(),
+            StatusCode::CONFLICT
+        );
         assert_eq!(
             AppError::RateLimited { retry_after: 60 }.status_code(),
             StatusCode::TOO_MANY_REQUESTS
@@ -309,7 +452,10 @@ mod tests {
             AppError::validation("email", "invalid").to_string(),
             "Validation error on field 'email': invalid"
         );
-        assert_eq!(AppError::InvalidCredentials.to_string(), "Invalid credentials");
+        assert_eq!(
+            AppError::InvalidCredentials.to_string(),
+            "Invalid credentials"
+        );
         assert_eq!(AppError::TokenExpired.to_string(), "Token has expired");
         assert_eq!(AppError::Unauthorized.to_string(), "Unauthorized");
         assert_eq!(AppError::Forbidden.to_string(), "Forbidden");
@@ -317,10 +463,7 @@ mod tests {
             AppError::not_found("user").to_string(),
             "Resource not found: user"
         );
-        assert_eq!(
-            AppError::conflict("exists").to_string(),
-            "Conflict: exists"
-        );
+        assert_eq!(AppError::conflict("exists").to_string(), "Conflict: exists");
         assert_eq!(
             AppError::RateLimited { retry_after: 60 }.to_string(),
             "Rate limited, retry after 60 seconds"
@@ -377,6 +520,34 @@ mod tests {
     }
 
     #[test]
+    fn rate_limited_sets_retry_after_header() {
+        let err = AppError::rate_limited("download_daily_limit", Some(3600));
+        let resp = err.error_response();
+        assert_eq!(resp.status().as_u16(), 429);
+        assert_eq!(
+            resp.headers()
+                .get("retry-after")
+                .and_then(|v| v.to_str().ok()),
+            Some("3600"),
+        );
+    }
+
+    #[test]
+    fn rate_limited_without_retry_after() {
+        let err = AppError::rate_limited("download_concurrency_limit", None);
+        let resp = err.error_response();
+        assert_eq!(resp.status().as_u16(), 429);
+        assert!(resp.headers().get("retry-after").is_none());
+    }
+
+    #[test]
+    fn upstream_error_is_502() {
+        let err = AppError::upstream("forgejo timeout");
+        let resp = err.error_response();
+        assert_eq!(resp.status().as_u16(), 502);
+    }
+
+    #[test]
     fn test_internal_error_hides_details() {
         let err = AppError::internal("secret internal info");
         let resp = err.error_response();
@@ -394,3 +565,6 @@ mod tests {
         assert!(json["error"]["details"].is_null());
     }
 }
+
+pub mod oci;
+pub use oci::OciError;

@@ -119,20 +119,31 @@ pub async fn register(
     crate::validation::validate_email(&body.email)?;
 
     auth_service
-        .register(body.email.clone(), body.password.clone(), ip_address.clone())
+        .register(
+            body.email.clone(),
+            body.password.clone(),
+            ip_address.clone(),
+        )
         .await?;
 
     // Generate tokens so the user is logged in immediately
     // (newly registered users never have 2FA, so this always returns Success)
     let result = auth_service
-        .login(body.email.clone(), body.password.clone(), device_info, ip_address)
+        .login(
+            body.email.clone(),
+            body.password.clone(),
+            device_info,
+            ip_address,
+        )
         .await?;
 
     let (tokens, user) = match result {
         LoginResult::Success(tokens, user) => (tokens, user),
         LoginResult::TwoFactorRequired { .. } => {
             // Should never happen for a brand-new registration
-            return Err(AppError::internal("Unexpected 2FA challenge during registration"));
+            return Err(AppError::internal(
+                "Unexpected 2FA challenge during registration",
+            ));
         }
     };
 
@@ -171,7 +182,11 @@ pub async fn register(
         resp.cookie(cookie);
     }
     Ok(resp
-        .cookie(AuthCookies::access_token(&tokens.access_token, secure, cookie_domain))
+        .cookie(AuthCookies::access_token(
+            &tokens.access_token,
+            secure,
+            cookie_domain,
+        ))
         .cookie(AuthCookies::refresh_token(
             &tokens.refresh_token,
             secure,
@@ -211,12 +226,10 @@ pub async fn login(
         .await?;
 
     match result {
-        LoginResult::TwoFactorRequired { challenge_token } => {
-            Ok(success(
-                serde_json::json!({ "requires_2fa": true, "challenge_token": challenge_token }),
-                request_id,
-            ))
-        }
+        LoginResult::TwoFactorRequired { challenge_token } => Ok(success(
+            serde_json::json!({ "requires_2fa": true, "challenge_token": challenge_token }),
+            request_id,
+        )),
         LoginResult::Success(tokens, user) => {
             let secure = config.is_production();
             let cookie_domain = config.cookie_domain.as_deref();
@@ -227,12 +240,16 @@ pub async fn login(
             };
 
             let mut resp = HttpResponse::Ok();
-                // Clear stale hostname-scoped cookies before setting domain-scoped ones
-                for cookie in AuthCookies::clear_stale(secure) {
-                    resp.cookie(cookie);
-                }
-                Ok(resp
-                .cookie(AuthCookies::access_token(&tokens.access_token, secure, cookie_domain))
+            // Clear stale hostname-scoped cookies before setting domain-scoped ones
+            for cookie in AuthCookies::clear_stale(secure) {
+                resp.cookie(cookie);
+            }
+            Ok(resp
+                .cookie(AuthCookies::access_token(
+                    &tokens.access_token,
+                    secure,
+                    cookie_domain,
+                ))
                 .cookie(AuthCookies::refresh_token(
                     &tokens.refresh_token,
                     secure,
@@ -261,7 +278,12 @@ pub async fn request_magic_link(
     let ip_address = extract_client_ip(&req);
 
     // Rate limit by email
-    check_rate_limit(&pool, &body.email.to_lowercase(), &RateLimitConfig::MAGIC_LINK).await?;
+    check_rate_limit(
+        &pool,
+        &body.email.to_lowercase(),
+        &RateLimitConfig::MAGIC_LINK,
+    )
+    .await?;
 
     // Validate email format
     crate::validation::validate_email(&body.email)?;
@@ -281,11 +303,13 @@ pub async fn request_magic_link(
     });
 
     // Always return success (don't reveal if email exists)
-    Ok(HttpResponse::Accepted().json(crate::responses::ApiResponse::<()> {
-        success: true,
-        data: None,
-        meta: crate::responses::ResponseMeta::new(request_id),
-    }))
+    Ok(
+        HttpResponse::Accepted().json(crate::responses::ApiResponse::<()> {
+            success: true,
+            data: None,
+            meta: crate::responses::ResponseMeta::new(request_id),
+        }),
+    )
 }
 
 /// POST /v1/auth/magic-link/verify
@@ -311,7 +335,10 @@ pub async fn verify_magic_link(
         .await?;
 
     match result {
-        crate::services::MagicLinkResult::TwoFactorRequired { challenge_token, is_new_user } => {
+        crate::services::MagicLinkResult::TwoFactorRequired {
+            challenge_token,
+            is_new_user,
+        } => {
             // Still send welcome email for new users
             if is_new_user {
                 let email_svc = email_service.get_ref().clone();
@@ -349,8 +376,17 @@ pub async fn verify_magic_link(
                 resp.cookie(cookie);
             }
             Ok(resp
-                .cookie(AuthCookies::access_token(&tokens.access_token, secure, cookie_domain))
-                .cookie(AuthCookies::refresh_token(&tokens.refresh_token, secure, true, cookie_domain))
+                .cookie(AuthCookies::access_token(
+                    &tokens.access_token,
+                    secure,
+                    cookie_domain,
+                ))
+                .cookie(AuthCookies::refresh_token(
+                    &tokens.refresh_token,
+                    secure,
+                    true,
+                    cookie_domain,
+                ))
                 .json(crate::responses::ApiResponse {
                     success: true,
                     data: Some(response),
@@ -385,16 +421,19 @@ pub async fn accept_admin_invite(
     check_rate_limit(&pool, &ip_key, &RateLimitConfig::LOGIN).await?;
 
     let result = auth_service
-        .accept_admin_invite(body.token.clone(), body.password.clone(), device_info, ip_address)
+        .accept_admin_invite(
+            body.token.clone(),
+            body.password.clone(),
+            device_info,
+            ip_address,
+        )
         .await?;
 
     match result {
-        AcceptInviteResult::PasswordRequired { email } => {
-            Ok(success(
-                serde_json::json!({ "needs_password": true, "email": email }),
-                request_id,
-            ))
-        }
+        AcceptInviteResult::PasswordRequired { email } => Ok(success(
+            serde_json::json!({ "needs_password": true, "email": email }),
+            request_id,
+        )),
         AcceptInviteResult::Success(tokens, user) => {
             let secure = config.is_production();
             let cookie_domain = config.cookie_domain.as_deref();
@@ -409,8 +448,17 @@ pub async fn accept_admin_invite(
                 resp.cookie(cookie);
             }
             Ok(resp
-                .cookie(AuthCookies::access_token(&tokens.access_token, secure, cookie_domain))
-                .cookie(AuthCookies::refresh_token(&tokens.refresh_token, secure, true, cookie_domain))
+                .cookie(AuthCookies::access_token(
+                    &tokens.access_token,
+                    secure,
+                    cookie_domain,
+                ))
+                .cookie(AuthCookies::refresh_token(
+                    &tokens.refresh_token,
+                    secure,
+                    true,
+                    cookie_domain,
+                ))
                 .json(crate::responses::ApiResponse {
                     success: true,
                     data: Some(response),
@@ -474,8 +522,17 @@ pub async fn refresh_token(
         resp.cookie(cookie);
     }
     Ok(resp
-        .cookie(AuthCookies::access_token(&tokens.access_token, secure, cookie_domain))
-        .cookie(AuthCookies::refresh_token(&tokens.refresh_token, secure, true, cookie_domain))
+        .cookie(AuthCookies::access_token(
+            &tokens.access_token,
+            secure,
+            cookie_domain,
+        ))
+        .cookie(AuthCookies::refresh_token(
+            &tokens.refresh_token,
+            secure,
+            true,
+            cookie_domain,
+        ))
         .json(crate::responses::ApiResponse {
             success: true,
             data: Some(serde_json::json!({ "expires_in": tokens.expires_in })),
@@ -490,6 +547,7 @@ pub async fn logout(
     user: AuthenticatedUser,
     auth_service: web::Data<Arc<AuthService>>,
     config: web::Data<crate::config::Config>,
+    oidc_provider: web::Data<Option<Arc<crate::services::oidc_provider::OidcProvider>>>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
     let ip_address = extract_client_ip(&req);
@@ -499,6 +557,50 @@ pub async fn logout(
         auth_service
             .logout(refresh_token, user.0.sub, ip_address)
             .await?;
+    }
+
+    // Revoke OIDC op-sessions and fan out back-channel logout tokens to all
+    // registered clients (e.g. DMARC) so they kill their local sessions too.
+    if let Some(provider_arc) = oidc_provider.as_ref().as_ref().cloned() {
+        let user_id = user.0.sub;
+        tokio::spawn(async move {
+            match provider_arc.revoke_sessions_for_backchannel(user_id).await {
+                Ok(targets) => {
+                    let http = reqwest::Client::builder()
+                        .timeout(std::time::Duration::from_secs(5))
+                        .build()
+                        .unwrap_or_default();
+                    for (client_id, uri, sid) in targets {
+                        match provider_arc.mint_logout_token(user_id, &sid, client_id) {
+                            Ok(token) => {
+                                if let Err(e) = http
+                                    .post(&uri)
+                                    .form(&[("logout_token", &token)])
+                                    .send()
+                                    .await
+                                {
+                                    tracing::warn!(
+                                        %uri, %client_id, error = %e,
+                                        "Backchannel logout delivery failed"
+                                    );
+                                } else {
+                                    tracing::info!(
+                                        %uri, %client_id,
+                                        "Backchannel logout delivered"
+                                    );
+                                }
+                            }
+                            Err(e) => {
+                                tracing::warn!(%client_id, error = %e, "Failed to mint logout token");
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "Failed to revoke sessions for backchannel logout");
+                }
+            }
+        });
     }
 
     let secure = config.is_production();
@@ -634,7 +736,12 @@ pub async fn request_password_reset(
     let ip_address = extract_client_ip(&req);
 
     // Rate limit by email
-    check_rate_limit(&pool, &body.email.to_lowercase(), &RateLimitConfig::PASSWORD_RESET).await?;
+    check_rate_limit(
+        &pool,
+        &body.email.to_lowercase(),
+        &RateLimitConfig::PASSWORD_RESET,
+    )
+    .await?;
 
     // Validate email format
     crate::validation::validate_email(&body.email)?;
@@ -655,11 +762,13 @@ pub async fn request_password_reset(
     }
 
     // Always return success (don't reveal if email exists)
-    Ok(HttpResponse::Accepted().json(crate::responses::ApiResponse::<()> {
-        success: true,
-        data: None,
-        meta: crate::responses::ResponseMeta::new(request_id),
-    }))
+    Ok(
+        HttpResponse::Accepted().json(crate::responses::ApiResponse::<()> {
+            success: true,
+            data: None,
+            meta: crate::responses::ResponseMeta::new(request_id),
+        }),
+    )
 }
 
 /// POST /v1/auth/password-reset/confirm
@@ -785,9 +894,7 @@ pub async fn auth_redirect(
     }
 
     // Access token missing/expired — try refresh token
-    let refresh_token = req
-        .cookie("refresh_token")
-        .map(|c| c.value().to_string());
+    let refresh_token = req.cookie("refresh_token").map(|c| c.value().to_string());
 
     if let Some(ref refresh_token) = refresh_token {
         tracing::info!("auth_redirect: attempting token refresh");
@@ -902,7 +1009,12 @@ pub async fn setup_admin(
 
     // Log them in immediately
     let result = auth_service
-        .login(body.email.clone(), body.password.clone(), device_info, ip_address)
+        .login(
+            body.email.clone(),
+            body.password.clone(),
+            device_info,
+            ip_address,
+        )
         .await?;
 
     let (tokens, user) = match result {
@@ -925,7 +1037,11 @@ pub async fn setup_admin(
         resp.cookie(cookie);
     }
     Ok(resp
-        .cookie(AuthCookies::access_token(&tokens.access_token, secure, cookie_domain))
+        .cookie(AuthCookies::access_token(
+            &tokens.access_token,
+            secure,
+            cookie_domain,
+        ))
         .cookie(AuthCookies::refresh_token(
             &tokens.refresh_token,
             secure,

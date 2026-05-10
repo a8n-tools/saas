@@ -4,9 +4,13 @@
 
 pub mod application;
 pub mod audit;
+pub mod download_cache;
+pub mod download_daily_count;
 pub mod feedback;
 pub mod invite;
 pub mod notification;
+pub mod oci_blob_cache;
+pub mod oci_pull_daily_counts;
 pub mod rate_limit;
 pub mod stripe;
 pub mod tier;
@@ -17,9 +21,13 @@ pub mod user;
 // Re-export repositories
 pub use application::ApplicationRepository;
 pub use audit::AuditLogRepository;
+pub use download_cache::DownloadCacheRepository;
+pub use download_daily_count::DownloadDailyCountRepository;
 pub use feedback::FeedbackRepository;
 pub use invite::InviteRepository;
 pub use notification::NotificationRepository;
+pub use oci_blob_cache::OciBlobCacheRepository;
+pub use oci_pull_daily_counts::OciPullDailyCountRepository;
 pub use rate_limit::RateLimitRepository;
 pub use stripe::StripeConfigRepository;
 pub use tier::TierConfigRepository;

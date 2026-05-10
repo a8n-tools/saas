@@ -165,10 +165,7 @@ impl TotpRepository {
     }
 
     /// Mark a recovery code as used
-    pub async fn mark_recovery_code_used(
-        pool: &PgPool,
-        code_id: Uuid,
-    ) -> Result<(), sqlx::Error> {
+    pub async fn mark_recovery_code_used(pool: &PgPool, code_id: Uuid) -> Result<(), sqlx::Error> {
         sqlx::query("UPDATE recovery_codes SET used_at = NOW() WHERE id = $1")
             .bind(code_id)
             .execute(pool)

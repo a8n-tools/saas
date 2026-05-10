@@ -43,38 +43,72 @@ impl SuspiciousPatterns {
         Self {
             suffixes: vec![
                 // Server-side scripting extensions
-                ".php", ".phtml", ".phar", ".asp", ".aspx", ".ashx", ".asmx",
-                ".jsp", ".jspx", ".do", ".action", ".cgi", ".pl", ".cfm", ".cfc",
+                ".php", ".phtml", ".phar", ".asp", ".aspx", ".ashx", ".asmx", ".jsp", ".jspx",
+                ".do", ".action", ".cgi", ".pl", ".cfm", ".cfc",
                 // Backup / config / archive files
-                ".bak", ".backup", ".save", ".old", ".orig", ".swp", ".tmp",
-                ".sql", ".sql.gz", ".log", ".conf", ".ini",
-                ".yml", ".yaml", ".toml", ".xml",
-                ".sh", ".bash", ".bat", ".cmd",
-                ".tar", ".tar.gz", ".tgz", ".zip", ".rar", ".7z", ".gz", ".bz2",
+                ".bak", ".backup", ".save", ".old", ".orig", ".swp", ".tmp", ".sql", ".sql.gz",
+                ".log", ".conf", ".ini", ".yml", ".yaml", ".toml", ".xml", ".sh", ".bash", ".bat",
+                ".cmd", ".tar", ".tar.gz", ".tgz", ".zip", ".rar", ".7z", ".gz", ".bz2",
             ],
             prefixes: vec![
                 // CMS probes
-                "/wp-", "/wordpress/", "/blog/wp-", "/joomla/", "/administrator/",
-                "/drupal/", "/magento/", "/downloader/", "/cms/",
+                "/wp-",
+                "/wordpress/",
+                "/blog/wp-",
+                "/joomla/",
+                "/administrator/",
+                "/drupal/",
+                "/magento/",
+                "/downloader/",
+                "/cms/",
                 // Admin panel / DB probes
-                "/phpmyadmin/", "/pma/", "/myadmin/", "/mysql/", "/dbadmin/",
+                "/phpmyadmin/",
+                "/pma/",
+                "/myadmin/",
+                "/mysql/",
+                "/dbadmin/",
                 "/phpMyAdmin/",
                 // Credential / config probes
-                "/aws-credentials", "/credentials", "/config.php",
+                "/aws-credentials",
+                "/credentials",
+                "/config.php",
                 // Debug / dev probes
-                "/api/swagger", "/swagger", "/api-docs",
-                "/actuator", "/jolokia/", "/console/", "/manager/",
-                "/host-manager/", "/debug", "/dump",
+                "/api/swagger",
+                "/swagger",
+                "/api-docs",
+                "/actuator",
+                "/jolokia/",
+                "/console/",
+                "/manager/",
+                "/host-manager/",
+                "/debug",
+                "/dump",
                 // Directory probes
-                "/node_modules/", "/test/", "/tmp/", "/backup/", "/backups/",
+                "/node_modules/",
+                "/test/",
+                "/tmp/",
+                "/backup/",
+                "/backups/",
                 "/src/",
             ],
             exact: HashSet::from([
-                "/server-info", "/server-status", "/xmlrpc.php",
-                "/database.yml", "/secrets.json", "/secrets.yml",
-                "/docker.sh", "/Dockerfile", "/package.json", "/package-lock.json",
-                "/api/info", "/api/config", "/api/debug", "/api/env",
-                "/graphql", "/trace", "/test",
+                "/server-info",
+                "/server-status",
+                "/xmlrpc.php",
+                "/database.yml",
+                "/secrets.json",
+                "/secrets.yml",
+                "/docker.sh",
+                "/Dockerfile",
+                "/package.json",
+                "/package-lock.json",
+                "/api/info",
+                "/api/config",
+                "/api/debug",
+                "/api/env",
+                "/graphql",
+                "/trace",
+                "/test",
             ]),
             contains: vec![
                 // Path traversal
@@ -191,8 +225,7 @@ impl AutoBanService {
                 "Auto-banned after {} suspicious requests (last: {})",
                 entry.count, path
             );
-            let expires_at =
-                now + chrono::Duration::seconds(self.config.ban_duration_secs as i64);
+            let expires_at = now + chrono::Duration::seconds(self.config.ban_duration_secs as i64);
 
             // Remove strikes — no longer needed
             strikes.remove(ip);
@@ -217,7 +250,9 @@ impl AutoBanService {
             let reason_owned = reason.clone();
             let count = self.config.threshold;
             tokio::spawn(async move {
-                if let Err(e) = persist_ban(&pool, &ip_owned, &reason_owned, count, expires_at).await {
+                if let Err(e) =
+                    persist_ban(&pool, &ip_owned, &reason_owned, count, expires_at).await
+                {
                     tracing::error!(error = %e, ip = %ip_owned, "Failed to persist IP ban to database");
                 }
             });
@@ -381,9 +416,7 @@ where
         // If auto-ban is disabled, pass through immediately
         if !auto_ban.is_enabled() {
             let fut = service.call(req);
-            return Box::pin(async move {
-                fut.await.map(|res| res.map_into_left_body())
-            });
+            return Box::pin(async move { fut.await.map(|res| res.map_into_left_body()) });
         }
 
         let ip = extract_client_ip(req.request());

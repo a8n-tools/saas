@@ -6,9 +6,12 @@ pub mod admin;
 pub mod application;
 pub mod auth;
 pub mod billing;
+pub mod download;
 pub mod feedback;
 pub mod health;
 pub mod membership;
+pub mod oci;
+pub mod oidc;
 pub mod user;
 pub mod webhook;
 
@@ -22,6 +25,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .configure(health::configure)
             .configure(auth::configure)
             .configure(user::configure)
+            .configure(download::configure)
             .configure(application::configure)
             .configure(billing::configure)
             .configure(feedback::configure)
@@ -33,4 +37,8 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
     // Root-level endpoints
     cfg.service(health::root_status);
     cfg.service(health::health_check);
+
+    // OIDC / OAuth 2.1 endpoints (root-level, outside /v1)
+    oidc::configure_well_known(cfg);
+    oidc::configure_oauth2(cfg);
 }

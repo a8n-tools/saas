@@ -1,5 +1,6 @@
 export { DashboardPage } from './DashboardPage'
 export { ApplicationsPage } from './ApplicationsPage'
+export { DownloadsPage } from './DownloadsPage'
 export { MembershipPage } from './MembershipPage'
 export { SettingsPage } from './SettingsPage'
 export { CheckoutSuccessPage } from './CheckoutSuccessPage'

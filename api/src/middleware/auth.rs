@@ -3,6 +3,8 @@
 //! This module provides JWT-based authentication middleware and extractors
 //! for securing API endpoints.
 
+use crate::errors::AppError;
+use crate::services::{AccessTokenClaims, JwtService};
 use actix_web::{
     cookie::{Cookie, SameSite},
     dev::Payload,
@@ -11,8 +13,6 @@ use actix_web::{
 };
 use std::future::{ready, Ready};
 use std::sync::Arc;
-use crate::errors::AppError;
-use crate::services::{AccessTokenClaims, JwtService};
 
 /// Key for storing authenticated user claims in request extensions
 #[derive(Debug, Clone)]
@@ -32,7 +32,9 @@ impl FromRequest for AuthenticatedUser {
             Some(service) => service.clone(),
             None => {
                 tracing::error!("JwtService not found in app data");
-                return ready(Err(AppError::internal("Authentication service not available")));
+                return ready(Err(AppError::internal(
+                    "Authentication service not available",
+                )));
             }
         };
 
@@ -43,7 +45,8 @@ impl FromRequest for AuthenticatedUser {
             Some(token) => match jwt_service.verify_access_token(&token) {
                 Ok(claims) => {
                     // Store claims in request extensions for later use
-                    req.extensions_mut().insert(AuthenticatedClaims(claims.clone()));
+                    req.extensions_mut()
+                        .insert(AuthenticatedClaims(claims.clone()));
                     ready(Ok(AuthenticatedUser(claims)))
                 }
                 Err(e) => ready(Err(e)),
@@ -77,12 +80,19 @@ impl FromRequest for OptionalUser {
         match token {
             Some(token) => match jwt_service.verify_access_token(&token) {
                 Ok(claims) => {
-                    req.extensions_mut().insert(AuthenticatedClaims(claims.clone()));
+                    req.extensions_mut()
+                        .insert(AuthenticatedClaims(claims.clone()));
                     ready(Ok(OptionalUser(Some(claims))))
                 }
-                Err(_) => ready(Ok(OptionalUser(None))),
+                Err(e) => {
+                    tracing::debug!(error = %e, path = %req.path(), "OptionalUser: token present but verification failed");
+                    ready(Ok(OptionalUser(None)))
+                }
             },
-            None => ready(Ok(OptionalUser(None))),
+            None => {
+                tracing::debug!(path = %req.path(), "OptionalUser: no token in request");
+                ready(Ok(OptionalUser(None)))
+            }
         }
     }
 }
@@ -101,7 +111,9 @@ impl FromRequest for AdminUser {
             Some(service) => service.clone(),
             None => {
                 tracing::error!("JwtService not found in app data");
-                return ready(Err(AppError::internal("Authentication service not available")));
+                return ready(Err(AppError::internal(
+                    "Authentication service not available",
+                )));
             }
         };
 
@@ -114,7 +126,8 @@ impl FromRequest for AdminUser {
                     if claims.role != "admin" {
                         return ready(Err(AppError::Forbidden));
                     }
-                    req.extensions_mut().insert(AuthenticatedClaims(claims.clone()));
+                    req.extensions_mut()
+                        .insert(AuthenticatedClaims(claims.clone()));
                     ready(Ok(AdminUser(claims)))
                 }
                 Err(e) => ready(Err(e)),
@@ -137,7 +150,9 @@ impl FromRequest for MemberUser {
             Some(service) => service.clone(),
             None => {
                 tracing::error!("JwtService not found in app data");
-                return ready(Err(AppError::internal("Authentication service not available")));
+                return ready(Err(AppError::internal(
+                    "Authentication service not available",
+                )));
             }
         };
 
@@ -150,7 +165,8 @@ impl FromRequest for MemberUser {
                         return ready(Err(AppError::Forbidden));
                     }
 
-                    req.extensions_mut().insert(AuthenticatedClaims(claims.clone()));
+                    req.extensions_mut()
+                        .insert(AuthenticatedClaims(claims.clone()));
                     ready(Ok(MemberUser(claims)))
                 }
                 Err(e) => ready(Err(e)),
@@ -201,7 +217,12 @@ impl AuthCookies {
     }
 
     /// Create refresh token cookie
-    pub fn refresh_token(token: &str, secure: bool, remember: bool, cookie_domain: Option<&str>) -> Cookie<'static> {
+    pub fn refresh_token(
+        token: &str,
+        secure: bool,
+        remember: bool,
+        cookie_domain: Option<&str>,
+    ) -> Cookie<'static> {
         let max_age = if remember {
             actix_web::cookie::time::Duration::days(30)
         } else {
@@ -337,7 +358,10 @@ mod tests {
         let cookies = AuthCookies::clear(true, Some(".example.com"));
         // 2 stale-clearing cookies (no domain) + 2 domain-scoped clearing cookies
         assert_eq!(cookies.len(), 4);
-        let domain_cookies: Vec<_> = cookies.iter().filter(|c| c.domain() == Some(".example.com")).collect();
+        let domain_cookies: Vec<_> = cookies
+            .iter()
+            .filter(|c| c.domain() == Some(".example.com"))
+            .collect();
         assert_eq!(domain_cookies.len(), 2);
         assert!(domain_cookies.iter().any(|c| c.name() == "access_token"));
         assert!(domain_cookies.iter().any(|c| c.name() == "refresh_token"));

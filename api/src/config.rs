@@ -38,6 +38,12 @@ pub struct Config {
     pub stripe_key_version: i16,
     /// Membership tier thresholds
     pub tier: TierConfig,
+    /// Download proxy configuration.
+    pub download: DownloadConfig,
+    /// OCI registry configuration.
+    pub oci: OciConfig,
+    /// OIDC / OpenID Provider configuration.
+    pub oidc: OidcConfig,
 }
 
 /// SMTP TLS mode
@@ -88,7 +94,11 @@ impl EmailConfig {
         let has_smtp = !smtp_host.is_empty() && smtp_host != "localhost";
 
         // SMTP_TLS: "implicit" (port 465) or "starttls" (port 587)
-        let smtp_tls = match env::var("SMTP_TLS").unwrap_or_default().to_lowercase().as_str() {
+        let smtp_tls = match env::var("SMTP_TLS")
+            .unwrap_or_default()
+            .to_lowercase()
+            .as_str()
+        {
             "starttls" => SmtpTls::Starttls,
             // Default to implicit TLS (port 465)
             _ => SmtpTls::Implicit,
@@ -200,6 +210,18 @@ pub struct TierConfig {
     pub early_adopter_trial_days: i64,
     /// Trial duration in days for standard tier
     pub standard_trial_days: i64,
+    /// Stripe Price ID for lifetime members ($0 recurring). Falls back to STRIPE_FREE_PRICE_ID env var.
+    pub free_price_id: Option<String>,
+    /// Stripe Price ID unlocked after early adopter trial ends.
+    pub early_adopter_price_id: Option<String>,
+    /// Stripe Price ID unlocked after standard trial ends.
+    pub standard_price_id: Option<String>,
+    /// Stripe Product ID that maps to the Lifetime tier.
+    pub lifetime_product_id: Option<String>,
+    /// Stripe Product ID that maps to the Early Adopter tier.
+    pub early_adopter_product_id: Option<String>,
+    /// Stripe Product ID that maps to the Standard tier.
+    pub standard_product_id: Option<String>,
 }
 
 impl TierConfig {
@@ -222,6 +244,14 @@ impl TierConfig {
                 .ok()
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(30),
+            free_price_id: env::var("STRIPE_FREE_PRICE_ID")
+                .ok()
+                .filter(|s| !s.is_empty()),
+            early_adopter_price_id: None,
+            standard_price_id: None,
+            lifetime_product_id: None,
+            early_adopter_product_id: None,
+            standard_product_id: None,
         }
     }
 
@@ -236,6 +266,13 @@ impl TierConfig {
                 .early_adopter_trial_days
                 .unwrap_or(env.early_adopter_trial_days),
             standard_trial_days: row.standard_trial_days.unwrap_or(env.standard_trial_days),
+            // free_price_id: DB value takes precedence; fall back to STRIPE_FREE_PRICE_ID env var
+            free_price_id: row.free_price_id.clone().or(env.free_price_id),
+            early_adopter_price_id: row.early_adopter_price_id.clone(),
+            standard_price_id: row.standard_price_id.clone(),
+            lifetime_product_id: row.lifetime_product_id.clone(),
+            early_adopter_product_id: row.early_adopter_product_id.clone(),
+            standard_product_id: row.standard_product_id.clone(),
         }
     }
 
@@ -245,6 +282,172 @@ impl TierConfig {
             || row.early_adopter_slots.is_some()
             || row.early_adopter_trial_days.is_some()
             || row.standard_trial_days.is_some()
+            || row.free_price_id.is_some()
+            || row.early_adopter_price_id.is_some()
+            || row.standard_price_id.is_some()
+            || row.lifetime_product_id.is_some()
+            || row.early_adopter_product_id.is_some()
+            || row.standard_product_id.is_some()
+    }
+}
+
+/// Download proxy configuration.
+#[derive(Debug, Clone)]
+pub struct DownloadConfig {
+    pub forgejo_base_url: Option<String>,
+    pub forgejo_api_token: Option<String>,
+    pub cache_dir: String,
+    pub cache_max_bytes: u64,
+    pub concurrency_per_user: u32,
+    pub daily_limit_per_user: u32,
+    pub release_cache_ttl_secs: u64,
+}
+
+impl DownloadConfig {
+    pub fn from_env() -> Self {
+        Self {
+            forgejo_base_url: env::var("FORGEJO_BASE_URL").ok().filter(|s| !s.is_empty()),
+            forgejo_api_token: env::var("FORGEJO_API_TOKEN").ok().filter(|s| !s.is_empty()),
+            cache_dir: env::var("DOWNLOAD_CACHE_DIR")
+                .unwrap_or_else(|_| "/var/cache/a8n-downloads".to_string()),
+            cache_max_bytes: env::var("DOWNLOAD_CACHE_MAX_BYTES")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(10_737_418_240),
+            concurrency_per_user: env::var("DOWNLOAD_CONCURRENCY_PER_USER")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(2),
+            daily_limit_per_user: env::var("DOWNLOAD_DAILY_LIMIT_PER_USER")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(50),
+            release_cache_ttl_secs: env::var("FORGEJO_RELEASE_CACHE_TTL_SECS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(300),
+        }
+    }
+
+    pub fn enabled(&self) -> bool {
+        self.forgejo_base_url.is_some() && self.forgejo_api_token.is_some()
+    }
+}
+
+/// OCI registry configuration.
+#[derive(Debug, Clone)]
+pub struct OciConfig {
+    pub enabled: bool,
+    pub port: u16,
+    pub service: String,
+    pub blob_cache_dir: String,
+    pub blob_cache_max_bytes: u64,
+    pub manifest_cache_ttl_secs: u64,
+    pub concurrent_manifests_per_user: u32,
+    pub pulls_per_user_per_day: u32,
+    pub token_ttl_secs: u64,
+}
+
+impl OciConfig {
+    pub fn from_env() -> Self {
+        Self {
+            enabled: env::var("OCI_REGISTRY_ENABLED")
+                .map(|v| v == "true" || v == "1")
+                .unwrap_or(false),
+            port: env::var("OCI_REGISTRY_PORT")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(18081),
+            service: env::var("OCI_REGISTRY_SERVICE")
+                .unwrap_or_else(|_| "oci.example.com".to_string()),
+            blob_cache_dir: env::var("OCI_BLOB_CACHE_DIR")
+                .unwrap_or_else(|_| "/var/cache/a8n-oci".to_string()),
+            blob_cache_max_bytes: env::var("OCI_BLOB_CACHE_MAX_BYTES")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(53_687_091_200), // 50 GiB
+            manifest_cache_ttl_secs: env::var("OCI_MANIFEST_CACHE_TTL_SECS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(300),
+            concurrent_manifests_per_user: env::var("OCI_CONCURRENT_MANIFESTS_PER_USER")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(2),
+            pulls_per_user_per_day: env::var("OCI_PULLS_PER_USER_PER_DAY")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(50),
+            token_ttl_secs: env::var("OCI_TOKEN_TTL_SECS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(900),
+        }
+    }
+}
+
+/// OIDC / OpenID Provider configuration.
+///
+/// When `issuer` is empty the OIDC feature is disabled; all `/oauth2/*` and
+/// `/.well-known/*` endpoints return 404.
+#[derive(Debug, Clone)]
+pub struct OidcConfig {
+    /// Full issuer URL, e.g. `https://api.a8n.tools`.
+    /// Unset or empty disables the OIDC feature.
+    pub issuer: Option<String>,
+    /// Path to the active Ed25519 private key PEM (PKCS#8, as generated by
+    /// `openssl genpkey -algorithm ED25519`).
+    pub jwt_private_key_path: String,
+    /// kid for the active signing key (e.g. `2026-04-primary`).
+    pub jwt_active_kid: String,
+    /// Directory holding every kid's `<kid>.pub.pem` public key files.
+    /// All files in the directory are served in the JWKS response.
+    pub jwt_public_keys_dir: String,
+    /// Access token TTL in seconds (60–900, default 600).
+    pub access_token_ttl_secs: u32,
+    /// Refresh token absolute TTL in seconds (default 30 d).
+    pub refresh_token_ttl_secs: u32,
+    /// Refresh token idle TTL in seconds (default 14 d).
+    pub refresh_idle_ttl_secs: u32,
+    /// Authorization code TTL in seconds (default 60, max 120).
+    pub code_ttl_secs: u32,
+}
+
+impl OidcConfig {
+    pub fn from_env() -> Self {
+        let issuer = env::var("OIDC_ISSUER").ok().filter(|s| !s.is_empty());
+        Self {
+            issuer,
+            jwt_private_key_path: env::var("OIDC_JWT_PRIVATE_KEY_PATH")
+                .unwrap_or_else(|_| "secrets/jwt_private.pem".to_string()),
+            jwt_active_kid: env::var("OIDC_JWT_ACTIVE_KID")
+                .unwrap_or_else(|_| "dev-key".to_string()),
+            jwt_public_keys_dir: env::var("OIDC_JWT_PUBLIC_KEYS_DIR")
+                .unwrap_or_else(|_| "secrets".to_string()),
+            access_token_ttl_secs: env::var("OIDC_ACCESS_TOKEN_TTL_SECONDS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(600)
+                .min(900)
+                .max(60),
+            refresh_token_ttl_secs: env::var("OIDC_REFRESH_TOKEN_TTL_SECONDS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(2_592_000),
+            refresh_idle_ttl_secs: env::var("OIDC_REFRESH_IDLE_TTL_SECONDS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(1_209_600),
+            code_ttl_secs: env::var("OIDC_CODE_TTL_SECONDS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(60)
+                .min(120),
+        }
+    }
+
+    pub fn enabled(&self) -> bool {
+        self.issuer.is_some()
     }
 }
 
@@ -265,12 +468,17 @@ impl Config {
         let port = env::var("APP_PORT")
             .unwrap_or_else(|_| "4000".to_string())
             .parse::<u16>()
-            .map_err(|_| ConfigError::InvalidValue("APP_PORT".to_string(), "must be a valid port number".to_string()))?;
+            .map_err(|_| {
+                ConfigError::InvalidValue(
+                    "APP_PORT".to_string(),
+                    "must be a valid port number".to_string(),
+                )
+            })?;
 
         let log_level = env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string());
 
-        let cors_origin = env::var("CORS_ORIGIN")
-            .unwrap_or_else(|_| "http://localhost:5173".to_string());
+        let cors_origin =
+            env::var("CORS_ORIGIN").unwrap_or_else(|_| "http://localhost:5173".to_string());
 
         let environment = env::var("ENVIRONMENT").unwrap_or_else(|_| "production".to_string());
         let app_name = env::var("APP_NAME").unwrap_or_else(|_| "localhost".to_string());
@@ -285,8 +493,10 @@ impl Config {
 
         let totp_encryption_key = Self::load_totp_encryption_key(&environment);
         let stripe_encryption_key = Self::load_stripe_encryption_key(&environment);
-        let totp_encryption_key_prev = Self::load_optional_encryption_key("TOTP_ENCRYPTION_KEY_PREV");
-        let stripe_encryption_key_prev = Self::load_optional_encryption_key("STRIPE_ENCRYPTION_KEY_PREV");
+        let totp_encryption_key_prev =
+            Self::load_optional_encryption_key("TOTP_ENCRYPTION_KEY_PREV");
+        let stripe_encryption_key_prev =
+            Self::load_optional_encryption_key("STRIPE_ENCRYPTION_KEY_PREV");
         let totp_key_version: i16 = env::var("TOTP_KEY_VERSION")
             .ok()
             .and_then(|v| v.parse().ok())
@@ -297,6 +507,9 @@ impl Config {
             .unwrap_or(1);
 
         let tier = TierConfig::from_env();
+        let download = DownloadConfig::from_env();
+        let oci = OciConfig::from_env();
+        let oidc = OidcConfig::from_env();
 
         let config = Self {
             database_url,
@@ -316,6 +529,9 @@ impl Config {
             stripe_encryption_key_prev,
             stripe_key_version,
             tier,
+            download,
+            oci,
+            oidc,
         };
 
         info!(
@@ -338,8 +554,8 @@ impl Config {
     fn load_totp_encryption_key(environment: &str) -> [u8; 32] {
         match env::var("TOTP_ENCRYPTION_KEY") {
             Ok(hex_str) => {
-                let bytes = hex::decode(hex_str.trim())
-                    .expect("TOTP_ENCRYPTION_KEY must be valid hex");
+                let bytes =
+                    hex::decode(hex_str.trim()).expect("TOTP_ENCRYPTION_KEY must be valid hex");
                 let key: [u8; 32] = bytes
                     .try_into()
                     .expect("TOTP_ENCRYPTION_KEY must be exactly 32 bytes (64 hex chars)");
@@ -359,8 +575,8 @@ impl Config {
     fn load_stripe_encryption_key(environment: &str) -> [u8; 32] {
         match env::var("STRIPE_ENCRYPTION_KEY") {
             Ok(hex_str) => {
-                let bytes = hex::decode(hex_str.trim())
-                    .expect("STRIPE_ENCRYPTION_KEY must be valid hex");
+                let bytes =
+                    hex::decode(hex_str.trim()).expect("STRIPE_ENCRYPTION_KEY must be valid hex");
                 let key: [u8; 32] = bytes
                     .try_into()
                     .expect("STRIPE_ENCRYPTION_KEY must be exactly 32 bytes (64 hex chars)");
@@ -491,12 +707,86 @@ mod tests {
     }
 
     #[test]
+    fn download_config_defaults_when_forgejo_unset() {
+        env::remove_var("FORGEJO_BASE_URL");
+        env::remove_var("FORGEJO_API_TOKEN");
+        env::remove_var("DOWNLOAD_CACHE_DIR");
+        env::remove_var("DOWNLOAD_CACHE_MAX_BYTES");
+        env::remove_var("DOWNLOAD_CONCURRENCY_PER_USER");
+        env::remove_var("DOWNLOAD_DAILY_LIMIT_PER_USER");
+        env::remove_var("FORGEJO_RELEASE_CACHE_TTL_SECS");
+
+        let cfg = DownloadConfig::from_env();
+        assert!(!cfg.enabled());
+        assert_eq!(cfg.cache_dir, "/var/cache/a8n-downloads");
+        assert_eq!(cfg.cache_max_bytes, 10_737_418_240);
+        assert_eq!(cfg.concurrency_per_user, 2);
+        assert_eq!(cfg.daily_limit_per_user, 50);
+        assert_eq!(cfg.release_cache_ttl_secs, 300);
+    }
+
+    #[test]
+    fn download_config_enabled_when_forgejo_set() {
+        env::set_var("FORGEJO_BASE_URL", "https://git.example.com");
+        env::set_var("FORGEJO_API_TOKEN", "test-token");
+        let cfg = DownloadConfig::from_env();
+        assert!(cfg.enabled());
+        assert_eq!(
+            cfg.forgejo_base_url.as_deref(),
+            Some("https://git.example.com")
+        );
+        env::remove_var("FORGEJO_BASE_URL");
+        env::remove_var("FORGEJO_API_TOKEN");
+    }
+
+    #[test]
     fn test_key_version_parsing() {
         // Test the parsing logic directly to avoid env var races with parallel tests.
         // Key versions use: env::var("X").ok().and_then(|v| v.parse().ok()).unwrap_or(1)
         assert_eq!("3".parse::<i16>().unwrap(), 3);
         assert_eq!("7".parse::<i16>().unwrap(), 7);
-        assert_eq!(None::<String>.and_then(|v: String| v.parse::<i16>().ok()).unwrap_or(1), 1);
-        assert_eq!(Some("invalid".to_string()).and_then(|v| v.parse::<i16>().ok()).unwrap_or(1), 1);
+        assert_eq!(
+            None::<String>
+                .and_then(|v: String| v.parse::<i16>().ok())
+                .unwrap_or(1),
+            1
+        );
+        assert_eq!(
+            Some("invalid".to_string())
+                .and_then(|v| v.parse::<i16>().ok())
+                .unwrap_or(1),
+            1
+        );
+    }
+
+    #[test]
+    fn oci_config_defaults() {
+        env::remove_var("OCI_REGISTRY_ENABLED");
+        env::remove_var("OCI_REGISTRY_PORT");
+        env::remove_var("OCI_REGISTRY_SERVICE");
+        env::remove_var("OCI_BLOB_CACHE_DIR");
+        env::remove_var("OCI_BLOB_CACHE_MAX_BYTES");
+        env::remove_var("OCI_MANIFEST_CACHE_TTL_SECS");
+        env::remove_var("OCI_CONCURRENT_MANIFESTS_PER_USER");
+        env::remove_var("OCI_PULLS_PER_USER_PER_DAY");
+        env::remove_var("OCI_TOKEN_TTL_SECS");
+
+        let cfg = OciConfig::from_env();
+        assert!(!cfg.enabled);
+        assert_eq!(cfg.port, 18081);
+        assert_eq!(cfg.blob_cache_dir, "/var/cache/a8n-oci");
+        assert_eq!(cfg.blob_cache_max_bytes, 53_687_091_200);
+        assert_eq!(cfg.manifest_cache_ttl_secs, 300);
+        assert_eq!(cfg.concurrent_manifests_per_user, 2);
+        assert_eq!(cfg.pulls_per_user_per_day, 50);
+        assert_eq!(cfg.token_ttl_secs, 900);
+    }
+
+    #[test]
+    fn oci_config_enabled_when_set() {
+        env::set_var("OCI_REGISTRY_ENABLED", "true");
+        let cfg = OciConfig::from_env();
+        assert!(cfg.enabled);
+        env::remove_var("OCI_REGISTRY_ENABLED");
     }
 }

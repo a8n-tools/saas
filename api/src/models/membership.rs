@@ -116,16 +116,28 @@ mod tests {
         assert_eq!(StripeSubscriptionStatus::PastDue.as_str(), "past_due");
         assert_eq!(StripeSubscriptionStatus::Canceled.as_str(), "canceled");
         assert_eq!(StripeSubscriptionStatus::Trialing.as_str(), "trialing");
-        assert_eq!(StripeSubscriptionStatus::IncompleteExpired.as_str(), "incomplete_expired");
+        assert_eq!(
+            StripeSubscriptionStatus::IncompleteExpired.as_str(),
+            "incomplete_expired"
+        );
         assert_eq!(StripeSubscriptionStatus::Unpaid.as_str(), "unpaid");
         assert_eq!(StripeSubscriptionStatus::Paused.as_str(), "paused");
     }
 
     #[test]
     fn stripe_status_from_string() {
-        assert_eq!(StripeSubscriptionStatus::from("active".to_string()), StripeSubscriptionStatus::Active);
-        assert_eq!(StripeSubscriptionStatus::from("past_due".to_string()), StripeSubscriptionStatus::PastDue);
-        assert_eq!(StripeSubscriptionStatus::from("unknown".to_string()), StripeSubscriptionStatus::Incomplete);
+        assert_eq!(
+            StripeSubscriptionStatus::from("active".to_string()),
+            StripeSubscriptionStatus::Active
+        );
+        assert_eq!(
+            StripeSubscriptionStatus::from("past_due".to_string()),
+            StripeSubscriptionStatus::PastDue
+        );
+        assert_eq!(
+            StripeSubscriptionStatus::from("unknown".to_string()),
+            StripeSubscriptionStatus::Incomplete
+        );
     }
 
     #[test]
@@ -138,8 +150,17 @@ mod tests {
 
     #[test]
     fn payment_status_from_string() {
-        assert_eq!(PaymentStatus::from("succeeded".to_string()), PaymentStatus::Succeeded);
-        assert_eq!(PaymentStatus::from("failed".to_string()), PaymentStatus::Failed);
-        assert_eq!(PaymentStatus::from("unknown".to_string()), PaymentStatus::Pending);
+        assert_eq!(
+            PaymentStatus::from("succeeded".to_string()),
+            PaymentStatus::Succeeded
+        );
+        assert_eq!(
+            PaymentStatus::from("failed".to_string()),
+            PaymentStatus::Failed
+        );
+        assert_eq!(
+            PaymentStatus::from("unknown".to_string()),
+            PaymentStatus::Pending
+        );
     }
 }

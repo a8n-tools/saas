@@ -62,11 +62,27 @@ impl AccessTokenClaims {
     /// - User has an active trial (trial_ends_at in the future)
     /// - User has an active or grace_period subscription
     pub fn has_member_access(&self) -> bool {
-        self.role == "admin"
-            || self.lifetime_member
-            || self.trial_ends_at.map_or(false, |ts| ts > chrono::Utc::now().timestamp())
-            || self.membership_status == "active"
-            || self.membership_status == "grace_period"
+        Self::has_member_access_static(
+            &self.role,
+            self.lifetime_member,
+            self.trial_ends_at,
+            &self.membership_status,
+        )
+    }
+
+    /// Static version of `has_member_access` for use with raw user fields
+    /// (e.g. when building userinfo responses without a full `AccessTokenClaims`).
+    pub fn has_member_access_static(
+        role: &str,
+        lifetime_member: bool,
+        trial_ends_at: Option<i64>,
+        membership_status: &str,
+    ) -> bool {
+        role == "admin"
+            || lifetime_member
+            || trial_ends_at.map_or(false, |ts| ts > chrono::Utc::now().timestamp())
+            || membership_status == "active"
+            || membership_status == "grace_period"
     }
 }
 
@@ -314,7 +330,12 @@ mod tests {
         assert_ne!(hash1, token);
     }
 
-    fn test_claims(membership_status: &str, lifetime_member: bool, trial_ends_at: Option<i64>, role: &str) -> AccessTokenClaims {
+    fn test_claims(
+        membership_status: &str,
+        lifetime_member: bool,
+        trial_ends_at: Option<i64>,
+        role: &str,
+    ) -> AccessTokenClaims {
         AccessTokenClaims {
             sub: Uuid::new_v4(),
             email: "test@example.com".to_string(),

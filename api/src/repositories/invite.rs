@@ -10,10 +10,7 @@ pub struct InviteRepository;
 
 impl InviteRepository {
     /// Create a new admin invite
-    pub async fn create(
-        pool: &PgPool,
-        data: CreateAdminInvite,
-    ) -> Result<AdminInvite, AppError> {
+    pub async fn create(pool: &PgPool, data: CreateAdminInvite) -> Result<AdminInvite, AppError> {
         let invite = sqlx::query_as::<_, AdminInvite>(
             r#"
             INSERT INTO admin_invites (email, token_hash, invited_by, role, expires_at)

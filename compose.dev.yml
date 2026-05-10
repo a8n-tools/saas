@@ -4,7 +4,7 @@ services:
   # PostgreSQL Database
   postgres:
     image: postgres:16-alpine
-    container_name: saas-postgres-${USER}
+    container_name: dev-saas-postgres-${USER}
     restart: unless-stopped
     environment:
       POSTGRES_USER: a8n
@@ -26,7 +26,8 @@ services:
     build:
       context: ./api
       dockerfile: Dockerfile
-    container_name: saas-api-${USER}
+    container_name: dev-saas-api-${USER}
+    command: ["/app/target/debug/a8n-api"]
     restart: unless-stopped
     environment:
       # scheme://username:password@host:port/path/file.ext
@@ -52,6 +53,29 @@ services:
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       STRIPE_PRICE_ID: ${STRIPE_PRICE_ID:-}
       STRIPE_BUSINESS_PRICE_ID: ${STRIPE_BUSINESS_PRICE_ID:-}
+      FORGEJO_BASE_URL: ${FORGEJO_BASE_URL:-}
+      FORGEJO_API_TOKEN: ${FORGEJO_API_TOKEN:-}
+      DOWNLOAD_CACHE_DIR: /var/cache/a8n-downloads
+      DOWNLOAD_CACHE_MAX_BYTES: ${DOWNLOAD_CACHE_MAX_BYTES:-10737418240}
+      DOWNLOAD_CONCURRENCY_PER_USER: ${DOWNLOAD_CONCURRENCY_PER_USER:-2}
+      DOWNLOAD_DAILY_LIMIT_PER_USER: ${DOWNLOAD_DAILY_LIMIT_PER_USER:-50}
+      FORGEJO_RELEASE_CACHE_TTL_SECS: ${FORGEJO_RELEASE_CACHE_TTL_SECS:-300}
+      OCI_REGISTRY_ENABLED: ${OCI_REGISTRY_ENABLED:-false}
+      OCI_REGISTRY_PORT: ${OCI_REGISTRY_PORT:-18081}
+      OCI_REGISTRY_SERVICE: ${OCI_REGISTRY_SERVICE:-${USER}-oci.a8n.run}
+      OCI_BLOB_CACHE_DIR: /var/cache/a8n-oci
+      OCI_BLOB_CACHE_MAX_BYTES: ${OCI_BLOB_CACHE_MAX_BYTES:-53687091200}
+      OCI_MANIFEST_CACHE_TTL_SECS: ${OCI_MANIFEST_CACHE_TTL_SECS:-300}
+      OCI_CONCURRENT_MANIFESTS_PER_USER: ${OCI_CONCURRENT_MANIFESTS_PER_USER:-2}
+      OCI_PULLS_PER_USER_PER_DAY: ${OCI_PULLS_PER_USER_PER_DAY:-50}
+      OCI_TOKEN_TTL_SECS: ${OCI_TOKEN_TTL_SECS:-900}
+      # OIDC Provider
+      OIDC_ISSUER: https://${USER}-api.a8n.run
+      OIDC_JWT_PRIVATE_KEY_PATH: /run/secrets/oidc/dev-2026.pem
+      OIDC_JWT_ACTIVE_KID: dev-2026
+      OIDC_JWT_PUBLIC_KEYS_DIR: /run/secrets/oidc
+    ports:
+      - "18081:18081"
     volumes:
       - ./api/src:/app/src:ro
       - ./api/migrations:/app/migrations:ro
@@ -59,6 +83,9 @@ services:
       - ./api/Cargo.toml:/app/Cargo.toml:ro
       - ./api/Cargo.lock:/app/Cargo.lock:ro
       - api_target:/app/target
+      - downloads_cache:/var/cache/a8n-downloads
+      - oci_cache:/var/cache/a8n-oci
+      - ./secrets:/run/secrets/oidc:ro
     networks:
       - default # Use default network for internal communication with Postgres
       - network-traefik-public
@@ -73,13 +100,18 @@ services:
       - "traefik.http.routers.api-saas-${USER}.entrypoints=web-secure"
       - "traefik.http.routers.api-saas-${USER}.tls.certresolver=cert-cloudflare"
       - "traefik.http.services.api-saas-${USER}.loadbalancer.server.port=4000"
+      - "traefik.http.routers.oci-saas-${USER}.rule=Host(`${USER}-oci.a8n.run`)"
+      - "traefik.http.routers.oci-saas-${USER}.service=oci-saas-${USER}@docker"
+      - "traefik.http.routers.oci-saas-${USER}.entrypoints=web-secure"
+      - "traefik.http.routers.oci-saas-${USER}.tls.certresolver=cert-cloudflare"
+      - "traefik.http.services.oci-saas-${USER}.loadbalancer.server.port=18081"
 
   # React Frontend
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: saas-frontend-${USER}
+    container_name: dev-saas-frontend-${USER}
     restart: unless-stopped
     environment:
       # Use Docker service name for internal proxy requests
@@ -114,6 +146,10 @@ volumes:
     name: saas-data-${USER}
   api_target:
     name: saas-api-target-${USER}
+  downloads_cache:
+    name: saas-downloads-cache-${USER}
+  oci_cache:
+    name: saas-oci-cache-${USER}
 
 networks:
   network-traefik-public:

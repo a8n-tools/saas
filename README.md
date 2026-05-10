@@ -253,6 +253,13 @@ pub async fn get_item(
 | `SMTP_USERNAME`         | SMTP auth username                                           | -                                                         | No         |
 | `SMTP_PASSWORD`         | SMTP auth password                                           | -                                                         | No         |
 | `EMAIL_ENABLED`         | Force enable email sending in dev                            | `false`                                                   | No         |
+| `FORGEJO_BASE_URL`             | Forgejo instance root (e.g. `https://git.example.com`). Unset disables the download proxy. | -                              | No         |
+| `FORGEJO_API_TOKEN`            | Forgejo PAT with read access to the release repos                                          | -                              | No         |
+| `DOWNLOAD_CACHE_DIR`           | On-disk SHA-256 blob cache directory                                                       | `/var/cache/a8n-downloads`     | No         |
+| `DOWNLOAD_CACHE_MAX_BYTES`     | Soft cap for the blob cache; triggers async LRU eviction when exceeded                     | `10737418240` (10 GiB)         | No         |
+| `DOWNLOAD_CONCURRENCY_PER_USER`| Max simultaneous in-flight downloads per user (in-process — single-instance only)          | `2`                            | No         |
+| `DOWNLOAD_DAILY_LIMIT_PER_USER`| Max downloads per UTC day per user                                                         | `50`                           | No         |
+| `FORGEJO_RELEASE_CACHE_TTL_SECS`| TTL for cached Forgejo release metadata                                                    | `300`                          | No         |
 
 ### Frontend
 
@@ -359,6 +366,15 @@ Will this work on any machine?
 | Email links        | `http://localhost:5173`      | Derived from `APP_URL` or `CORS_ORIGIN`           |
 
 Each child app (RUS, Rusty Links) must share the same `JWT_SECRET` as the main API for SSO to work.
+
+## Feature: Forgejo Download Proxy
+
+Members can download release binaries from private Forgejo repos through
+the platform. Gated behind `FORGEJO_BASE_URL` + `FORGEJO_API_TOKEN` —
+when unset, the download routes and UI are hidden. See
+[`docs/forgejo-download-proxy.md`](docs/forgejo-download-proxy.md) for
+full user + developer documentation (admin setup, audit actions,
+caveats, all seven config vars).
 
 ## License
 

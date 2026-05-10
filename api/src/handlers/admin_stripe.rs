@@ -209,13 +209,13 @@ pub async fn create_stripe_webhook(
 
         let updated = StripeConfigRepository::update(
             &pool,
-            None,  // secret_key unchanged
-            None,  // secret_key_nonce unchanged
+            None, // secret_key unchanged
+            None, // secret_key_nonce unchanged
             Some(ws_enc),
             Some(ws_nonce),
             admin.0.sub,
             key_version,
-            None,  // app_tag unchanged
+            None, // app_tag unchanged
         )
         .await?;
 

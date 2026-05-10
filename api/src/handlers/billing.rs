@@ -8,13 +8,12 @@ use sqlx::PgPool;
 use std::sync::Arc;
 
 use crate::errors::AppError;
+use crate::middleware::extract_client_ip;
 use crate::middleware::AuthenticatedUser;
 use crate::models::RateLimitConfig;
 use crate::repositories::{RateLimitRepository, UserRepository};
 use crate::responses::{get_request_id, success};
 use crate::services::StripeService;
-use crate::middleware::extract_client_ip;
-
 
 /// Request body for SetupIntent creation
 #[derive(Debug, Deserialize)]
@@ -54,6 +53,15 @@ pub async fn create_setup_intent(
     }
 
     crate::validation::validate_email(&body.email)?;
+
+    // Reject early if the email is already registered, so the user does not
+    // waste a step entering card details before discovering the conflict.
+    if UserRepository::find_by_email(&pool, &body.email)
+        .await?
+        .is_some()
+    {
+        return Err(AppError::conflict("Email already registered"));
+    }
 
     let (customer_id, client_secret) = stripe.create_setup_intent(&body.email).await?;
 

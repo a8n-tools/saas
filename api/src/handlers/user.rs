@@ -6,6 +6,7 @@ use actix_web::{web, HttpRequest, HttpResponse};
 use serde::Deserialize;
 use sqlx::PgPool;
 use std::sync::Arc;
+use tokio;
 
 use crate::errors::AppError;
 use crate::middleware::{extract_client_ip, AuthCookies, AuthenticatedUser};
@@ -123,7 +124,10 @@ pub async fn list_sessions(
         })
         .collect();
 
-    Ok(success(serde_json::json!({ "sessions": sessions }), request_id))
+    Ok(success(
+        serde_json::json!({ "sessions": sessions }),
+        request_id,
+    ))
 }
 
 /// DELETE /v1/users/me/sessions/{session_id}
@@ -220,7 +224,10 @@ pub async fn confirm_email_change(
     // Send notification to old email (fire and forget)
     let email_svc = email_service.get_ref().clone();
     tokio::spawn(async move {
-        if let Err(e) = email_svc.send_email_change_notification(&old_email, &new_email).await {
+        if let Err(e) = email_svc
+            .send_email_change_notification(&old_email, &new_email)
+            .await
+        {
             tracing::error!(error = %e, email = %old_email, "Failed to send email change notification");
         }
     });
@@ -293,7 +300,10 @@ pub async fn confirm_email_verification(
                     id
                 }
             };
-            if let Err(e) = stripe.create_free_subscription(&customer_id, &free_price_id).await {
+            if let Err(e) = stripe
+                .create_free_subscription(&customer_id, &free_price_id)
+                .await
+            {
                 tracing::error!(error = %e, user_id = %user_id, "Failed to create $0 subscription for lifetime member");
             }
         }
@@ -317,6 +327,7 @@ pub async fn delete_account(
     config: web::Data<crate::config::Config>,
     totp_service: web::Data<Arc<TotpService>>,
     stripe_service: web::Data<Arc<StripeService>>,
+    oidc_provider: web::Data<Option<Arc<crate::services::oidc_provider::OidcProvider>>>,
     body: web::Json<DeleteAccountRequest>,
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
@@ -328,10 +339,10 @@ pub async fn delete_account(
         .ok_or(AppError::not_found("User"))?;
 
     // Verify password
-    let password_hash = db_user
-        .password_hash
-        .as_ref()
-        .ok_or(AppError::validation("password", "No password set for this account"))?;
+    let password_hash = db_user.password_hash.as_ref().ok_or(AppError::validation(
+        "password",
+        "No password set for this account",
+    ))?;
 
     let password_service = PasswordService::new();
     if !password_service.verify(&body.password, password_hash)? {
@@ -345,12 +356,18 @@ pub async fn delete_account(
         })?;
 
         if totp_code.is_empty() {
-            return Err(AppError::validation("totp_code", "Two-factor authentication code is required"));
+            return Err(AppError::validation(
+                "totp_code",
+                "Two-factor authentication code is required",
+            ));
         }
 
         let valid = totp_service.verify_code(user.0.sub, totp_code).await?;
         if !valid {
-            return Err(AppError::validation("totp_code", "Invalid two-factor authentication code"));
+            return Err(AppError::validation(
+                "totp_code",
+                "Invalid two-factor authentication code",
+            ));
         }
     }
 
@@ -392,6 +409,15 @@ pub async fn delete_account(
         user_email = %user.0.email,
         "User deleted their own account"
     );
+
+    if let Some(provider) = oidc_provider.as_ref().as_ref().cloned() {
+        let deleted_user_id = user.0.sub;
+        tokio::spawn(crate::handlers::admin::dispatch_lifecycle_event(
+            provider,
+            deleted_user_id,
+            "user.deleted",
+        ));
+    }
 
     // Clear auth cookies and return success
     let secure = config.is_production();

@@ -650,7 +650,10 @@ function PricesTab() {
                   </tr>
                 )}
                 {prices?.map((price) => (
-                  <tr key={price.id} className="border-b last:border-0">
+                  <tr
+                    key={price.id}
+                    className={`border-b last:border-0 ${!price.active ? 'opacity-50' : ''}`}
+                  >
                     <td className="px-4 py-3">
                       <code className="text-xs font-mono">{price.id}</code>
                     </td>

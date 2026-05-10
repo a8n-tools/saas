@@ -57,9 +57,10 @@ impl PasswordService {
     /// Validate password strength
     pub fn validate_strength(&self, password: &str) -> Result<(), AppError> {
         validate_password_strength(password).map_err(|e| {
-            let message = e.message.map(|m| m.to_string()).unwrap_or_else(|| {
-                "Password does not meet strength requirements".to_string()
-            });
+            let message = e
+                .message
+                .map(|m| m.to_string())
+                .unwrap_or_else(|| "Password does not meet strength requirements".to_string());
             AppError::validation("password", message)
         })
     }

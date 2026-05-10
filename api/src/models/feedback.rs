@@ -232,9 +232,18 @@ mod tests {
     #[test]
     fn feedback_status_from_str() {
         assert_eq!(FeedbackStatus::from_str("new"), Some(FeedbackStatus::New));
-        assert_eq!(FeedbackStatus::from_str("reviewed"), Some(FeedbackStatus::Reviewed));
-        assert_eq!(FeedbackStatus::from_str("responded"), Some(FeedbackStatus::Responded));
-        assert_eq!(FeedbackStatus::from_str("closed"), Some(FeedbackStatus::Closed));
+        assert_eq!(
+            FeedbackStatus::from_str("reviewed"),
+            Some(FeedbackStatus::Reviewed)
+        );
+        assert_eq!(
+            FeedbackStatus::from_str("responded"),
+            Some(FeedbackStatus::Responded)
+        );
+        assert_eq!(
+            FeedbackStatus::from_str("closed"),
+            Some(FeedbackStatus::Closed)
+        );
         assert_eq!(FeedbackStatus::from_str("invalid"), None);
     }
 
@@ -242,7 +251,10 @@ mod tests {
 
     #[test]
     fn mask_email_normal() {
-        assert_eq!(Feedback::mask_email("alice@example.com"), "a***@example.com");
+        assert_eq!(
+            Feedback::mask_email("alice@example.com"),
+            "a***@example.com"
+        );
     }
 
     #[test]

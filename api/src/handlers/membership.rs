@@ -63,20 +63,18 @@ pub async fn get_membership(
         .ok_or(AppError::not_found("User"))?;
 
     // If user has a Stripe customer, fetch live subscription data
-    let (current_period_end, cancel_at_period_end) = if let Some(ref customer_id) =
-        db_user.stripe_customer_id
-    {
-        match stripe.get_customer_subscription(customer_id).await? {
-            Some(sub) => {
-                let period_end =
-                    chrono::DateTime::from_timestamp(sub.current_period_end, 0);
-                (period_end, sub.cancel_at_period_end)
+    let (current_period_end, cancel_at_period_end) =
+        if let Some(ref customer_id) = db_user.stripe_customer_id {
+            match stripe.get_customer_subscription(customer_id).await? {
+                Some(sub) => {
+                    let period_end = chrono::DateTime::from_timestamp(sub.current_period_end, 0);
+                    (period_end, sub.cancel_at_period_end)
+                }
+                None => (None, false),
             }
-            None => (None, false),
-        }
-    } else {
-        (None, false)
-    };
+        } else {
+            (None, false)
+        };
 
     let response = MembershipResponse {
         status: db_user.membership_status.clone(),
@@ -192,7 +190,12 @@ pub async fn cancel_membership(
         }
     } else {
         // No Stripe customer — just update status directly
-        UserRepository::update_membership_status(pool.get_ref(), user.0.sub, crate::models::MembershipStatus::Canceled).await?;
+        UserRepository::update_membership_status(
+            pool.get_ref(),
+            user.0.sub,
+            crate::models::MembershipStatus::Canceled,
+        )
+        .await?;
         UserRepository::reset_subscription_tier(pool.get_ref(), user.0.sub).await?;
     }
 
@@ -214,7 +217,11 @@ pub async fn cancel_membership(
     let cookie_domain = config.cookie_domain.as_deref();
 
     Ok(HttpResponse::Ok()
-        .cookie(AuthCookies::access_token(&access_token, secure, cookie_domain))
+        .cookie(AuthCookies::access_token(
+            &access_token,
+            secure,
+            cookie_domain,
+        ))
         .json(crate::responses::ApiResponse {
             success: true,
             data: Some(serde_json::json!({
@@ -256,7 +263,12 @@ pub async fn cancel_membership_immediate(
     }
 
     // Update user status immediately
-    UserRepository::update_membership_status(pool.get_ref(), user.0.sub, crate::models::MembershipStatus::Canceled).await?;
+    UserRepository::update_membership_status(
+        pool.get_ref(),
+        user.0.sub,
+        crate::models::MembershipStatus::Canceled,
+    )
+    .await?;
     UserRepository::reset_subscription_tier(pool.get_ref(), user.0.sub).await?;
 
     let updated_user = UserRepository::find_by_id(&pool, user.0.sub)
@@ -270,7 +282,11 @@ pub async fn cancel_membership_immediate(
     let cookie_domain = config.cookie_domain.as_deref();
 
     Ok(HttpResponse::Ok()
-        .cookie(AuthCookies::access_token(&access_token, secure, cookie_domain))
+        .cookie(AuthCookies::access_token(
+            &access_token,
+            secure,
+            cookie_domain,
+        ))
         .json(crate::responses::ApiResponse {
             success: true,
             data: Some(serde_json::json!({
@@ -307,7 +323,9 @@ pub async fn reactivate_membership(
         .ok_or(AppError::not_found("Subscription"))?;
 
     if !sub.cancel_at_period_end {
-        return Err(AppError::conflict("Membership is not scheduled for cancellation"));
+        return Err(AppError::conflict(
+            "Membership is not scheduled for cancellation",
+        ));
     }
 
     // Reactivate in Stripe
@@ -426,7 +444,11 @@ pub async fn subscribe(
     };
 
     Ok(HttpResponse::Ok()
-        .cookie(AuthCookies::access_token(&access_token, secure, cookie_domain))
+        .cookie(AuthCookies::access_token(
+            &access_token,
+            secure,
+            cookie_domain,
+        ))
         .json(crate::responses::ApiResponse {
             success: true,
             data: Some(response_data),

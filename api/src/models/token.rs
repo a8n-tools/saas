@@ -290,7 +290,10 @@ mod tests {
 
     // -- RefreshToken --
 
-    fn make_refresh_token(expires_at: DateTime<Utc>, revoked_at: Option<DateTime<Utc>>) -> RefreshToken {
+    fn make_refresh_token(
+        expires_at: DateTime<Utc>,
+        revoked_at: Option<DateTime<Utc>>,
+    ) -> RefreshToken {
         RefreshToken {
             id: Uuid::new_v4(),
             user_id: Uuid::new_v4(),
@@ -337,7 +340,10 @@ mod tests {
 
     // -- MagicLinkToken --
 
-    fn make_magic_link(expires_at: DateTime<Utc>, used_at: Option<DateTime<Utc>>) -> MagicLinkToken {
+    fn make_magic_link(
+        expires_at: DateTime<Utc>,
+        used_at: Option<DateTime<Utc>>,
+    ) -> MagicLinkToken {
         MagicLinkToken {
             id: Uuid::new_v4(),
             email: "test@example.com".to_string(),
@@ -371,7 +377,10 @@ mod tests {
 
     // -- PasswordResetToken --
 
-    fn make_reset_token(expires_at: DateTime<Utc>, used_at: Option<DateTime<Utc>>) -> PasswordResetToken {
+    fn make_reset_token(
+        expires_at: DateTime<Utc>,
+        used_at: Option<DateTime<Utc>>,
+    ) -> PasswordResetToken {
         PasswordResetToken {
             id: Uuid::new_v4(),
             user_id: Uuid::new_v4(),
@@ -449,7 +458,10 @@ mod tests {
 
     // -- EmailVerificationToken --
 
-    fn make_verification_token(expires_at: DateTime<Utc>, used_at: Option<DateTime<Utc>>) -> EmailVerificationToken {
+    fn make_verification_token(
+        expires_at: DateTime<Utc>,
+        used_at: Option<DateTime<Utc>>,
+    ) -> EmailVerificationToken {
         EmailVerificationToken {
             id: Uuid::new_v4(),
             user_id: Uuid::new_v4(),

@@ -77,6 +77,12 @@ export interface AdminApplication {
   webhook_url: string | null
   version: string | null
   source_code_url: string | null
+  forgejo_owner: string | null
+  forgejo_repo: string | null
+  pinned_release_tag: string | null
+  oci_image_owner: string | null
+  oci_image_name: string | null
+  pinned_image_tag: string | null
   sort_order: number
   created_at: string
   updated_at: string
@@ -95,6 +101,12 @@ export interface UpdateApplicationRequest {
   is_active?: boolean
   maintenance_mode?: boolean
   maintenance_message?: string
+  forgejo_owner?: string | null
+  forgejo_repo?: string | null
+  pinned_release_tag?: string | null
+  oci_image_owner?: string | null
+  oci_image_name?: string | null
+  pinned_image_tag?: string | null
 }
 
 export interface CreateApplicationRequest {
@@ -206,6 +218,12 @@ export interface TierConfigResponse {
   early_adopter_slots: number
   early_adopter_trial_days: number
   standard_trial_days: number
+  free_price_id: string | null
+  early_adopter_price_id: string | null
+  standard_price_id: string | null
+  lifetime_product_id: string | null
+  early_adopter_product_id: string | null
+  standard_product_id: string | null
   source: 'database' | 'environment'
   lifetime_slots_used: number
   early_adopter_slots_used: number
@@ -218,6 +236,12 @@ export interface UpdateTierConfigRequest {
   early_adopter_slots?: number
   early_adopter_trial_days?: number
   standard_trial_days?: number
+  free_price_id?: string
+  early_adopter_price_id?: string
+  standard_price_id?: string
+  lifetime_product_id?: string
+  early_adopter_product_id?: string
+  standard_product_id?: string
 }
 
 export interface GrantMembershipRequest {

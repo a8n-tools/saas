@@ -12,11 +12,14 @@ use crate::config::Config;
 use crate::errors::AppError;
 use crate::middleware::{extract_client_ip, AdminUser};
 use crate::models::{
-    AuditAction, CreateAdminNotification, CreateAuditLog, CreateFeedback,
-    FeedbackStatus, FeedbackSubmissionResponse, NotificationType, RateLimitConfig,
-    RespondToFeedback, RespondToFeedbackRequest, UpdateFeedbackStatusRequest,
+    AuditAction, CreateAdminNotification, CreateAuditLog, CreateFeedback, FeedbackStatus,
+    FeedbackSubmissionResponse, NotificationType, RateLimitConfig, RespondToFeedback,
+    RespondToFeedbackRequest, UpdateFeedbackStatusRequest,
 };
-use crate::repositories::{AuditLogRepository, FeedbackRepository, NotificationRepository, RateLimitRepository, UserRepository};
+use crate::repositories::{
+    AuditLogRepository, FeedbackRepository, NotificationRepository, RateLimitRepository,
+    UserRepository,
+};
 use crate::responses::{created, get_request_id, paginated, success};
 use crate::services::EmailService;
 
@@ -43,7 +46,10 @@ fn normalize_optional(value: Option<String>) -> Option<String> {
 
 fn validate_length(field: &str, value: &str, max: usize) -> Result<(), AppError> {
     if value.len() > max {
-        return Err(AppError::validation(field, format!("{field} must be at most {max} characters")));
+        return Err(AppError::validation(
+            field,
+            format!("{field} must be at most {max} characters"),
+        ));
     }
     Ok(())
 }
@@ -102,7 +108,9 @@ pub async fn submit_feedback(
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
     let ip_address = extract_client_ip(&req);
-    let ip_key = ip_address.map(|ip| ip.to_string()).unwrap_or_else(|| "unknown".to_string());
+    let ip_key = ip_address
+        .map(|ip| ip.to_string())
+        .unwrap_or_else(|| "unknown".to_string());
     check_feedback_rate_limit(&pool, &ip_key).await?;
 
     // Parse multipart fields
@@ -140,14 +148,20 @@ pub async fn submit_feedback(
         {
             bytes.extend_from_slice(&chunk);
             if filename.is_some() && bytes.len() > MAX_ATTACHMENT_SIZE {
-                return Err(AppError::validation("attachment", "File exceeds 5 MB limit"));
+                return Err(AppError::validation(
+                    "attachment",
+                    "File exceeds 5 MB limit",
+                ));
             }
         }
 
         if let Some(fname) = filename {
             // File field
             if attachment_parts.len() >= MAX_ATTACHMENTS {
-                return Err(AppError::validation("attachment", "Maximum 3 attachments allowed"));
+                return Err(AppError::validation(
+                    "attachment",
+                    "Maximum 3 attachments allowed",
+                ));
             }
             let mime = field
                 .content_type()
@@ -188,7 +202,11 @@ pub async fn submit_feedback(
     let tags = normalize_tags(&tags_raw)?;
     let page_path = normalize_optional(page_path_raw);
     let message = message_raw.unwrap_or_default().trim().to_string();
-    let honeypot = website_raw.as_deref().map(str::trim).unwrap_or_default().to_string();
+    let honeypot = website_raw
+        .as_deref()
+        .map(str::trim)
+        .unwrap_or_default()
+        .to_string();
     let is_spam = !honeypot.is_empty();
 
     if let Some(name) = &name {
@@ -203,7 +221,10 @@ pub async fn submit_feedback(
     if let Some(page_path) = &page_path {
         validate_length("page_path", page_path, 255)?;
         if !page_path.starts_with('/') {
-            return Err(AppError::validation("page_path", "Page path must be a relative path"));
+            return Err(AppError::validation(
+                "page_path",
+                "Page path must be a relative path",
+            ));
         }
     }
     if message.is_empty() {
@@ -262,8 +283,13 @@ pub async fn submit_feedback(
 
     let email_svc = email_service.get_ref().clone();
     let feedback_id = feedback.id;
-    let admin_url = format!("{}/admin/feedback?id={}", config.email.base_url, feedback_id);
-    let admin_emails = UserRepository::find_admin_emails(&pool).await.unwrap_or_default();
+    let admin_url = format!(
+        "{}/admin/feedback?id={}",
+        config.email.base_url, feedback_id
+    );
+    let admin_emails = UserRepository::find_admin_emails(&pool)
+        .await
+        .unwrap_or_default();
     tokio::spawn(async move {
         if let Err(e) = email_svc
             .send_admin_feedback_notification(&admin_url, &admin_emails)
@@ -305,13 +331,8 @@ pub async fn list_feedback(
             .ok_or_else(|| AppError::validation("status", "Invalid feedback status"))?;
     }
 
-    let (feedback, total) = FeedbackRepository::list_paginated(
-        &pool,
-        page,
-        per_page,
-        query.status.as_deref(),
-    )
-    .await?;
+    let (feedback, total) =
+        FeedbackRepository::list_paginated(&pool, page, per_page, query.status.as_deref()).await?;
 
     let items = feedback
         .into_iter()
@@ -496,7 +517,9 @@ pub async fn export_feedback(
             csv_opt(&item.page_path),
             csv_field(&item.status),
             csv_opt(&item.admin_response),
-            item.responded_at.map(|t| t.to_rfc3339()).unwrap_or_default(),
+            item.responded_at
+                .map(|t| t.to_rfc3339())
+                .unwrap_or_default(),
             item.is_spam,
             item.created_at.to_rfc3339(),
             item.updated_at.to_rfc3339(),
@@ -505,7 +528,10 @@ pub async fn export_feedback(
 
     Ok(HttpResponse::Ok()
         .content_type("text/csv; charset=utf-8")
-        .insert_header(("Content-Disposition", "attachment; filename=\"feedback.csv\""))
+        .insert_header((
+            "Content-Disposition",
+            "attachment; filename=\"feedback.csv\"",
+        ))
         .body(csv))
 }
 
@@ -568,7 +594,10 @@ pub async fn get_attachment(
         return Err(AppError::not_found("Attachment"));
     }
 
-    let disposition = format!("inline; filename=\"{}\"", meta.filename.replace('"', "\\\""));
+    let disposition = format!(
+        "inline; filename=\"{}\"",
+        meta.filename.replace('"', "\\\"")
+    );
 
     Ok(HttpResponse::Ok()
         .content_type(meta.mime_type.clone())
