@@ -23,7 +23,7 @@ export function formatCurrency(cents: number, currency = 'usd'): string {
 
 export const APP_GRADIENTS = [
   'from-indigo-500 to-primary',
-  'from-teal-500 to-indigo-500',
+  'from-teal-400 to-indigo-600',
   'from-primary to-teal-500',
   'from-violet-500 to-indigo-500',
 ]
