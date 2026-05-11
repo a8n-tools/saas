@@ -101,14 +101,14 @@ export function DashboardPage() {
             <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
           </div>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 lg:grid-cols-2">
             {applications.map((app, index) => {
               const baseDomain = config.appDomain || 'localhost'
               const subdomain = app.subdomain || app.slug
               const appUrl = `${subdomain}.${baseDomain}`
               const gradient = getAppGradient(index)
               return (
-                <Card key={app.id} className="border-border/50 transition-all hover:shadow-lg hover:shadow-indigo-500/5">
+                <Card key={app.id} className="flex h-full flex-col border-border/50 transition-all hover:shadow-lg hover:shadow-indigo-500/5">
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-lg">{app.display_name}</CardTitle>
@@ -122,7 +122,7 @@ export function DashboardPage() {
                     </div>
                     <CardDescription>{app.description}</CardDescription>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="mt-auto">
                     {app.is_accessible ? (
                       <a
                         href={`https://${appUrl}`}
