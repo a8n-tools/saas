@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest'
+import { http, HttpResponse } from 'msw'
 import { useAuthStore } from './authStore'
+import { server } from '@/test/mocks/server'
 import { mockUser } from '@/test/mocks/handlers'
+
+// Must match the base URL used by apiClient (config.apiUrl + '/v1')
+const API_BASE = `${import.meta.env.VITE_API_URL || ''}/v1`
 
 // Reset zustand store before each test
 beforeEach(() => {
@@ -213,6 +218,48 @@ describe('authStore', () => {
       const state = useAuthStore.getState()
       expect(state.user).toBeNull()
       expect(state.isAuthenticated).toBe(false)
+      expect(state.isLoading).toBe(false)
+    })
+
+    // Boot-time reconciliation (A8N-62): the rehydrated `isAuthenticated=true` UX
+    // hint is validated against the real cookie session via refreshUser().
+    it('should log out when rehydrated isAuthenticated=true but me() and refresh() both fail', async () => {
+      // Cookie session has expired: both /users/me and /auth/refresh return 401.
+      server.use(
+        http.get(`${API_BASE}/users/me`, () =>
+          HttpResponse.json(
+            { success: false, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } },
+            { status: 401 }
+          )
+        ),
+        http.post(`${API_BASE}/auth/refresh`, () =>
+          HttpResponse.json(
+            { success: false, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } },
+            { status: 401 }
+          )
+        )
+      )
+
+      // Simulate rehydration from localStorage: hint says authenticated, user is null.
+      useAuthStore.setState({ isAuthenticated: true, user: null, isLoading: true })
+
+      await useAuthStore.getState().refreshUser()
+
+      const state = useAuthStore.getState()
+      expect(state.isAuthenticated).toBe(false)
+      expect(state.user).toBeNull()
+      expect(state.isLoading).toBe(false)
+    })
+
+    it('should stay authenticated when rehydrated isAuthenticated=true and me() succeeds', async () => {
+      // Simulate rehydration from localStorage with a still-valid cookie session.
+      useAuthStore.setState({ isAuthenticated: true, user: null, isLoading: true })
+
+      await useAuthStore.getState().refreshUser()
+
+      const state = useAuthStore.getState()
+      expect(state.isAuthenticated).toBe(true)
+      expect(state.user).toEqual(mockUser)
       expect(state.isLoading).toBe(false)
     })
   })

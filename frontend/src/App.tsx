@@ -88,6 +88,34 @@ function SetupGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+// Validate the persisted auth hint against the real session once on app boot.
+// localStorage only persists `isAuthenticated` as a UX hint (to avoid a logged-out
+// flash); the HttpOnly access/refresh cookies are the source of truth. Without this
+// boot check, a public page can keep showing "Logout" long after the cookie session
+// expired (A8N-62). refreshUser() runs the me() -> refresh() -> me() fallback chain
+// and, on total failure, flips isAuthenticated to false so Header re-renders
+// logged-out; on success it also (re)starts the proactive refresh timer.
+let authBootValidated = false
+
+function AuthBootstrap() {
+  useEffect(() => {
+    // Run exactly once per page load (guards against StrictMode double-invoke and
+    // route-driven remounts).
+    if (authBootValidated) return
+    authBootValidated = true
+
+    const { isAuthenticated, refreshUser, setLoading } = useAuthStore.getState()
+    if (isAuthenticated) {
+      refreshUser()
+    } else {
+      // No persisted session: resolve loading so public pages render immediately.
+      setLoading(false)
+    }
+  }, [])
+
+  return null
+}
+
 // Protected route wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, isLoading } = useAuthStore()
@@ -167,6 +195,7 @@ export default function App() {
   return (
     <TooltipProvider>
     <SetupGuard>
+      <AuthBootstrap />
       <FeedbackLauncher />
       <Routes>
         {/* Public routes */}
