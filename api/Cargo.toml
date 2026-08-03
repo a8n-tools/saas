@@ -26,11 +26,12 @@ base64 = "0.21"
 ipnetwork = "0.20"
 hmac = "0.12"
 hex = "0.4"
-# Shared Stripe primitives (DEV-495 / DEV-514): the constant-time webhook
-# signature verifier, shared with bunyip and mokosh so the same check is not
-# maintained three times. Pinned by rev; re-pin to the merged commit once
-# dunite PR #27 lands.
-dunite-stripe-core = { git = "https://dev.a8n.run/psa-systems/dunite", rev = "0734f2adb4a7a85a29ae32815527d93b8efc06cb" }
+# Shared Stripe service + response DTOs (DEV-495 / DEV-515): the async-stripe
+# client for products, prices, subscriptions, invoices and webhook endpoints,
+# shared with bunyip so the ~1100-line service is not maintained twice. Pulls in
+# dunite-stripe-core (the constant-time webhook verifier, DEV-514) transitively,
+# so a8n no longer needs a direct dep on it.
+dunite-stripe = { git = "https://dev.a8n.run/psa-systems/dunite", rev = "3efa8a16dd22f71dcebf8b54ddc1c3af00b4b14d" }
 aes-gcm = "0.10"
 data-encoding = "2"
 tera = "1"

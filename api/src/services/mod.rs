@@ -39,6 +39,9 @@ pub use oci_limiter::{OciLimitDenial, OciLimiter, OciPullGuard};
 pub use oci_token::{OciTokenService, RegistryTokenClaims, REGISTRY_AUDIENCE};
 pub use password::PasswordService;
 pub use release_cache::ReleaseCache;
-pub use stripe::{StripeConfig, StripeService};
+pub use stripe::{
+    stripe_config_from_db_model, stripe_config_from_env, stripe_err, StripeConfig, StripeService,
+    StripeServiceError,
+};
 pub use totp::TotpService;
 pub use webhook::WebhookService;
