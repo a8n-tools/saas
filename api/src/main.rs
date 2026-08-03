@@ -22,10 +22,11 @@ use a8n_api::{
     repositories::{FeedbackRepository, RateLimitRepository, UserRepository},
     routes,
     services::{
-        oidc_keys::OidcKeySet, oidc_provider::OidcProvider, AuthService, BlobCache, DownloadCache,
-        DownloadLimiter, EmailService, EncryptionKeySet, ForgejoClient, ForgejoRegistryClient,
-        JwtConfig, JwtService, ManifestCache, OciLimiter, OciTokenService, PasswordService,
-        ReleaseCache, StripeConfig, StripeService, TotpService, WebhookService,
+        oidc_keys::OidcKeySet, oidc_provider::OidcProvider, stripe_config_from_db_model,
+        stripe_config_from_env, AuthService, BlobCache, DownloadCache, DownloadLimiter,
+        EmailService, EncryptionKeySet, ForgejoClient, ForgejoRegistryClient, JwtConfig,
+        JwtService, ManifestCache, OciLimiter, OciTokenService, PasswordService, ReleaseCache,
+        StripeService, TotpService, WebhookService,
     },
 };
 
@@ -168,18 +169,18 @@ async fn main() -> anyhow::Result<()> {
         use a8n_api::repositories::StripeConfigRepository;
         match StripeConfigRepository::get(&pool).await {
             Ok(db_config) if db_config.secret_key.is_some() => {
-                match StripeConfig::from_db_model(&db_config, &stripe_key_set) {
+                match stripe_config_from_db_model(&db_config, &stripe_key_set) {
                     Ok(cfg) => {
                         info!("Stripe service initialized from database config");
                         cfg
                     }
                     Err(e) => {
                         tracing::warn!(error = %e, "Failed to decrypt DB Stripe config, falling back to env vars");
-                        StripeConfig::from_env()?
+                        stripe_config_from_env()?
                     }
                 }
             }
-            _ => StripeConfig::from_env()?,
+            _ => stripe_config_from_env()?,
         }
     };
     let stripe_service = Arc::new(StripeService::new(stripe_config));
