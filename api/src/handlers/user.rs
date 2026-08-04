@@ -51,6 +51,21 @@ pub struct ConfirmEmailVerificationBody {
     pub token: String,
 }
 
+/// DEV-525: request body for replacing the optional profile fields.
+///
+/// Every field is optional in the JSON and every field is written on every
+/// call, so omitting one clears it. That is a full replace rather than a patch,
+/// which is what a settings form submits.
+#[derive(Debug, Deserialize)]
+pub struct UpdateProfileRequest {
+    #[serde(default)]
+    pub first_name: Option<String>,
+    #[serde(default)]
+    pub last_name: Option<String>,
+    #[serde(default)]
+    pub phone: Option<String>,
+}
+
 /// GET /v1/users/me
 /// Get current user profile
 pub async fn get_current_user(
@@ -66,6 +81,61 @@ pub async fn get_current_user(
         .ok_or(AppError::not_found("User"))?;
 
     Ok(success(UserResponse::from(user), request_id))
+}
+
+/// DEV-525: the length ceiling on each profile field, matching the CHECK
+/// constraints in `20260804000049_add_user_profile_fields.sql` and bunyip's
+/// columns. Enforced here as well so a too-long value comes back as a field
+/// validation error rather than a 500 from the database.
+const PROFILE_FIELD_MAX_LEN: usize = 64;
+
+/// Trim a submitted profile field, treating whitespace-only as cleared.
+///
+/// The form submits empty strings for untouched fields, and an empty string in
+/// the database would make "no name" and "a name that is blank" two different
+/// states that render identically. One state is enough.
+fn normalize_profile_field(
+    raw: Option<&String>,
+    field: &'static str,
+) -> Result<Option<String>, AppError> {
+    let trimmed = raw.map(|v| v.trim()).filter(|v| !v.is_empty());
+
+    if let Some(value) = trimmed {
+        if value.chars().count() > PROFILE_FIELD_MAX_LEN {
+            return Err(AppError::validation(
+                field,
+                format!("Must be {PROFILE_FIELD_MAX_LEN} characters or fewer"),
+            ));
+        }
+    }
+
+    Ok(trimmed.map(|v| v.to_string()))
+}
+
+/// PUT /v1/users/me/profile
+/// Replace the optional profile fields (DEV-525).
+pub async fn update_profile(
+    req: HttpRequest,
+    user: AuthenticatedUser,
+    pool: web::Data<PgPool>,
+    body: web::Json<UpdateProfileRequest>,
+) -> Result<HttpResponse, AppError> {
+    let request_id = get_request_id(&req);
+
+    let first_name = normalize_profile_field(body.first_name.as_ref(), "first_name")?;
+    let last_name = normalize_profile_field(body.last_name.as_ref(), "last_name")?;
+    let phone = normalize_profile_field(body.phone.as_ref(), "phone")?;
+
+    let updated = UserRepository::update_profile(
+        pool.get_ref(),
+        user.0.sub,
+        first_name.as_deref(),
+        last_name.as_deref(),
+        phone.as_deref(),
+    )
+    .await?;
+
+    Ok(success(UserResponse::from(updated), request_id))
 }
 
 /// PUT /v1/users/me/password
@@ -439,4 +509,56 @@ pub async fn delete_account(
     }
 
     Ok(response)
+}
+
+#[cfg(test)]
+mod profile_tests {
+    use super::*;
+
+    fn field(raw: &str) -> Result<Option<String>, AppError> {
+        normalize_profile_field(Some(&raw.to_string()), "first_name")
+    }
+
+    #[test]
+    fn trims_surrounding_whitespace() {
+        assert_eq!(field("  Ada  ").unwrap(), Some("Ada".to_string()));
+    }
+
+    #[test]
+    fn treats_blank_and_absent_alike() {
+        // An empty string in the database would make "no name" and "a blank
+        // name" two states that render identically. One state is enough.
+        assert_eq!(field("").unwrap(), None);
+        assert_eq!(field("   ").unwrap(), None);
+        assert_eq!(normalize_profile_field(None, "first_name").unwrap(), None);
+    }
+
+    #[test]
+    fn accepts_the_longest_allowed_value() {
+        let at_limit = "a".repeat(PROFILE_FIELD_MAX_LEN);
+        assert_eq!(field(&at_limit).unwrap(), Some(at_limit.clone()));
+    }
+
+    #[test]
+    fn rejects_one_character_past_the_limit() {
+        let too_long = "a".repeat(PROFILE_FIELD_MAX_LEN + 1);
+        let err = field(&too_long).expect_err("must not reach the database");
+        assert!(
+            matches!(err, AppError::ValidationError { ref field, .. } if field == "first_name"),
+            "expected a field-scoped validation error, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn counts_characters_not_bytes() {
+        // The database CHECK uses `length()`, which counts characters, so a
+        // byte-based guard here would reject values Postgres accepts and turn a
+        // legitimate name into a validation error.
+        let multibyte = "é".repeat(PROFILE_FIELD_MAX_LEN);
+        assert!(
+            multibyte.len() > PROFILE_FIELD_MAX_LEN,
+            "test vector is multi-byte"
+        );
+        assert_eq!(field(&multibyte).unwrap(), Some(multibyte));
+    }
 }

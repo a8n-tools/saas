@@ -9,6 +9,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/users")
             .route("/me", web::get().to(handlers::get_current_user))
+            .route("/me/profile", web::put().to(handlers::update_profile))
             .route("/me/password", web::put().to(handlers::change_password))
             .route("/me/email", web::post().to(handlers::request_email_change))
             .route(
