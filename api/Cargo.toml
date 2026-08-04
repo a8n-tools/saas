@@ -31,13 +31,13 @@ hex = "0.4"
 # shared with bunyip so the ~1100-line service is not maintained twice. Pulls in
 # dunite-stripe-core (the constant-time webhook verifier, DEV-514) transitively,
 # so a8n no longer needs a direct dep on it.
-dunite-stripe = { git = "https://dev.a8n.run/psa-systems/dunite", rev = "cc10e8358a6f21160544a415a9488c16827af699" }
+dunite-stripe = { git = "https://dev.a8n.run/psa-systems/dunite", rev = "302af65f8006079510a32478a688844a0677c97e" }
 # Shared account vocabulary (DEV-495 / DEV-517): the role / membership-status /
 # subscription-tier enums and the tier-settings response, re-exported from this
 # crate's models. The User row + UserRepository stay local (the two schemas have
 # drifted) and nothing in the crate derives FromRow, so a8n's sqlx 0.7 and
-# bunyip's 0.8 can both consume it. Pinned to the branch rev that introduced it.
-dunite-user-core = { git = "https://dev.a8n.run/psa-systems/dunite", rev = "cc10e8358a6f21160544a415a9488c16827af699" }
+# bunyip's 0.8 can both consume it. Pinned to the merged dunite main.
+dunite-user-core = { git = "https://dev.a8n.run/psa-systems/dunite", rev = "302af65f8006079510a32478a688844a0677c97e" }
 # Shared login-location signal (DEV-495 / DEV-525): the offline IP2Location
 # lookup, the non-public-address filter and the record/unchanged/alert branch,
 # shared with bunyip so the "no client IP looks like a country change" trap is
