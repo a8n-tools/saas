@@ -44,6 +44,12 @@ pub struct User {
     pub lifetime_member: bool,
     /// Set when an admin manually granted lifetime membership
     pub subscription_override_by: Option<Uuid>,
+    /// DEV-525: the "first setup account" flag. Backfilled onto the
+    /// earliest-created admin by the migration and set on the first admin of a
+    /// fresh install by [`crate::repositories::UserRepository::ensure_super_admin`].
+    /// Gates the admin actions an ordinary admin should not be able to take
+    /// alone: impersonation, role changes, password resets and lifetime grants.
+    pub is_super_admin: bool,
 }
 
 impl User {
@@ -125,6 +131,10 @@ pub struct UserResponse {
     pub subscription_tier: String,
     pub trial_ends_at: Option<DateTime<Utc>>,
     pub lifetime_member: bool,
+    /// DEV-525: see [`User::is_super_admin`]. Surfaced so the admin UI can
+    /// render (or hide) the controls only the super admin may use, rather than
+    /// offering a button that the API will then refuse.
+    pub is_super_admin: bool,
 }
 
 impl From<User> for UserResponse {
@@ -144,6 +154,7 @@ impl From<User> for UserResponse {
             subscription_tier: user.subscription_tier,
             trial_ends_at: user.trial_ends_at,
             lifetime_member: user.lifetime_member,
+            is_super_admin: user.is_super_admin,
         }
     }
 }
@@ -177,6 +188,7 @@ mod tests {
             trial_ends_at: None,
             lifetime_member: false,
             subscription_override_by: None,
+            is_super_admin: false,
         }
     }
 
@@ -244,6 +256,20 @@ mod tests {
         assert_eq!(response.id, id);
         assert_eq!(response.email, "test@example.com");
         assert_eq!(response.role, "subscriber");
+    }
+
+    /// DEV-525: the admin UI decides whether to render the super-admin-only
+    /// controls from this field, so it has to survive the conversion. It also
+    /// must not default to `true` for an ordinary account.
+    #[test]
+    fn user_response_carries_the_super_admin_flag() {
+        let ordinary = test_user();
+        assert!(!UserResponse::from(ordinary).is_super_admin);
+
+        let mut super_admin = test_user();
+        super_admin.role = "admin".to_string();
+        super_admin.is_super_admin = true;
+        assert!(UserResponse::from(super_admin).is_super_admin);
     }
 
     // -- SubscriptionTier --

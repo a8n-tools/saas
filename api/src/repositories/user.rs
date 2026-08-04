@@ -26,7 +26,56 @@ impl UserRepository {
         .fetch_one(pool)
         .await?;
 
+        // DEV-525: an install whose very first admin arrives here (rather than
+        // through a role change) still needs a super admin, or the gated
+        // actions are unreachable forever.
+        if user.role == "admin" {
+            Self::ensure_super_admin(pool).await?;
+            return Self::find_by_id(pool, user.id)
+                .await?
+                .ok_or_else(|| AppError::not_found("User"));
+        }
+
         Ok(user)
+    }
+
+    /// DEV-525: hold the "at least one super admin exists, once any admin
+    /// does" invariant by promoting the earliest-created admin when nobody
+    /// holds the flag.
+    ///
+    /// Deliberately a single statement rather than a read-then-write: two
+    /// concurrent invite acceptances would both see "no super admin" and race,
+    /// and the `NOT EXISTS` guard inside the same statement is what makes the
+    /// second one a no-op. It is also byte-for-byte the backfill in
+    /// `20260804000048_add_super_admin.sql`, so migration and runtime cannot
+    /// drift into two different rules.
+    ///
+    /// Never demotes: once an operator holds the flag it stays with them, and
+    /// promoting someone else is a future admin action rather than a side
+    /// effect of creating an account.
+    pub async fn ensure_super_admin<'e, E>(executor: E) -> Result<(), AppError>
+    where
+        E: sqlx::Executor<'e, Database = Postgres>,
+    {
+        sqlx::query(
+            r#"
+            UPDATE users
+            SET is_super_admin = TRUE
+            WHERE id = (
+                SELECT id FROM users
+                WHERE role = 'admin' AND deleted_at IS NULL
+                ORDER BY created_at ASC
+                LIMIT 1
+            )
+            AND NOT EXISTS (
+                SELECT 1 FROM users WHERE is_super_admin AND deleted_at IS NULL
+            )
+            "#,
+        )
+        .execute(executor)
+        .await?;
+
+        Ok(())
     }
 
     /// Find user by ID
@@ -411,6 +460,16 @@ impl UserRepository {
         .await?
         .ok_or_else(|| AppError::not_found("User"))?;
 
+        // DEV-525: promoting someone to admin on an install that has none yet
+        // (the invite-accept path for an existing subscriber) has to seed the
+        // super admin, or the gated actions stay unreachable.
+        if user.role == "admin" {
+            Self::ensure_super_admin(pool).await?;
+            return Self::find_by_id(pool, user.id)
+                .await?
+                .ok_or_else(|| AppError::not_found("User"));
+        }
+
         Ok(user)
     }
 
@@ -664,5 +723,140 @@ impl UserRepository {
         .await?;
 
         Ok(users)
+    }
+}
+
+#[cfg(test)]
+mod super_admin_tests {
+    //! DEV-525: the super-admin invariant is enforced entirely in SQL, so these
+    //! need a real Postgres. Skipped automatically when DATABASE_URL is unset,
+    //! matching the `handlers::oci_registry::integration` pattern.
+    //!
+    //! Everything runs inside a transaction that is rolled back, so the rows
+    //! these insert (and the flag they clear) never outlive the test, and a
+    //! developer database with real admins in it is left untouched.
+
+    use super::*;
+    use sqlx::Row;
+
+    async fn maybe_pool() -> Option<PgPool> {
+        let url = std::env::var("DATABASE_URL").ok()?;
+        PgPool::connect(&url).await.ok()
+    }
+
+    /// Insert an admin with an explicit `created_at`, so "earliest" is a fact
+    /// the test controls rather than a race against clock resolution.
+    async fn seed_admin(tx: &mut sqlx::PgConnection, minutes_ago: i64) -> Uuid {
+        let id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO users (id, email, password_hash, role, subscription_status, created_at)
+             VALUES ($1, $2, 'x', 'admin', 'none', NOW() - ($3 || ' minutes')::interval)",
+        )
+        .bind(id)
+        .bind(format!("super-admin-test-{}@example.com", id))
+        .bind(minutes_ago.to_string())
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+        id
+    }
+
+    async fn is_super(tx: &mut sqlx::PgConnection, id: Uuid) -> bool {
+        sqlx::query("SELECT is_super_admin FROM users WHERE id = $1")
+            .bind(id)
+            .fetch_one(&mut *tx)
+            .await
+            .unwrap()
+            .get::<bool, _>(0)
+    }
+
+    #[tokio::test]
+    async fn promotes_the_earliest_admin_when_nobody_holds_the_flag() {
+        let Some(pool) = maybe_pool().await else {
+            return;
+        };
+        let mut tx = pool.begin().await.unwrap();
+
+        // Simulate a fresh install: no super admin anywhere.
+        sqlx::query("UPDATE users SET is_super_admin = FALSE")
+            .execute(&mut *tx)
+            .await
+            .unwrap();
+        // Older than anything a real deployment would already hold.
+        let first = seed_admin(&mut tx, 100_000).await;
+        let second = seed_admin(&mut tx, 99_999).await;
+
+        UserRepository::ensure_super_admin(&mut *tx).await.unwrap();
+
+        assert!(is_super(&mut tx, first).await, "earliest admin is promoted");
+        assert!(!is_super(&mut tx, second).await, "only one is promoted");
+
+        tx.rollback().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn never_moves_the_flag_off_an_existing_super_admin() {
+        let Some(pool) = maybe_pool().await else {
+            return;
+        };
+        let mut tx = pool.begin().await.unwrap();
+
+        sqlx::query("UPDATE users SET is_super_admin = FALSE")
+            .execute(&mut *tx)
+            .await
+            .unwrap();
+        let earliest = seed_admin(&mut tx, 100_000).await;
+        let holder = seed_admin(&mut tx, 1).await;
+        sqlx::query("UPDATE users SET is_super_admin = TRUE WHERE id = $1")
+            .bind(holder)
+            .execute(&mut *tx)
+            .await
+            .unwrap();
+
+        // Twice, because idempotence is the property that makes it safe to call
+        // on every admin creation.
+        UserRepository::ensure_super_admin(&mut *tx).await.unwrap();
+        UserRepository::ensure_super_admin(&mut *tx).await.unwrap();
+
+        assert!(is_super(&mut tx, holder).await, "the holder keeps the flag");
+        assert!(
+            !is_super(&mut tx, earliest).await,
+            "an operator's choice is not overridden by creation order"
+        );
+
+        tx.rollback().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn ignores_soft_deleted_admins() {
+        let Some(pool) = maybe_pool().await else {
+            return;
+        };
+        let mut tx = pool.begin().await.unwrap();
+
+        sqlx::query("UPDATE users SET is_super_admin = FALSE")
+            .execute(&mut *tx)
+            .await
+            .unwrap();
+        let deleted = seed_admin(&mut tx, 100_000).await;
+        sqlx::query("UPDATE users SET deleted_at = NOW() WHERE id = $1")
+            .bind(deleted)
+            .execute(&mut *tx)
+            .await
+            .unwrap();
+        let live = seed_admin(&mut tx, 99_999).await;
+
+        UserRepository::ensure_super_admin(&mut *tx).await.unwrap();
+
+        assert!(
+            !is_super(&mut tx, deleted).await,
+            "a deleted admin is skipped"
+        );
+        assert!(
+            is_super(&mut tx, live).await,
+            "the earliest live admin wins"
+        );
+
+        tx.rollback().await.unwrap();
     }
 }
