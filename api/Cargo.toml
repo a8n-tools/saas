@@ -26,6 +26,11 @@ base64 = "0.21"
 ipnetwork = "0.20"
 hmac = "0.12"
 hex = "0.4"
+# Shared Stripe primitives (DEV-495 / DEV-514): the constant-time webhook
+# signature verifier, shared with bunyip and mokosh so the same check is not
+# maintained three times. Pinned by rev; re-pin to the merged commit once
+# dunite PR #27 lands.
+dunite-stripe-core = { git = "https://dev.a8n.run/psa-systems/dunite", rev = "0734f2adb4a7a85a29ae32815527d93b8efc06cb" }
 aes-gcm = "0.10"
 data-encoding = "2"
 tera = "1"
