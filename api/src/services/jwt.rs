@@ -288,6 +288,9 @@ mod tests {
             lifetime_member: false,
             subscription_override_by: None,
             is_super_admin: false,
+            first_name: None,
+            last_name: None,
+            phone: None,
         }
     }
 
