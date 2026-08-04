@@ -46,6 +46,21 @@ export function AdminUsersPage() {
   const { user: currentUser } = useAuthStore()
   const queryClient = useQueryClient()
 
+  // DEV-525: the API refuses a password reset or a role change to every admin
+  // except the super admin. Compute the reasons once rather than per row, and
+  // disable-with-tooltip rather than hide, matching how this menu already
+  // handles an unconfigured mailer: a control that vanishes reads as a missing
+  // feature, one that explains itself reads as a permission.
+  const isSuperAdmin = currentUser?.is_super_admin === true
+  const resetPasswordBlockedReason = !isSuperAdmin
+    ? 'Only the super admin can reset another account’s password'
+    : !emailEnabled
+      ? 'Email is not configured'
+      : null
+  const roleChangeBlockedReason = isSuperAdmin
+    ? null
+    : 'Only the super admin can change roles'
+
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['admin', 'users', page, searchQuery],
     queryFn: () => adminApi.getUsers(page, 20, searchQuery || undefined),
@@ -263,7 +278,7 @@ export function AdminUsersPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          {emailEnabled ? (
+                          {resetPasswordBlockedReason === null ? (
                             <DropdownMenuItem onClick={() => handleAction(user, 'reset')}>
                               <KeyRound className="h-4 w-4 mr-2" />
                               Reset Password
@@ -278,13 +293,25 @@ export function AdminUsersPage() {
                                   </DropdownMenuItem>
                                 </span>
                               </TooltipTrigger>
-                              <TooltipContent>Email is not configured</TooltipContent>
+                              <TooltipContent>{resetPasswordBlockedReason}</TooltipContent>
                             </Tooltip>
                           )}
                           {currentUser?.id !== user.id && (
                             <>
                               <DropdownMenuSeparator />
-                              {user.role === 'admin' ? (
+                              {roleChangeBlockedReason !== null ? (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span>
+                                      <DropdownMenuItem disabled>
+                                        <Shield className="h-4 w-4 mr-2" />
+                                        {user.role === 'admin' ? 'Remove Admin' : 'Make Admin'}
+                                      </DropdownMenuItem>
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent>{roleChangeBlockedReason}</TooltipContent>
+                                </Tooltip>
+                              ) : user.role === 'admin' ? (
                                 <DropdownMenuItem onClick={() => handleAction(user, 'removeAdmin')}>
                                   <ShieldOff className="h-4 w-4 mr-2" />
                                   Remove Admin

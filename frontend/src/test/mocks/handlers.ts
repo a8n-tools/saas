@@ -16,8 +16,10 @@ export const mockUser = {
   subscription_tier: 'standard' as const,
   trial_ends_at: null,
   lifetime_member: false,
+  is_super_admin: false,
 }
 
+// An ordinary admin: full panel access except the four DEV-525 actions.
 export const mockAdminUser = {
   ...mockUser,
   id: '123e4567-e89b-12d3-a456-426614174001',
@@ -25,6 +27,15 @@ export const mockAdminUser = {
   role: 'admin' as const,
   last_login_at: '2024-01-01T00:00:00Z',
   grace_period_end: null,
+}
+
+// DEV-525: the "first setup account", the only one allowed to impersonate,
+// change roles, reset passwords or grant lifetime membership.
+export const mockSuperAdminUser = {
+  ...mockAdminUser,
+  id: '123e4567-e89b-12d3-a456-426614174002',
+  email: 'super-admin@example.com',
+  is_super_admin: true,
 }
 
 export const mockApplication = {
