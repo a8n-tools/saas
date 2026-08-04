@@ -67,6 +67,16 @@ pub struct IdTokenClaims {
     pub membership_status: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub has_member_access: Option<bool>,
+    // DEV-525: standard `profile` scope claims.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub given_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub family_name: Option<String>,
+    // DEV-525: standard `phone` scope claim.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub phone_number: Option<String>,
 }
 
 // ── Lifecycle event token claims ─────────────────────────────────────────────
@@ -424,7 +434,12 @@ impl OidcProvider {
         header.kid = Some(self.keys.active_kid.clone());
         // typ defaults to "JWT" for ID tokens
 
-        let include_profile = scope.iter().any(|s| s == "email");
+        // The `email` scope has always driven these; the name is historical and
+        // now misleading, since DEV-525 introduced a real `profile` scope.
+        let include_email = scope.iter().any(|s| s == "email");
+        // DEV-525: the standard OIDC scopes, each gating only its own claims.
+        let include_profile = scope.iter().any(|s| s == "profile");
+        let include_phone = scope.iter().any(|s| s == "phone");
         let claims = IdTokenClaims {
             iss: self.issuer().to_string(),
             sub: user.id.to_string(),
@@ -435,23 +450,48 @@ impl OidcProvider {
             nonce: nonce.to_string(),
             azp: client.client_id.to_string(),
             at_hash,
-            email: if include_profile {
+            email: if include_email {
                 Some(user.email.clone())
             } else {
                 None
             },
-            email_verified: if include_profile {
+            email_verified: if include_email {
                 Some(user.email_verified)
             } else {
                 None
             },
-            membership_status: if include_profile {
+            membership_status: if include_email {
                 Some(user.membership_status.clone())
             } else {
                 None
             },
-            has_member_access: if include_profile {
+            has_member_access: if include_email {
                 Some(user_has_member_access(user))
+            } else {
+                None
+            },
+            // DEV-525. `name` is the OIDC display name; assemble it from the
+            // parts rather than storing a third copy that can disagree with
+            // them. Absent entirely when the user has filled in neither part,
+            // which is what `skip_serializing_if` is for: an RP should see no
+            // claim rather than an empty string it has to special-case.
+            name: if include_profile {
+                display_name(user)
+            } else {
+                None
+            },
+            given_name: if include_profile {
+                user.first_name.clone()
+            } else {
+                None
+            },
+            family_name: if include_profile {
+                user.last_name.clone()
+            } else {
+                None
+            },
+            phone_number: if include_phone {
+                user.phone.clone()
             } else {
                 None
             },
@@ -1002,6 +1042,25 @@ fn sha256_bytes(input: &[u8]) -> Vec<u8> {
     h.finalize().to_vec()
 }
 
+/// DEV-525: the OIDC `name` claim, assembled from the parts.
+///
+/// Derived rather than stored so it can never disagree with `given_name` and
+/// `family_name`. `None` when the user has filled in neither part, so the claim
+/// is omitted entirely instead of shipping an empty string an RP would have to
+/// special-case. A user with only one part gets that part.
+pub(crate) fn display_name(user: &User) -> Option<String> {
+    let parts: Vec<&str> = [user.first_name.as_deref(), user.last_name.as_deref()]
+        .into_iter()
+        .flatten()
+        .collect();
+
+    if parts.is_empty() {
+        None
+    } else {
+        Some(parts.join(" "))
+    }
+}
+
 /// Whether a User has active member access.
 fn user_has_member_access(user: &User) -> bool {
     user.role == "admin"
@@ -1009,4 +1068,70 @@ fn user_has_member_access(user: &User) -> bool {
         || user.trial_ends_at.map_or(false, |t| t > Utc::now())
         || user.membership_status == "active"
         || user.membership_status == "grace_period"
+}
+
+#[cfg(test)]
+mod display_name_tests {
+    use super::*;
+
+    fn user_named(first: Option<&str>, last: Option<&str>) -> User {
+        let mut u = crate::models::User {
+            id: Uuid::new_v4(),
+            email: "test@example.com".to_string(),
+            email_verified: true,
+            password_hash: None,
+            role: "subscriber".to_string(),
+            stripe_customer_id: None,
+            stripe_payment_method_id: None,
+            membership_status: "none".to_string(),
+            price_locked: false,
+            locked_price_id: None,
+            locked_price_amount: None,
+            grace_period_start: None,
+            grace_period_end: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            two_factor_enabled: false,
+            last_login_at: None,
+            deleted_at: None,
+            subscription_tier: "standard".to_string(),
+            trial_ends_at: None,
+            lifetime_member: false,
+            subscription_override_by: None,
+            is_super_admin: false,
+            first_name: None,
+            last_name: None,
+            phone: None,
+        };
+        u.first_name = first.map(String::from);
+        u.last_name = last.map(String::from);
+        u
+    }
+
+    #[test]
+    fn joins_both_parts() {
+        assert_eq!(
+            display_name(&user_named(Some("Ada"), Some("Lovelace"))),
+            Some("Ada Lovelace".to_string())
+        );
+    }
+
+    #[test]
+    fn uses_whichever_single_part_is_present() {
+        assert_eq!(
+            display_name(&user_named(Some("Ada"), None)),
+            Some("Ada".to_string())
+        );
+        assert_eq!(
+            display_name(&user_named(None, Some("Lovelace"))),
+            Some("Lovelace".to_string())
+        );
+    }
+
+    #[test]
+    fn is_absent_rather_than_empty_when_unset() {
+        // The claim is omitted entirely; an RP should never have to
+        // special-case an empty-string display name.
+        assert_eq!(display_name(&user_named(None, None)), None);
+    }
 }

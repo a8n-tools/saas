@@ -120,6 +120,9 @@ describe('hasActiveMembership', () => {
     trial_ends_at: null,
     lifetime_member: false,
     is_super_admin: false,
+    first_name: null,
+    last_name: null,
+    phone: null,
   }
 
   it('returns false for null user', () => {

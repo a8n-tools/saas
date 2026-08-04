@@ -86,12 +86,13 @@ pub async fn discovery(provider: web::Data<Option<Arc<OidcProvider>>>) -> HttpRe
             "client_secret_basic", "private_key_jwt", "none"
         ],
         "scopes_supported": [
-            "openid", "email", "offline_access",
+            "openid", "email", "profile", "phone", "offline_access",
             "dmarc:read", "dmarc:write"
         ],
         "claims_supported": [
             "iss", "sub", "aud", "exp", "iat", "auth_time", "nonce", "azp",
-            "email", "email_verified", "membership_status", "has_member_access"
+            "email", "email_verified", "membership_status", "has_member_access",
+            "name", "given_name", "family_name", "phone_number"
         ],
         "code_challenge_methods_supported": ["S256"],
         "require_pkce": true,
@@ -538,7 +539,7 @@ pub async fn userinfo(
     let token_str = extract_bearer_token(&req)
         .ok_or_else(|| AppError::OidcInvalidToken("missing Bearer token".into()))?;
 
-    let sub_str = verify_at_jwt_get_sub(provider, &token_str)?;
+    let (sub_str, scope) = verify_at_jwt_get_sub_and_scope(provider, &token_str)?;
     let user_id = Uuid::parse_str(&sub_str)
         .map_err(|_| AppError::OidcInvalidToken("invalid sub in access token".into()))?;
 
@@ -546,7 +547,7 @@ pub async fn userinfo(
         .await?
         .ok_or_else(|| AppError::OidcInvalidToken("user not found".into()))?;
 
-    Ok(HttpResponse::Ok().json(serde_json::json!({
+    let mut claims = serde_json::json!({
         "sub": user.id.to_string(),
         "email": user.email,
         "email_verified": user.email_verified,
@@ -557,7 +558,34 @@ pub async fn userinfo(
             user.trial_ends_at.map(|t| t.timestamp()),
             &user.membership_status,
         ),
-    })))
+    });
+
+    // DEV-525: the profile and phone claims, each only when the access token
+    // carries the scope that grants it. A claim whose value is null is omitted
+    // rather than sent, matching the ID token's `skip_serializing_if`.
+    let obj = claims
+        .as_object_mut()
+        .expect("userinfo claims are constructed as an object");
+
+    if scope.iter().any(|s| s == "profile") {
+        if let Some(name) = crate::services::oidc_provider::display_name(&user) {
+            obj.insert("name".into(), serde_json::Value::String(name));
+        }
+        if let Some(given) = user.first_name.clone() {
+            obj.insert("given_name".into(), serde_json::Value::String(given));
+        }
+        if let Some(family) = user.last_name.clone() {
+            obj.insert("family_name".into(), serde_json::Value::String(family));
+        }
+    }
+
+    if scope.iter().any(|s| s == "phone") {
+        if let Some(phone) = user.phone.clone() {
+            obj.insert("phone_number".into(), serde_json::Value::String(phone));
+        }
+    }
+
+    Ok(HttpResponse::Ok().json(claims))
 }
 
 // ── Revocation endpoint ───────────────────────────────────────────────────────
@@ -763,6 +791,18 @@ fn authenticate_client(
 
 /// Verify an `at+jwt` access token and return its `sub` claim.
 fn verify_at_jwt_get_sub(provider: &OidcProvider, token: &str) -> Result<String, AppError> {
+    verify_at_jwt_get_sub_and_scope(provider, token).map(|(sub, _)| sub)
+}
+
+/// Verify an `at+jwt` and return its subject together with its granted scope.
+///
+/// DEV-525: userinfo must not hand an RP a claim the user never consented to,
+/// so it filters on the scope the access token carries rather than returning
+/// everything it can read from the row.
+fn verify_at_jwt_get_sub_and_scope(
+    provider: &OidcProvider,
+    token: &str,
+) -> Result<(String, Vec<String>), AppError> {
     use jsonwebtoken::{Algorithm, DecodingKey, Header, Validation};
 
     // Peek at the header to get kid and validate typ
@@ -793,10 +833,21 @@ fn verify_at_jwt_get_sub(provider: &OidcProvider, token: &str) -> Result<String,
             AppError::OidcInvalidToken(format!("access token verification failed: {e}"))
         })?;
 
-    data.claims["sub"]
+    let sub = data.claims["sub"]
         .as_str()
         .map(String::from)
-        .ok_or_else(|| AppError::OidcInvalidToken("access token missing sub claim".into()))
+        .ok_or_else(|| AppError::OidcInvalidToken("access token missing sub claim".into()))?;
+
+    // A token minted before DEV-525 has no profile scope in it, so an absent
+    // `scope` claim means "no profile claims", not "all of them".
+    let scope = data.claims["scope"]
+        .as_str()
+        .unwrap_or_default()
+        .split_whitespace()
+        .map(String::from)
+        .collect();
+
+    Ok((sub, scope))
 }
 
 /// Extract `Authorization: Bearer <token>` from the request.

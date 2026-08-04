@@ -144,6 +144,41 @@ impl UserRepository {
         Ok(())
     }
 
+    /// DEV-525: replace the optional profile fields.
+    ///
+    /// Every field is set on every call, `None` included, so clearing a name in
+    /// the settings form actually clears it. A partial-update helper would need
+    /// the caller to distinguish "absent" from "null" in the request body, which
+    /// the settings form has no way to express.
+    pub async fn update_profile<'e, E>(
+        executor: E,
+        user_id: Uuid,
+        first_name: Option<&str>,
+        last_name: Option<&str>,
+        phone: Option<&str>,
+    ) -> Result<User, AppError>
+    where
+        E: sqlx::Executor<'e, Database = Postgres>,
+    {
+        let user = sqlx::query_as::<_, User>(
+            r#"
+            UPDATE users
+            SET first_name = $2, last_name = $3, phone = $4, updated_at = NOW()
+            WHERE id = $1 AND deleted_at IS NULL
+            RETURNING *
+            "#,
+        )
+        .bind(user_id)
+        .bind(first_name)
+        .bind(last_name)
+        .bind(phone)
+        .fetch_optional(executor)
+        .await?
+        .ok_or_else(|| AppError::not_found("User"))?;
+
+        Ok(user)
+    }
+
     /// Update email verified status
     pub async fn set_email_verified(pool: &PgPool, user_id: Uuid) -> Result<(), AppError> {
         sqlx::query(
@@ -855,6 +890,108 @@ mod super_admin_tests {
         assert!(
             is_super(&mut tx, live).await,
             "the earliest live admin wins"
+        );
+
+        tx.rollback().await.unwrap();
+    }
+}
+
+#[cfg(test)]
+mod profile_tests {
+    //! DEV-525: `update_profile` writes every field on every call, including
+    //! `None`, so clearing a name in the settings form actually clears it.
+    //! Needs a real Postgres; skipped when DATABASE_URL is unset, and wrapped in
+    //! a rolled-back transaction so a developer database is left untouched.
+
+    use super::*;
+    use sqlx::Row;
+
+    async fn maybe_pool() -> Option<PgPool> {
+        let url = std::env::var("DATABASE_URL").ok()?;
+        PgPool::connect(&url).await.ok()
+    }
+
+    #[tokio::test]
+    async fn writes_then_clears_every_field() {
+        let Some(pool) = maybe_pool().await else {
+            return;
+        };
+        let mut tx = pool.begin().await.unwrap();
+
+        let id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO users (id, email, password_hash, role, subscription_status)
+             VALUES ($1, $2, 'x', 'subscriber', 'none')",
+        )
+        .bind(id)
+        .bind(format!("profile-test-{}@example.com", id))
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+
+        let set = UserRepository::update_profile(
+            &mut *tx,
+            id,
+            Some("Ada"),
+            Some("Lovelace"),
+            Some("+61 400 000 000"),
+        )
+        .await
+        .unwrap();
+        assert_eq!(set.first_name.as_deref(), Some("Ada"));
+        assert_eq!(set.last_name.as_deref(), Some("Lovelace"));
+        assert_eq!(set.phone.as_deref(), Some("+61 400 000 000"));
+
+        // Omitting a field clears it: the settings form has no way to say
+        // "leave this one alone", so a partial write would strand old values.
+        let cleared = UserRepository::update_profile(&mut *tx, id, None, None, None)
+            .await
+            .unwrap();
+        assert_eq!(cleared.first_name, None);
+        assert_eq!(cleared.last_name, None);
+        assert_eq!(cleared.phone, None);
+
+        let row = sqlx::query("SELECT first_name, last_name, phone FROM users WHERE id = $1")
+            .bind(id)
+            .fetch_one(&mut *tx)
+            .await
+            .unwrap();
+        assert_eq!(row.get::<Option<String>, _>(0), None);
+        assert_eq!(row.get::<Option<String>, _>(1), None);
+        assert_eq!(row.get::<Option<String>, _>(2), None);
+
+        tx.rollback().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn the_database_refuses_an_over_length_value() {
+        let Some(pool) = maybe_pool().await else {
+            return;
+        };
+        let mut tx = pool.begin().await.unwrap();
+
+        let id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO users (id, email, password_hash, role, subscription_status)
+             VALUES ($1, $2, 'x', 'subscriber', 'none')",
+        )
+        .bind(id)
+        .bind(format!("profile-len-{}@example.com", id))
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+
+        // The handler guards this too, but the handler is not the only writer,
+        // so the CHECK constraint has to hold on its own.
+        let err = sqlx::query("UPDATE users SET first_name = $2 WHERE id = $1")
+            .bind(id)
+            .bind("a".repeat(65))
+            .execute(&mut *tx)
+            .await
+            .expect_err("the CHECK constraint must reject 65 characters");
+        assert!(
+            err.to_string().contains("users_first_name_check"),
+            "expected the first_name CHECK to fire, got: {err}"
         );
 
         tx.rollback().await.unwrap();

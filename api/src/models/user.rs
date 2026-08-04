@@ -50,6 +50,16 @@ pub struct User {
     /// Gates the admin actions an ordinary admin should not be able to take
     /// alone: impersonation, role changes, password resets and lifetime grants.
     pub is_super_admin: bool,
+    /// DEV-525: optional given name. Nullable in the DB (legacy rows have no
+    /// source). Flowed as the OIDC `given_name` claim under the `profile` scope.
+    pub first_name: Option<String>,
+    /// DEV-525: optional family name. Flowed as `family_name` under `profile`.
+    pub last_name: Option<String>,
+    /// DEV-525: optional phone number. Flowed as `phone_number` under the
+    /// `phone` scope. No format normalization at the DB layer; the settings
+    /// form trims whitespace but otherwise stores verbatim, because a global
+    /// phone-number grammar is a bigger commitment than this needs.
+    pub phone: Option<String>,
 }
 
 impl User {
@@ -135,6 +145,12 @@ pub struct UserResponse {
     /// render (or hide) the controls only the super admin may use, rather than
     /// offering a button that the API will then refuse.
     pub is_super_admin: bool,
+    /// DEV-525: see [`User::first_name`].
+    pub first_name: Option<String>,
+    /// DEV-525: see [`User::last_name`].
+    pub last_name: Option<String>,
+    /// DEV-525: see [`User::phone`].
+    pub phone: Option<String>,
 }
 
 impl From<User> for UserResponse {
@@ -155,6 +171,9 @@ impl From<User> for UserResponse {
             trial_ends_at: user.trial_ends_at,
             lifetime_member: user.lifetime_member,
             is_super_admin: user.is_super_admin,
+            first_name: user.first_name,
+            last_name: user.last_name,
+            phone: user.phone,
         }
     }
 }
@@ -189,6 +208,9 @@ mod tests {
             lifetime_member: false,
             subscription_override_by: None,
             is_super_admin: false,
+            first_name: None,
+            last_name: None,
+            phone: None,
         }
     }
 

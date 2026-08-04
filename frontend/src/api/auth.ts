@@ -42,6 +42,14 @@ export const authApi = {
   changePassword: (data: { current_password: string; new_password: string }): Promise<void> =>
     apiClient.put('/users/me/password', data),
 
+  // DEV-525. A full replace, not a patch: every field is written on every call,
+  // so omitting one clears it. Returns the refreshed user for the auth store.
+  updateProfile: (data: {
+    first_name?: string | null
+    last_name?: string | null
+    phone?: string | null
+  }): Promise<User> => apiClient.put('/users/me/profile', data),
+
   requestEmailChange: (data: { new_email: string; current_password?: string }): Promise<{ message: string; requires_relogin: boolean }> =>
     apiClient.post('/users/me/email', data),
 
