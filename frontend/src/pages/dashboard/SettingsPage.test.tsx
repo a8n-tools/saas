@@ -192,3 +192,53 @@ describe('SettingsPage login-location alerts', () => {
     })
   })
 })
+
+// DEV-525: profile picture upload / removal.
+describe('SettingsPage avatar', () => {
+  it('shows the initials fallback when no avatar is set', () => {
+    render(<SettingsPage />)
+
+    expect(screen.getByLabelText('No profile picture set')).toHaveTextContent('T')
+    expect(screen.queryByAltText('Your profile picture')).not.toBeInTheDocument()
+  })
+
+  it('offers no Remove until an avatar exists', () => {
+    render(<SettingsPage />)
+
+    expect(screen.queryByRole('button', { name: /^remove$/i })).not.toBeInTheDocument()
+  })
+
+  it('uploads a selected file and records the new version', async () => {
+    render(<SettingsPage />)
+
+    const file = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], 'me.png', {
+      type: 'image/png',
+    })
+    await userEvent.upload(screen.getByLabelText('Choose a profile picture'), file)
+
+    await waitFor(() => {
+      expect(useAuthStore.getState().user?.avatar_updated_at).toBe('2026-08-04T00:00:00Z')
+    })
+  })
+
+  it('renders the stored image once one exists', async () => {
+    setupAuthUser({ ...mockUser, avatar_updated_at: '2026-08-04T00:00:00Z' })
+    render(<SettingsPage />)
+
+    await waitFor(() => {
+      expect(screen.getByAltText('Your profile picture')).toBeInTheDocument()
+    })
+    expect(screen.queryByLabelText('No profile picture set')).not.toBeInTheDocument()
+  })
+
+  it('removes an existing avatar', async () => {
+    setupAuthUser({ ...mockUser, avatar_updated_at: '2026-08-04T00:00:00Z' })
+    render(<SettingsPage />)
+
+    await userEvent.click(screen.getByRole('button', { name: /^remove$/i }))
+
+    await waitFor(() => {
+      expect(useAuthStore.getState().user?.avatar_updated_at).toBeNull()
+    })
+  })
+})

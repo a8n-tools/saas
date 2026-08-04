@@ -124,6 +124,7 @@ describe('hasActiveMembership', () => {
     last_name: null,
     phone: null,
     login_location_alerts: true,
+    avatar_updated_at: null,
   }
 
   it('returns false for null user', () => {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -148,6 +148,73 @@ export function SettingsPage() {
       setProfileError(apiError.error?.message || 'Failed to save profile')
     } finally {
       setProfileLoading(false)
+    }
+  }
+
+  // Avatar (DEV-525)
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+  const [avatarBusy, setAvatarBusy] = useState(false)
+  const [avatarError, setAvatarError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const avatarVersion = user?.avatar_updated_at ?? null
+
+  useEffect(() => {
+    if (!avatarVersion) {
+      setAvatarUrl(null)
+      return
+    }
+    let revoked = false
+    let objectUrl: string | null = null
+    authApi
+      .fetchAvatarObjectUrl()
+      .then((url) => {
+        // The effect can lose the race with an unmount or a newer upload;
+        // revoke rather than leak, and never write a stale URL into state.
+        if (revoked) {
+          if (url) URL.revokeObjectURL(url)
+          return
+        }
+        objectUrl = url
+        setAvatarUrl(url)
+      })
+      // A failed fetch falls back to initials rather than becoming an unhandled
+      // rejection. The picture is not worth a console error, let alone a
+      // crashed effect.
+      .catch(() => {
+        if (!revoked) setAvatarUrl(null)
+      })
+    return () => {
+      revoked = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [avatarVersion])
+
+  const onAvatarSelected = async (file: File | undefined) => {
+    if (!file) return
+    setAvatarBusy(true)
+    setAvatarError(null)
+    try {
+      setUser(await authApi.uploadAvatar(file))
+    } catch (err) {
+      const apiError = err as { error?: { message?: string } }
+      setAvatarError(apiError.error?.message || 'Failed to upload image')
+    } finally {
+      setAvatarBusy(false)
+      // Clear the input so re-picking the same file fires a change event.
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  const onAvatarRemove = async () => {
+    setAvatarBusy(true)
+    setAvatarError(null)
+    try {
+      setUser(await authApi.deleteAvatar())
+    } catch (err) {
+      const apiError = err as { error?: { message?: string } }
+      setAvatarError(apiError.error?.message || 'Failed to remove image')
+    } finally {
+      setAvatarBusy(false)
     }
   }
 
@@ -374,6 +441,74 @@ export function SettingsPage() {
               Save profile
             </Button>
           </form>
+        </CardContent>
+      </Card>
+
+      {/* Avatar (DEV-525) */}
+      <Card className="border-border/50">
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-teal-500">
+              <User className="h-4 w-4 text-white" />
+            </div>
+            <CardTitle>Profile Picture</CardTitle>
+          </div>
+          <CardDescription>
+            PNG, JPEG, WebP or GIF, up to 2 MB. Shown to you and to applications you sign into.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {avatarError && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{avatarError}</AlertDescription>
+            </Alert>
+          )}
+          <div className="flex items-center gap-4">
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt="Your profile picture"
+                className="h-16 w-16 rounded-full object-cover"
+              />
+            ) : (
+              <div
+                className="flex h-16 w-16 items-center justify-center rounded-full bg-muted text-lg font-semibold"
+                aria-label="No profile picture set"
+              >
+                {(user?.email?.[0] ?? '?').toUpperCase()}
+              </div>
+            )}
+            <div className="flex gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                className="hidden"
+                aria-label="Choose a profile picture"
+                onChange={(e) => onAvatarSelected(e.target.files?.[0])}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                disabled={avatarBusy}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {avatarBusy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Upload
+              </Button>
+              {avatarVersion && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={avatarBusy}
+                  onClick={onAvatarRemove}
+                >
+                  Remove
+                </Button>
+              )}
+            </div>
+          </div>
         </CardContent>
       </Card>
 

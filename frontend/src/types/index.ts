@@ -45,6 +45,12 @@ export interface User {
    * country itself is never sent to the client.
    */
   login_location_alerts: boolean
+  /**
+   * DEV-525: when this user last uploaded an avatar, or null for none. Doubles
+   * as the cache-busting version for the avatar request, so a re-upload is
+   * fetched fresh rather than served from cache.
+   */
+  avatar_updated_at: string | null
 }
 
 // Auth types
