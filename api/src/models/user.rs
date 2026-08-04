@@ -5,137 +5,12 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
 
-/// User roles in the system
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum UserRole {
-    Subscriber,
-    Admin,
-}
-
-impl UserRole {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            UserRole::Subscriber => "subscriber",
-            UserRole::Admin => "admin",
-        }
-    }
-}
-
-impl From<String> for UserRole {
-    fn from(s: String) -> Self {
-        match s.as_str() {
-            "admin" => UserRole::Admin,
-            _ => UserRole::Subscriber,
-        }
-    }
-}
-
-impl From<&str> for UserRole {
-    fn from(s: &str) -> Self {
-        match s {
-            "admin" => UserRole::Admin,
-            _ => UserRole::Subscriber,
-        }
-    }
-}
-
-/// Membership status for users
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum MembershipStatus {
-    None,
-    Active,
-    PastDue,
-    Canceled,
-    GracePeriod,
-}
-
-impl MembershipStatus {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            MembershipStatus::None => "none",
-            MembershipStatus::Active => "active",
-            MembershipStatus::PastDue => "past_due",
-            MembershipStatus::Canceled => "canceled",
-            MembershipStatus::GracePeriod => "grace_period",
-        }
-    }
-
-    /// Check if the user has access to paid features
-    pub fn has_access(&self) -> bool {
-        matches!(
-            self,
-            MembershipStatus::Active | MembershipStatus::GracePeriod
-        )
-    }
-}
-
-impl From<String> for MembershipStatus {
-    fn from(s: String) -> Self {
-        match s.as_str() {
-            "active" => MembershipStatus::Active,
-            "past_due" => MembershipStatus::PastDue,
-            "canceled" => MembershipStatus::Canceled,
-            "grace_period" => MembershipStatus::GracePeriod,
-            _ => MembershipStatus::None,
-        }
-    }
-}
-
-impl From<&str> for MembershipStatus {
-    fn from(s: &str) -> Self {
-        match s {
-            "active" => MembershipStatus::Active,
-            "past_due" => MembershipStatus::PastDue,
-            "canceled" => MembershipStatus::Canceled,
-            "grace_period" => MembershipStatus::GracePeriod,
-            _ => MembershipStatus::None,
-        }
-    }
-}
-
-/// Subscription tier assigned at email verification
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum SubscriptionTier {
-    /// Permanently free — first 5 verified users
-    Lifetime,
-    /// Permanently free — admin-granted (not tied to signup count)
-    Free,
-    /// 3-month free trial — users 6-10
-    EarlyAdopter,
-    /// 1-month free trial — all subsequent users
-    Standard,
-}
-
-impl SubscriptionTier {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            SubscriptionTier::Lifetime => "lifetime",
-            SubscriptionTier::Free => "free",
-            SubscriptionTier::EarlyAdopter => "early_adopter",
-            SubscriptionTier::Standard => "standard",
-        }
-    }
-}
-
-impl From<&str> for SubscriptionTier {
-    fn from(s: &str) -> Self {
-        match s {
-            "lifetime" => SubscriptionTier::Lifetime,
-            "free" => SubscriptionTier::Free,
-            "early_adopter" => SubscriptionTier::EarlyAdopter,
-            _ => SubscriptionTier::Standard,
-        }
-    }
-}
-
-impl From<String> for SubscriptionTier {
-    fn from(s: String) -> Self {
-        SubscriptionTier::from(s.as_str())
-    }
-}
+// The account vocabulary (roles, membership status, subscription tier) lives in
+// the shared `dunite-user-core` crate (DEV-517) and is re-exported here, so
+// `crate::models::user::*` paths are unchanged and a8n-tools and bunyip cannot
+// drift on the string values. The `User` row struct below stays a8n-side: the
+// two schemas have not been reconciled.
+pub use dunite_user_core::{MembershipStatus, SubscriptionTier, UserRole};
 
 /// User database model
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
@@ -307,71 +182,7 @@ mod tests {
 
     // -- UserRole --
 
-    #[test]
-    fn user_role_as_str() {
-        assert_eq!(UserRole::Subscriber.as_str(), "subscriber");
-        assert_eq!(UserRole::Admin.as_str(), "admin");
-    }
-
-    #[test]
-    fn user_role_from_string() {
-        assert_eq!(UserRole::from("admin".to_string()), UserRole::Admin);
-        assert_eq!(
-            UserRole::from("subscriber".to_string()),
-            UserRole::Subscriber
-        );
-        assert_eq!(UserRole::from("unknown".to_string()), UserRole::Subscriber);
-    }
-
-    #[test]
-    fn user_role_from_str() {
-        assert_eq!(UserRole::from("admin"), UserRole::Admin);
-        assert_eq!(UserRole::from("anything"), UserRole::Subscriber);
-    }
-
     // -- MembershipStatus --
-
-    #[test]
-    fn membership_status_as_str() {
-        assert_eq!(MembershipStatus::None.as_str(), "none");
-        assert_eq!(MembershipStatus::Active.as_str(), "active");
-        assert_eq!(MembershipStatus::PastDue.as_str(), "past_due");
-        assert_eq!(MembershipStatus::Canceled.as_str(), "canceled");
-        assert_eq!(MembershipStatus::GracePeriod.as_str(), "grace_period");
-    }
-
-    #[test]
-    fn membership_status_has_access() {
-        assert!(MembershipStatus::Active.has_access());
-        assert!(MembershipStatus::GracePeriod.has_access());
-        assert!(!MembershipStatus::None.has_access());
-        assert!(!MembershipStatus::PastDue.has_access());
-        assert!(!MembershipStatus::Canceled.has_access());
-    }
-
-    #[test]
-    fn membership_status_from_string() {
-        assert_eq!(
-            MembershipStatus::from("active".to_string()),
-            MembershipStatus::Active
-        );
-        assert_eq!(
-            MembershipStatus::from("past_due".to_string()),
-            MembershipStatus::PastDue
-        );
-        assert_eq!(
-            MembershipStatus::from("canceled".to_string()),
-            MembershipStatus::Canceled
-        );
-        assert_eq!(
-            MembershipStatus::from("grace_period".to_string()),
-            MembershipStatus::GracePeriod
-        );
-        assert_eq!(
-            MembershipStatus::from("unknown".to_string()),
-            MembershipStatus::None
-        );
-    }
 
     // -- User methods --
 
@@ -436,35 +247,6 @@ mod tests {
     }
 
     // -- SubscriptionTier --
-
-    #[test]
-    fn subscription_tier_as_str() {
-        assert_eq!(SubscriptionTier::Lifetime.as_str(), "lifetime");
-        assert_eq!(SubscriptionTier::Free.as_str(), "free");
-        assert_eq!(SubscriptionTier::EarlyAdopter.as_str(), "early_adopter");
-        assert_eq!(SubscriptionTier::Standard.as_str(), "standard");
-    }
-
-    #[test]
-    fn subscription_tier_from_str() {
-        assert_eq!(
-            SubscriptionTier::from("lifetime"),
-            SubscriptionTier::Lifetime
-        );
-        assert_eq!(SubscriptionTier::from("free"), SubscriptionTier::Free);
-        assert_eq!(
-            SubscriptionTier::from("early_adopter"),
-            SubscriptionTier::EarlyAdopter
-        );
-        assert_eq!(
-            SubscriptionTier::from("standard"),
-            SubscriptionTier::Standard
-        );
-        assert_eq!(
-            SubscriptionTier::from("unknown"),
-            SubscriptionTier::Standard
-        );
-    }
 
     fn user_with_tier(
         lifetime_member: bool,
