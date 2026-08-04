@@ -291,6 +291,8 @@ mod tests {
             first_name: None,
             last_name: None,
             phone: None,
+            last_login_country: None,
+            login_location_alerts: true,
         }
     }
 
