@@ -196,17 +196,43 @@ pub fn ed25519_public_key_x(pub_pem: &[u8]) -> Result<String, String> {
 mod tests {
     use super::*;
 
-    // Known Ed25519 public key in SubjectPublicKeyInfo PEM format (test vector).
-    // Generated with: openssl genpkey -algorithm ED25519 | openssl pkey -pubout
+    /// Known Ed25519 public key in SubjectPublicKeyInfo PEM format (test vector).
+    /// Generated with: openssl genpkey -algorithm ED25519 | openssl pkey -pubout
+    ///
+    /// DEV-524: the previous constant was not an Ed25519 key at all. Its DER
+    /// header carried `2B 65 5D` where the OID must be `2B 65 70`
+    /// (1.3.101.112, id-Ed25519), so `ed25519_public_key_x` rejected it and
+    /// both positive tests unwrapped on an `Err`. Verify any replacement by
+    /// decoding it, not by eye: the first 12 DER bytes must be exactly
+    /// `30 2A 30 05 06 03 2B 65 70 03 21 00`.
     const TEST_PUB_PEM: &str = "-----BEGIN PUBLIC KEY-----\n\
-        MCowBQYDK2VdAyEA2jS+MsZoWKW9GXJMjMvhqRO5MXJibQqUYXqXhKLrVjg=\n\
+        MCowBQYDK2VwAyEAuDNvcRMAMPemPvAIt5KAJbV7pWRCeBoKuXWfITB6yTY=\n\
+        -----END PUBLIC KEY-----\n";
+
+    /// The base64url (unpadded) encoding of the 32 key bytes in `TEST_PUB_PEM`,
+    /// i.e. the `x` value a relying party reads out of our JWKS.
+    const TEST_PUB_X: &str = "uDNvcRMAMPemPvAIt5KAJbV7pWRCeBoKuXWfITB6yTY";
+
+    /// The same key with the OID byte corrupted (`70` -> `5D`), which is the
+    /// exact shape of the broken vector DEV-524 replaced.
+    const BAD_OID_PEM: &str = "-----BEGIN PUBLIC KEY-----\n\
+        MCowBQYDK2VdAyEAuDNvcRMAMPemPvAIt5KAJbV7pWRCeBoKuXWfITB6yTY=\n\
         -----END PUBLIC KEY-----\n";
 
     #[test]
-    fn test_ed25519_x_extraction_length() {
+    fn test_ed25519_x_extraction_matches_the_known_vector() {
         let x = ed25519_public_key_x(TEST_PUB_PEM.as_bytes()).unwrap();
+        // Pin the value, not just its shape: a length-only assertion passes for
+        // any 32 bytes, including the wrong 32 bytes.
+        assert_eq!(x, TEST_PUB_X);
         // Base64url of 32 bytes = 43 chars (no padding)
         assert_eq!(x.len(), 43, "x should be 43 base64url chars: {x}");
+        // base64url, not standard base64: never the two characters that would
+        // break a bare JWKS value.
+        assert!(
+            !x.contains('+') && !x.contains('/'),
+            "x must be base64url: {x}"
+        );
     }
 
     #[test]
@@ -217,12 +243,36 @@ mod tests {
     }
 
     #[test]
-    fn test_ed25519_x_extraction_bad_header() {
-        // Corrupt the OID byte
-        let bad_pem = "-----BEGIN PUBLIC KEY-----\n\
-            MCowBQYDK2VdAyEA2jS+MsZoWKW9GXJMjMvhqRO5MXJibQqUYXqXhKLrVjg=\n\
+    fn test_ed25519_x_extraction_rejects_a_bad_oid() {
+        let err = ed25519_public_key_x(BAD_OID_PEM.as_bytes())
+            .expect_err("a non-Ed25519 OID must not yield a JWKS x value");
+        assert!(
+            err.contains("unexpected DER header"),
+            "unhelpful error for a corrupt OID: {err}"
+        );
+    }
+
+    #[test]
+    fn test_ed25519_x_extraction_rejects_a_short_key() {
+        // `TEST_PUB_PEM` truncated to 40 DER bytes: the header is intact, so
+        // the length guard rather than the header check is what rejects it.
+        let short_pem = "-----BEGIN PUBLIC KEY-----\n\
+            MCowBQYDK2VwAyEAuDNvcRMAMPemPvAIt5KAJbV7pWRCeBoKuXWfIQ==\n\
             -----END PUBLIC KEY-----\n";
-        // This test just checks it doesn't panic; the correct key is valid above.
-        let _ = ed25519_public_key_x(bad_pem.as_bytes());
+        let err = ed25519_public_key_x(short_pem.as_bytes())
+            .expect_err("a truncated SPKI must not yield a JWKS x value");
+        assert!(err.contains("too short"), "unhelpful error: {err}");
+    }
+
+    #[test]
+    fn test_ed25519_x_extraction_rejects_non_base64() {
+        let err = ed25519_public_key_x(
+            b"-----BEGIN PUBLIC KEY-----\nnot base64 at all!\n-----END PUBLIC KEY-----\n",
+        )
+        .expect_err("a non-base64 body must not yield a JWKS x value");
+        assert!(
+            err.contains("base64 decode failed"),
+            "unhelpful error: {err}"
+        );
     }
 }
