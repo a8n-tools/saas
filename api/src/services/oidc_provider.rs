@@ -1104,6 +1104,7 @@ mod display_name_tests {
             phone: None,
             last_login_country: None,
             login_location_alerts: true,
+            avatar_updated_at: None,
         };
         u.first_name = first.map(String::from);
         u.last_name = last.map(String::from);

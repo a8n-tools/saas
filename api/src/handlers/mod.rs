@@ -7,6 +7,7 @@ pub mod admin_oci;
 pub mod admin_stripe;
 pub mod application;
 pub mod auth;
+pub mod avatar;
 pub mod billing;
 pub mod download;
 pub mod feedback;
@@ -25,6 +26,7 @@ pub use auth::{
     logout_redirect, refresh_token, register, request_magic_link, request_password_reset,
     setup_admin, setup_status, verify_magic_link, verify_password_reset_token,
 };
+pub use avatar::{delete_avatar, get_avatar, upload_avatar};
 pub use billing::{create_setup_intent, download_invoice, list_invoices};
 pub use download::{admin_refresh_release, download_asset, list_all_downloads, list_app_downloads};
 pub use feedback::{

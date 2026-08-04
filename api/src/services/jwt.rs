@@ -293,6 +293,7 @@ mod tests {
             phone: None,
             last_login_country: None,
             login_location_alerts: true,
+            avatar_updated_at: None,
         }
     }
 

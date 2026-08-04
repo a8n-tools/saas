@@ -20,6 +20,7 @@ dependencies = [
  "data-encoding",
  "dotenvy",
  "dunite-geoip",
+ "dunite-image-upload",
  "dunite-stripe",
  "dunite-user-core",
  "futures-util",
@@ -704,6 +705,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "cfb"
+version = "0.7.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d38f2da7a0a2c4ccf0065be06397cc26a81f4e528be095826eee9d4adbb8c60f"
+dependencies = [
+ "byteorder",
+ "fnv",
+ "uuid 1.23.1",
+]
+
+[[package]]
 name = "cfg-if"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1164,9 +1176,18 @@ checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
 [[package]]
 name = "dunite-geoip"
 version = "0.1.0"
-source = "git+https://dev.a8n.run/psa-systems/dunite?rev=b526535c7c632bd3aa74fd8abb2736f90d389c24#b526535c7c632bd3aa74fd8abb2736f90d389c24"
+source = "git+https://dev.a8n.run/psa-systems/dunite?rev=6c535f447ef8f6b8216b07ae093e880c84765784#6c535f447ef8f6b8216b07ae093e880c84765784"
 dependencies = [
  "ip2location",
+]
+
+[[package]]
+name = "dunite-image-upload"
+version = "0.1.0"
+source = "git+https://dev.a8n.run/psa-systems/dunite?rev=6c535f447ef8f6b8216b07ae093e880c84765784#6c535f447ef8f6b8216b07ae093e880c84765784"
+dependencies = [
+ "imagesize",
+ "infer 0.16.0",
 ]
 
 [[package]]
@@ -1792,7 +1813,7 @@ dependencies = [
  "base64 0.13.1",
  "futures-lite",
  "http 0.2.12",
- "infer",
+ "infer 0.2.3",
  "pin-project-lite",
  "rand 0.7.3",
  "serde",
@@ -2096,6 +2117,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "imagesize"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "edcd27d72f2f071c64249075f42e205ff93c9a4c5f6c6da53e79ed9f9832c285"
+
+[[package]]
 name = "impl-more"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2129,6 +2156,15 @@ name = "infer"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "64e9829a50b42bb782c1df523f78d332fe371b10c661e78b7a3c34b0198e9fac"
+
+[[package]]
+name = "infer"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc150e5ce2330295b8616ce0e3f53250e53af31759a9dbedad1621ba29151847"
+dependencies = [
+ "cfb",
+]
 
 [[package]]
 name = "inout"

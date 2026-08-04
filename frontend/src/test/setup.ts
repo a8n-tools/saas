@@ -42,6 +42,21 @@ Object.defineProperty(navigator, 'clipboard', {
   value: { writeText: vi.fn().mockResolvedValue(undefined) },
 })
 
+// Mock URL.createObjectURL / revokeObjectURL (not available in jsdom).
+// DEV-525: the avatar preview fetches the image as a blob and turns it into an
+// object URL, so without these the settings page can only ever be tested on its
+// fallback path.
+Object.defineProperty(URL, 'createObjectURL', {
+  writable: true,
+  configurable: true,
+  value: vi.fn(() => 'blob:mock-avatar'),
+})
+Object.defineProperty(URL, 'revokeObjectURL', {
+  writable: true,
+  configurable: true,
+  value: vi.fn(),
+})
+
 // Establish API mocking before all tests
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }))
 

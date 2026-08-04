@@ -21,6 +21,7 @@ export const mockUser = {
   last_name: null,
   phone: null,
   login_location_alerts: true,
+  avatar_updated_at: null,
 }
 
 // An ordinary admin: full panel access except the four DEV-525 actions.
@@ -508,6 +509,29 @@ export const handlers = [
     return HttpResponse.json({
       success: true,
       data: { ...mockUser, login_location_alerts: body.enabled },
+    })
+  }),
+
+  // DEV-525: the stored avatar bytes. Served as a real image response so the
+  // settings page exercises its blob path rather than only its fallback.
+  http.get(`${API_BASE}/users/me/avatar`, () => {
+    return new HttpResponse(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), {
+      headers: { 'Content-Type': 'image/png' },
+    })
+  }),
+
+  // DEV-525: avatar upload / removal. Both return the refreshed user.
+  http.post(`${API_BASE}/users/me/avatar`, () => {
+    return HttpResponse.json({
+      success: true,
+      data: { ...mockUser, avatar_updated_at: '2026-08-04T00:00:00Z' },
+    })
+  }),
+
+  http.delete(`${API_BASE}/users/me/avatar`, () => {
+    return HttpResponse.json({
+      success: true,
+      data: { ...mockUser, avatar_updated_at: null },
     })
   }),
 

@@ -222,6 +222,101 @@ impl UserRepository {
         Ok(user)
     }
 
+    /// DEV-525: store (or replace) the user's avatar.
+    ///
+    /// The `user_avatars` row and the `users.avatar_updated_at` marker are
+    /// written in one transaction. Split across two statements they could drift
+    /// into "the marker says an avatar exists, the table says it does not",
+    /// which renders as a broken image for every viewer until someone notices.
+    pub async fn set_avatar(
+        pool: &PgPool,
+        user_id: Uuid,
+        mime_type: &str,
+        data: &[u8],
+    ) -> Result<User, AppError> {
+        let mut tx = pool.begin().await?;
+
+        sqlx::query(
+            r#"
+            INSERT INTO user_avatars (user_id, mime_type, size_bytes, data, updated_at)
+            VALUES ($1, $2, $3, $4, NOW())
+            ON CONFLICT (user_id) DO UPDATE
+            SET mime_type = EXCLUDED.mime_type,
+                size_bytes = EXCLUDED.size_bytes,
+                data = EXCLUDED.data,
+                updated_at = NOW()
+            "#,
+        )
+        .bind(user_id)
+        .bind(mime_type)
+        .bind(data.len() as i32)
+        .bind(data)
+        .execute(&mut *tx)
+        .await?;
+
+        let user = sqlx::query_as::<_, User>(
+            r#"
+            UPDATE users
+            SET avatar_updated_at = NOW(), updated_at = NOW()
+            WHERE id = $1 AND deleted_at IS NULL
+            RETURNING *
+            "#,
+        )
+        .bind(user_id)
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or_else(|| AppError::not_found("User"))?;
+
+        tx.commit().await?;
+        Ok(user)
+    }
+
+    /// DEV-525: remove the user's avatar. Idempotent: deleting an avatar that
+    /// is already gone succeeds, because a client retrying a delete should not
+    /// see an error for having got what it asked for.
+    pub async fn clear_avatar(pool: &PgPool, user_id: Uuid) -> Result<User, AppError> {
+        let mut tx = pool.begin().await?;
+
+        sqlx::query("DELETE FROM user_avatars WHERE user_id = $1")
+            .bind(user_id)
+            .execute(&mut *tx)
+            .await?;
+
+        let user = sqlx::query_as::<_, User>(
+            r#"
+            UPDATE users
+            SET avatar_updated_at = NULL, updated_at = NOW()
+            WHERE id = $1 AND deleted_at IS NULL
+            RETURNING *
+            "#,
+        )
+        .bind(user_id)
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or_else(|| AppError::not_found("User"))?;
+
+        tx.commit().await?;
+        Ok(user)
+    }
+
+    /// DEV-525: fetch the stored avatar bytes and their MIME type.
+    ///
+    /// Kept off every other read path on purpose: this is the only query that
+    /// touches the BYTEA, so `find_by_id` and the users list never carry image
+    /// data they will not use.
+    pub async fn get_avatar(
+        pool: &PgPool,
+        user_id: Uuid,
+    ) -> Result<Option<(String, Vec<u8>)>, AppError> {
+        let row: Option<(String, Vec<u8>)> =
+            sqlx::query_as("SELECT mime_type, data FROM user_avatars WHERE user_id = $1")
+                .bind(user_id)
+                .fetch_optional(pool)
+                .await?;
+
+        Ok(row)
+    }
+
     /// Update email verified status
     pub async fn set_email_verified(pool: &PgPool, user_id: Uuid) -> Result<(), AppError> {
         sqlx::query(
@@ -1075,6 +1170,179 @@ mod profile_tests {
             .await
             .unwrap();
         assert_eq!(row.get::<Option<String>, _>(0).as_deref(), Some("AU"));
+
+        tx.rollback().await.unwrap();
+    }
+
+    /// 1x1 transparent PNG, the smallest valid payload to store.
+    const PNG_1X1: &[u8] = &[
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44,
+        0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F,
+        0x15, 0xC4, 0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00,
+        0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49,
+        0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+    ];
+
+    async fn seed_user(tx: &mut sqlx::PgConnection, tag: &str) -> Uuid {
+        let id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO users (id, email, password_hash, role, subscription_status)
+             VALUES ($1, $2, 'x', 'subscriber', 'none')",
+        )
+        .bind(id)
+        .bind(format!("{tag}-{id}@example.com"))
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+        id
+    }
+
+    #[tokio::test]
+    async fn avatar_marker_and_bytes_move_together() {
+        let Some(pool) = maybe_pool().await else {
+            return;
+        };
+        let id = {
+            let mut tx = pool.begin().await.unwrap();
+            let id = seed_user(&mut tx, "avatar").await;
+            tx.commit().await.unwrap();
+            id
+        };
+
+        // `set_avatar` and `clear_avatar` own their own transactions, so this
+        // test cannot wrap them in one; it cleans up after itself instead.
+        let before = UserRepository::find_by_id(&pool, id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(before.avatar_updated_at.is_none(), "no avatar to start");
+
+        let stored = UserRepository::set_avatar(&pool, id, "image/png", PNG_1X1)
+            .await
+            .unwrap();
+        assert!(
+            stored.avatar_updated_at.is_some(),
+            "the marker must be set in the same transaction as the bytes"
+        );
+        let (mime, data) = UserRepository::get_avatar(&pool, id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(mime, "image/png");
+        assert_eq!(data, PNG_1X1);
+
+        let cleared = UserRepository::clear_avatar(&pool, id).await.unwrap();
+        assert!(
+            cleared.avatar_updated_at.is_none(),
+            "clearing the bytes must clear the marker, or the client renders a broken image"
+        );
+        assert!(UserRepository::get_avatar(&pool, id)
+            .await
+            .unwrap()
+            .is_none());
+
+        // Idempotent: deleting what is already gone is not an error.
+        UserRepository::clear_avatar(&pool, id).await.unwrap();
+
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(id)
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn re_upload_replaces_rather_than_accumulates() {
+        let Some(pool) = maybe_pool().await else {
+            return;
+        };
+        let id = {
+            let mut tx = pool.begin().await.unwrap();
+            let id = seed_user(&mut tx, "avatar-replace").await;
+            tx.commit().await.unwrap();
+            id
+        };
+
+        UserRepository::set_avatar(&pool, id, "image/png", PNG_1X1)
+            .await
+            .unwrap();
+        UserRepository::set_avatar(&pool, id, "image/gif", b"GIF89a-second-upload")
+            .await
+            .unwrap();
+
+        let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM user_avatars WHERE user_id = $1")
+            .bind(id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(count.0, 1, "one row per user, replaced on re-upload");
+
+        let (mime, data) = UserRepository::get_avatar(&pool, id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(mime, "image/gif");
+        assert_eq!(data, b"GIF89a-second-upload");
+
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(id)
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn the_database_refuses_an_avatar_over_the_cap() {
+        let Some(pool) = maybe_pool().await else {
+            return;
+        };
+        let mut tx = pool.begin().await.unwrap();
+        let id = seed_user(&mut tx, "avatar-cap").await;
+
+        // The handler enforces this too, but the handler is not the only
+        // possible writer, so the CHECK has to hold on its own.
+        let oversized = vec![0u8; 2 * 1024 * 1024 + 1];
+        let err = sqlx::query(
+            "INSERT INTO user_avatars (user_id, mime_type, size_bytes, data)
+             VALUES ($1, 'image/png', $2, $3)",
+        )
+        .bind(id)
+        .bind(oversized.len() as i32)
+        .bind(&oversized)
+        .execute(&mut *tx)
+        .await
+        .expect_err("the size CHECK must reject 2 MiB + 1");
+        assert!(
+            err.to_string().contains("user_avatars_size_bytes_check"),
+            "expected the size CHECK to fire, got: {err}"
+        );
+
+        tx.rollback().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn the_database_refuses_a_lying_size() {
+        let Some(pool) = maybe_pool().await else {
+            return;
+        };
+        let mut tx = pool.begin().await.unwrap();
+        let id = seed_user(&mut tx, "avatar-lie").await;
+
+        // A row claiming 1 KB while carrying more is what would let the size
+        // cap be sidestepped; `user_avatars_data_size` makes it unrepresentable.
+        let err = sqlx::query(
+            "INSERT INTO user_avatars (user_id, mime_type, size_bytes, data)
+             VALUES ($1, 'image/png', 1024, $2)",
+        )
+        .bind(id)
+        .bind(vec![0u8; 4096])
+        .execute(&mut *tx)
+        .await
+        .expect_err("size_bytes must match the payload");
+        assert!(
+            err.to_string().contains("user_avatars_data_size"),
+            "expected the payload-size CHECK to fire, got: {err}"
+        );
 
         tx.rollback().await.unwrap();
     }
