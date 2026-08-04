@@ -1132,7 +1132,7 @@ checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
 [[package]]
 name = "dunite-stripe"
 version = "0.1.0"
-source = "git+https://dev.a8n.run/psa-systems/dunite?rev=3efa8a16dd22f71dcebf8b54ddc1c3af00b4b14d#3efa8a16dd22f71dcebf8b54ddc1c3af00b4b14d"
+source = "git+https://dev.a8n.run/psa-systems/dunite?rev=cc10e8358a6f21160544a415a9488c16827af699#cc10e8358a6f21160544a415a9488c16827af699"
 dependencies = [
  "async-stripe",
  "chrono",
@@ -1148,7 +1148,7 @@ dependencies = [
 [[package]]
 name = "dunite-stripe-core"
 version = "0.1.0"
-source = "git+https://dev.a8n.run/psa-systems/dunite?rev=3efa8a16dd22f71dcebf8b54ddc1c3af00b4b14d#3efa8a16dd22f71dcebf8b54ddc1c3af00b4b14d"
+source = "git+https://dev.a8n.run/psa-systems/dunite?rev=cc10e8358a6f21160544a415a9488c16827af699#cc10e8358a6f21160544a415a9488c16827af699"
 dependencies = [
  "hex",
  "hmac",
@@ -1162,7 +1162,7 @@ dependencies = [
 [[package]]
 name = "dunite-user-core"
 version = "0.1.0"
-source = "git+https://dev.a8n.run/psa-systems/dunite?rev=82cfbe03645f98a7285de05f2fce65351df24a14#82cfbe03645f98a7285de05f2fce65351df24a14"
+source = "git+https://dev.a8n.run/psa-systems/dunite?rev=cc10e8358a6f21160544a415a9488c16827af699#cc10e8358a6f21160544a415a9488c16827af699"
 dependencies = [
  "chrono",
  "serde",
