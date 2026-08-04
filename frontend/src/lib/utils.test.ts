@@ -123,6 +123,7 @@ describe('hasActiveMembership', () => {
     first_name: null,
     last_name: null,
     phone: null,
+    login_location_alerts: true,
   }
 
   it('returns false for null user', () => {

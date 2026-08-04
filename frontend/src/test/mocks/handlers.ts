@@ -20,6 +20,7 @@ export const mockUser = {
   first_name: null,
   last_name: null,
   phone: null,
+  login_location_alerts: true,
 }
 
 // An ordinary admin: full panel access except the four DEV-525 actions.
@@ -497,6 +498,16 @@ export const handlers = [
         last_name: body.last_name ?? null,
         phone: body.phone ?? null,
       },
+    })
+  }),
+
+  // DEV-525: echoes the requested state back, so a test asserts on what the
+  // toggle actually sent.
+  http.put(`${API_BASE}/users/me/login-alerts`, async ({ request }) => {
+    const body = (await request.json()) as { enabled: boolean }
+    return HttpResponse.json({
+      success: true,
+      data: { ...mockUser, login_location_alerts: body.enabled },
     })
   }),
 

@@ -166,3 +166,29 @@ describe('SettingsPage profile form', () => {
     expect(useAuthStore.getState().user?.first_name).toBeNull()
   })
 })
+
+// DEV-525: the per-user opt-out for the new-login-location alert.
+describe('SettingsPage login-location alerts', () => {
+  it('reflects the stored preference', () => {
+    setupAuthUser({ ...mockUser, login_location_alerts: false })
+    render(<SettingsPage />)
+
+    expect(screen.getByLabelText('New sign-in location alerts')).not.toBeChecked()
+  })
+
+  it('defaults to on', () => {
+    render(<SettingsPage />)
+
+    expect(screen.getByLabelText('New sign-in location alerts')).toBeChecked()
+  })
+
+  it('persists a turn-off and updates the auth store', async () => {
+    render(<SettingsPage />)
+
+    await userEvent.click(screen.getByLabelText('New sign-in location alerts'))
+
+    await waitFor(() => {
+      expect(useAuthStore.getState().user?.login_location_alerts).toBe(false)
+    })
+  })
+})
