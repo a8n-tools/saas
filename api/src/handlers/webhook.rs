@@ -13,7 +13,7 @@ use crate::models::{
     AuditAction, AuditSeverity, CreateAuditLog, MembershipStatus, SubscriptionTier,
 };
 use crate::repositories::{AuditLogRepository, UserRepository};
-use crate::services::{EmailService, StripeService};
+use crate::services::{stripe_err, EmailService, StripeService};
 
 /// POST /v1/webhooks/stripe
 /// Handle Stripe webhook events
@@ -32,8 +32,20 @@ pub async fn stripe_webhook(
         .and_then(|h| h.to_str().ok())
         .ok_or(AppError::Unauthorized)?;
 
+    // Fail closed when no real signing secret is configured. `whsec_placeholder`
+    // is a public source constant, so verifying against it would accept any
+    // forged event (the shared crate exposes this check as
+    // `webhook_secret_configured`; bunyip filed the same class of bug as
+    // BUNYIP-203).
+    if !stripe.webhook_secret_configured() {
+        tracing::error!("Stripe webhook received but no signing secret is configured; rejecting");
+        return Err(AppError::Unauthorized);
+    }
+
     // Verify webhook signature
-    stripe.verify_webhook_signature(&body, signature)?;
+    stripe
+        .verify_webhook_signature(&body, signature)
+        .map_err(stripe_err)?;
 
     // Parse the event
     let payload = String::from_utf8(body.to_vec())

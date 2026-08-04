@@ -1,7 +1,6 @@
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use sqlx::FromRow;
-use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::errors::AppError;
@@ -22,67 +21,16 @@ pub struct StripeConfig {
 }
 
 // --- Stripe API response structs ---
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct StripeProductResponse {
-    pub id: String,
-    pub name: String,
-    pub description: Option<String>,
-    pub active: bool,
-    pub metadata: HashMap<String, String>,
-    pub created: i64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct StripePriceResponse {
-    pub id: String,
-    pub product_id: String,
-    pub unit_amount: Option<i64>,
-    pub currency: String,
-    pub recurring_interval: Option<String>,
-    pub active: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct StripeSubscriptionItemResponse {
-    pub price_id: String,
-    pub product_id: String,
-    pub quantity: Option<u64>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct StripeSubscriptionResponse {
-    pub id: String,
-    pub status: String,
-    pub current_period_start: i64,
-    pub current_period_end: i64,
-    pub cancel_at_period_end: bool,
-    pub items: Vec<StripeSubscriptionItemResponse>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct StripeInvoiceResponse {
-    pub id: String,
-    pub customer_id: Option<String>,
-    pub amount_paid: i64,
-    pub currency: String,
-    pub status: Option<String>,
-    pub invoice_pdf: Option<String>,
-    pub hosted_invoice_url: Option<String>,
-    pub created: i64,
-    pub description: Option<String>,
-    pub number: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct StripeWebhookEndpointResponse {
-    pub id: String,
-    pub url: String,
-    pub enabled_events: Vec<String>,
-    pub status: String,
-    /// Only present on creation
-    pub secret: Option<String>,
-}
+//
+// DEV-515: the normalised response DTOs now live in the shared `dunite-stripe`
+// crate and are re-exported here, so `crate::models::stripe::*` import paths
+// are unchanged and a8n-tools + bunyip deserialise Stripe objects identically.
+// `StripeCheckoutPrice` comes along with them (unused by a8n today; it is the
+// checkout-session line-item price bunyip reads for its webhook).
+pub use dunite_stripe::{
+    StripeCheckoutPrice, StripeInvoiceResponse, StripePriceResponse, StripeProductResponse,
+    StripeSubscriptionItemResponse, StripeSubscriptionResponse, StripeWebhookEndpointResponse,
+};
 
 /// Encrypt plaintext with the current key. Returns (ciphertext, nonce, key_version).
 pub fn encrypt_secret(

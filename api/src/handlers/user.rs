@@ -13,7 +13,9 @@ use crate::middleware::{extract_client_ip, AuthCookies, AuthenticatedUser};
 use crate::models::{AuditAction, CreateAuditLog, SubscriptionTier, UserResponse};
 use crate::repositories::{AuditLogRepository, TokenRepository, UserRepository};
 use crate::responses::{get_request_id, success, success_no_data};
-use crate::services::{AuthService, EmailService, PasswordService, StripeService, TotpService};
+use crate::services::{
+    stripe_err, AuthService, EmailService, PasswordService, StripeService, TotpService,
+};
 use crate::validation::validate_email;
 
 /// Request body for deleting account
@@ -295,7 +297,10 @@ pub async fn confirm_email_verification(
             let customer_id = match user.stripe_customer_id {
                 Some(id) => id,
                 None => {
-                    let id = stripe.create_customer(&email, user_id).await?;
+                    let id = stripe
+                        .create_customer(&email, user_id)
+                        .await
+                        .map_err(stripe_err)?;
                     UserRepository::update_stripe_customer_id(pool.get_ref(), user_id, &id).await?;
                     id
                 }
