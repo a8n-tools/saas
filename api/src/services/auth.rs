@@ -19,7 +19,10 @@ use crate::models::{
 use crate::repositories::{
     AuditLogRepository, InviteRepository, TokenRepository, TotpRepository, UserRepository,
 };
-use crate::services::{JwtService, PasswordService};
+use crate::services::{EmailService, JwtService, PasswordService};
+use dunite_geoip::{
+    is_non_public_ip, login_location_decision, GeoIpService, LoginLocationDecision,
+};
 
 /// Authentication tokens returned after login
 #[derive(Debug, Clone)]
@@ -56,6 +59,15 @@ pub struct AuthService {
     jwt: JwtService,
     password: PasswordService,
     tier_config: Arc<RwLock<TierConfig>>,
+    /// DEV-525: IP -> country resolver, `None` when `IP2LOCATION_DB_PATH` is
+    /// unset. The whole login-location feature is inert while this is `None`:
+    /// no lookups, no mail, no column writes.
+    geoip: Option<Arc<GeoIpService>>,
+    /// DEV-525: mailer for the new-login-location alert. Injected after
+    /// construction because the email service is built after this one in
+    /// `main`, and because a service that cannot mail is still a usable
+    /// AuthService for every other caller.
+    email: Option<Arc<EmailService>>,
 }
 
 impl AuthService {
@@ -65,6 +77,90 @@ impl AuthService {
             jwt,
             password: PasswordService::new(),
             tier_config,
+            geoip: None,
+            email: None,
+        }
+    }
+
+    /// DEV-525: attach the IP -> country resolver. Without it the
+    /// login-location signal stays off.
+    pub fn with_geoip(mut self, geoip: Option<Arc<GeoIpService>>) -> Self {
+        self.geoip = geoip;
+        self
+    }
+
+    /// DEV-525: attach the mailer used for the new-login-location alert.
+    pub fn with_email(mut self, email: Arc<EmailService>) -> Self {
+        self.email = Some(email);
+        self
+    }
+
+    /// DEV-525: compare this login's country against the one recorded at the
+    /// user's previous login; alert on a change, record it either way.
+    ///
+    /// Best-effort throughout. Every failure here is logged and swallowed: a
+    /// geolocation lookup, a column write or an outbound email must never turn
+    /// a successful authentication into a failed one. The user is already
+    /// signed in by the time this runs.
+    async fn assess_login_location(
+        &self,
+        user: &User,
+        ip_address: Option<IpAddr>,
+        device_info: Option<&str>,
+    ) {
+        let Some(geoip) = self.geoip.as_ref() else {
+            return;
+        };
+        let Some(ip) = ip_address else {
+            return;
+        };
+        // An address that cannot carry a country resolves to nothing, and the
+        // next one that does resolve would then read as a change. Skip them.
+        if is_non_public_ip(&ip) {
+            return;
+        }
+        let Some(country) = geoip.country_code(ip) else {
+            return;
+        };
+
+        match login_location_decision(user.last_login_country.as_deref(), &country) {
+            LoginLocationDecision::Unchanged => {}
+            LoginLocationDecision::Record => {
+                if let Err(e) =
+                    UserRepository::set_last_login_country(&self.pool, user.id, Some(&country))
+                        .await
+                {
+                    tracing::warn!(user_id = %user.id, error = %e, "Failed to record initial login country");
+                }
+            }
+            LoginLocationDecision::Alert => {
+                let previous = user.last_login_country.as_deref().unwrap_or("?");
+                if user.login_location_alerts {
+                    if let Some(email) = self.email.as_ref() {
+                        let when = Utc::now().format("%Y-%m-%d %H:%M UTC").to_string();
+                        let ua = device_info.unwrap_or("unknown");
+                        if let Err(e) = email
+                            .send_new_login_location(
+                                &user.email,
+                                &country,
+                                &ip.to_string(),
+                                &when,
+                                ua,
+                            )
+                            .await
+                        {
+                            tracing::warn!(user_id = %user.id, error = %e, "Failed to send new-login-location email");
+                        }
+                    }
+                }
+                tracing::info!(user_id = %user.id, from = %previous, to = %country, "Login country changed");
+                if let Err(e) =
+                    UserRepository::set_last_login_country(&self.pool, user.id, Some(&country))
+                        .await
+                {
+                    tracing::warn!(user_id = %user.id, error = %e, "Failed to update login country");
+                }
+            }
         }
     }
 
@@ -172,6 +268,11 @@ impl AuthService {
 
         // Update last login
         UserRepository::update_last_login(&self.pool, user.id).await?;
+
+        // DEV-525: compare this login's country against the last one, alert on
+        // a change. Best-effort; never fails the login.
+        self.assess_login_location(&user, ip_address, device_info.as_deref())
+            .await;
 
         // Create audit log
         let ip = ip_address.map(|ip| IpNetwork::from(ip));
@@ -447,10 +548,16 @@ impl AuthService {
         }
 
         // Create tokens
-        let tokens = self.create_tokens(&user, device_info, ip_address).await?;
+        let tokens = self
+            .create_tokens(&user, device_info.clone(), ip_address)
+            .await?;
 
         // Update last login
         UserRepository::update_last_login(&self.pool, user.id).await?;
+
+        // DEV-525: a magic-link sign-in is a sign-in; assess it like any other.
+        self.assess_login_location(&user, ip_address, device_info.as_deref())
+            .await;
 
         // Audit log
         let ip = ip_address.map(|ip| IpNetwork::from(ip));
@@ -496,6 +603,11 @@ impl AuthService {
 
         // Update last login
         UserRepository::update_last_login(&self.pool, user.id).await?;
+
+        // DEV-525: compare this login's country against the last one, alert on
+        // a change. Best-effort; never fails the login.
+        self.assess_login_location(&user, ip_address, device_info.as_deref())
+            .await;
 
         // Audit log
         let ip = ip_address.map(|ip| IpNetwork::from(ip));

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}New Sign-In Location{% endblock %}
+{% block content %}
+<h1>New sign-in from {{ country }}</h1>
+<p>Your {{ app_name }} account was just signed into from a country it has not been signed into before.</p>
+
+<hr class="divider">
+
+<p><strong>Country:</strong> {{ country }}<br>
+<strong>IP address:</strong> {{ ip_address }}<br>
+<strong>When:</strong> {{ login_time }}<br>
+<strong>Device:</strong> {{ user_agent }}</p>
+
+<hr class="divider">
+
+<p><strong>If this was you,</strong> nothing further is needed. Travelling or using a VPN will trigger this.</p>
+
+<p><strong>If this was not you,</strong> change your password now and review your active sessions.</p>
+
+<div class="button-container">
+  <a href="{{ settings_url }}" class="button">Review account security</a>
+</div>
+
+<p class="muted">You can turn these alerts off in your account settings.</p>
+{% endblock %}

@@ -1,0 +1,19 @@
+{% extends "base.txt" %}
+{% block content %}
+New sign-in from {{ country }}
+
+Your {{ app_name }} account was just signed into from a country it has not been signed into before.
+
+Country:    {{ country }}
+IP address: {{ ip_address }}
+When:       {{ login_time }}
+Device:     {{ user_agent }}
+
+If this was you, nothing further is needed. Travelling or using a VPN will trigger this.
+
+If this was not you, change your password now and review your active sessions.
+
+Review account security: {{ settings_url }}
+
+You can turn these alerts off in your account settings.
+{% endblock %}

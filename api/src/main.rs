@@ -11,6 +11,8 @@ use tracing::{error, info};
 use tracing_actix_web::TracingLogger;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
+use dunite_geoip::GeoIpService;
+
 use a8n_api::{
     config::{Config, TierConfig},
     middleware::{
@@ -135,15 +137,6 @@ async fn main() -> anyhow::Result<()> {
     };
     let tier_config = Arc::new(std::sync::RwLock::new(tier_config));
 
-    // Initialize Auth service
-    let auth_service = Arc::new(AuthService::new(
-        pool.clone(),
-        (*jwt_service).clone(),
-        tier_config.clone(),
-    ));
-
-    info!("Auth service initialized");
-
     // Initialize Email service
     let email_service = Arc::new(EmailService::new(config.email.clone()).unwrap_or_else(|e| {
         tracing::warn!(error = %e, "Failed to initialize email service, using dev mode");
@@ -151,6 +144,35 @@ async fn main() -> anyhow::Result<()> {
     }));
 
     info!(enabled = config.email.enabled, "Email service initialized");
+
+    // DEV-525: IP -> country resolver for the new-login-location alert. Absent
+    // config disables the feature; present-but-unreadable is fatal, so an
+    // operator who meant to enable it is never left thinking they did.
+    let geoip = match config.ip2location_db_path.as_deref() {
+        Some(path) => match GeoIpService::new(path) {
+            Ok(db) => {
+                info!(path = %path, "GeoIP database loaded; login-location alerts enabled");
+                Some(Arc::new(db))
+            }
+            Err(e) => {
+                tracing::error!(path = %path, error = %e, "IP2LOCATION_DB_PATH is set but unreadable");
+                std::process::exit(1);
+            }
+        },
+        None => {
+            info!("IP2LOCATION_DB_PATH unset; login-location alerts disabled");
+            None
+        }
+    };
+
+    // Initialize Auth service (after the mailer and GeoIP it borrows).
+    let auth_service = Arc::new(
+        AuthService::new(pool.clone(), (*jwt_service).clone(), tier_config.clone())
+            .with_geoip(geoip)
+            .with_email(Arc::clone(&email_service)),
+    );
+
+    info!("Auth service initialized");
 
     // Build encryption key sets for key rotation support
     let totp_key_set = EncryptionKeySet {
