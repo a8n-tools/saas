@@ -69,6 +69,13 @@ pub struct User {
     /// DEV-525: per-user opt-out for the new-login-location alert, on by
     /// default.
     pub login_location_alerts: bool,
+    /// DEV-525: timestamp of the user's most recent avatar upload, or `None`
+    /// when no avatar is set. The bytes live in the separate `user_avatars`
+    /// table; this column is the cheap "an avatar exists" marker, so the hot
+    /// user-fetch path never loads the BYTEA, and it doubles as a cache-busting
+    /// version for the avatar `<img>` URL. Written in the same transaction that
+    /// writes or deletes the `user_avatars` row.
+    pub avatar_updated_at: Option<DateTime<Utc>>,
 }
 
 impl User {
@@ -164,6 +171,11 @@ pub struct UserResponse {
     /// page can render the toggle in the right position without a second
     /// request. `last_login_country` is deliberately not surfaced.
     pub login_location_alerts: bool,
+    /// DEV-525: see [`User::avatar_updated_at`]. Surfaced so the client can
+    /// decide whether to render the avatar `<img>` at all (and with what
+    /// cache-busting version) or fall back to initials, without a second
+    /// request that would 404 for most users.
+    pub avatar_updated_at: Option<DateTime<Utc>>,
 }
 
 impl From<User> for UserResponse {
@@ -188,6 +200,7 @@ impl From<User> for UserResponse {
             last_name: user.last_name,
             phone: user.phone,
             login_location_alerts: user.login_location_alerts,
+            avatar_updated_at: user.avatar_updated_at,
         }
     }
 }
@@ -227,6 +240,7 @@ mod tests {
             phone: None,
             last_login_country: None,
             login_location_alerts: true,
+            avatar_updated_at: None,
         }
     }
 
