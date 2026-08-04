@@ -33,6 +33,12 @@ export interface User {
    * offer a button that will 403.
    */
   is_super_admin: boolean
+  /** DEV-525: optional given name, flowed as the OIDC `given_name` claim. */
+  first_name: string | null
+  /** DEV-525: optional family name, flowed as `family_name`. */
+  last_name: string | null
+  /** DEV-525: optional phone number, flowed as `phone_number`. */
+  phone: string | null
 }
 
 // Auth types

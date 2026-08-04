@@ -17,6 +17,9 @@ export const mockUser = {
   trial_ends_at: null,
   lifetime_member: false,
   is_super_admin: false,
+  first_name: null,
+  last_name: null,
+  phone: null,
 }
 
 // An ordinary admin: full panel access except the four DEV-525 actions.
@@ -476,6 +479,25 @@ export const handlers = [
   // User settings
   http.put(`${API_BASE}/users/me/password`, () => {
     return HttpResponse.json({ success: true, data: null })
+  }),
+
+  // DEV-525: echoes the submitted body back onto the user, so a test can
+  // assert on exactly what the form sent rather than on a canned response.
+  http.put(`${API_BASE}/users/me/profile`, async ({ request }) => {
+    const body = (await request.json()) as {
+      first_name?: string | null
+      last_name?: string | null
+      phone?: string | null
+    }
+    return HttpResponse.json({
+      success: true,
+      data: {
+        ...mockUser,
+        first_name: body.first_name ?? null,
+        last_name: body.last_name ?? null,
+        phone: body.phone ?? null,
+      },
+    })
   }),
 
   http.post(`${API_BASE}/users/me/email`, () => {

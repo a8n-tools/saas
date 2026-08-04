@@ -46,6 +46,18 @@ const emailSchema = z.object({
 
 type EmailFormData = z.infer<typeof emailSchema>
 
+// DEV-525. The 64-character ceiling matches the API's PROFILE_FIELD_MAX_LEN and
+// the database CHECK, so a value this form accepts is one the API accepts.
+// Every field is optional: none of them is required to hold an account.
+const PROFILE_FIELD_MAX = 64
+const profileSchema = z.object({
+  firstName: z.string().max(PROFILE_FIELD_MAX, `Must be ${PROFILE_FIELD_MAX} characters or fewer`),
+  lastName: z.string().max(PROFILE_FIELD_MAX, `Must be ${PROFILE_FIELD_MAX} characters or fewer`),
+  phone: z.string().max(PROFILE_FIELD_MAX, `Must be ${PROFILE_FIELD_MAX} characters or fewer`),
+})
+
+type ProfileFormData = z.infer<typeof profileSchema>
+
 const passwordRequirements = [
   { label: 'At least 12 characters', test: (p: string) => p.length >= 12 },
   { label: 'One lowercase letter', test: (p: string) => /[a-z]/.test(p) },
@@ -56,7 +68,7 @@ const passwordRequirements = [
 
 export function SettingsPage() {
   const navigate = useNavigate()
-  const { user, logout } = useAuthStore()
+  const { user, logout, setUser } = useAuthStore()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
@@ -91,6 +103,52 @@ export function SettingsPage() {
   } = useForm<EmailFormData>({
     resolver: zodResolver(emailSchema),
   })
+
+  // Profile (DEV-525)
+  const [profileLoading, setProfileLoading] = useState(false)
+  const [profileError, setProfileError] = useState<string | null>(null)
+  const [profileSuccess, setProfileSuccess] = useState(false)
+
+  const {
+    register: registerProfile,
+    handleSubmit: handleProfileSubmit,
+    reset: resetProfile,
+    formState: { errors: profileErrors, isDirty: profileDirty },
+  } = useForm<ProfileFormData>({
+    resolver: zodResolver(profileSchema),
+    values: {
+      firstName: user?.first_name ?? '',
+      lastName: user?.last_name ?? '',
+      phone: user?.phone ?? '',
+    },
+  })
+
+  const onProfileSubmit = async (data: ProfileFormData) => {
+    setProfileLoading(true)
+    setProfileError(null)
+    setProfileSuccess(false)
+    try {
+      // Send null rather than '' for a cleared field, so the API stores NULL
+      // and "unset" stays a single state rather than two that look alike.
+      const updated = await authApi.updateProfile({
+        first_name: data.firstName.trim() || null,
+        last_name: data.lastName.trim() || null,
+        phone: data.phone.trim() || null,
+      })
+      setUser(updated)
+      resetProfile({
+        firstName: updated.first_name ?? '',
+        lastName: updated.last_name ?? '',
+        phone: updated.phone ?? '',
+      })
+      setProfileSuccess(true)
+    } catch (err) {
+      const apiError = err as { error?: { message?: string } }
+      setProfileError(apiError.error?.message || 'Failed to save profile')
+    } finally {
+      setProfileLoading(false)
+    }
+  }
 
   const onEmailSubmit = async (data: EmailFormData) => {
     setEmailLoading(true)
@@ -233,6 +291,71 @@ export function SettingsPage() {
               </p>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Profile (DEV-525) */}
+      <Card className="border-border/50">
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-indigo-500">
+              <User className="h-4 w-4 text-white" />
+            </div>
+            <CardTitle>Profile</CardTitle>
+          </div>
+          <CardDescription>
+            Optional. Applications you sign in to with your a8n account can read your name and
+            phone number, but only if you grant them that access.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleProfileSubmit(onProfileSubmit)} className="space-y-4">
+            {profileError && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{profileError}</AlertDescription>
+              </Alert>
+            )}
+            {profileSuccess && (
+              <Alert>
+                <Check className="h-4 w-4" />
+                <AlertDescription>Profile saved.</AlertDescription>
+              </Alert>
+            )}
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="firstName">First name</Label>
+                <Input id="firstName" autoComplete="given-name" {...registerProfile('firstName')} />
+                {profileErrors.firstName && (
+                  <p className="text-sm text-destructive">{profileErrors.firstName.message}</p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="lastName">Last name</Label>
+                <Input id="lastName" autoComplete="family-name" {...registerProfile('lastName')} />
+                {profileErrors.lastName && (
+                  <p className="text-sm text-destructive">{profileErrors.lastName.message}</p>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="phone">Phone</Label>
+              <Input id="phone" type="tel" autoComplete="tel" {...registerProfile('phone')} />
+              {profileErrors.phone && (
+                <p className="text-sm text-destructive">{profileErrors.phone.message}</p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Clearing a field removes it from your profile.
+              </p>
+            </div>
+
+            <Button type="submit" disabled={profileLoading || !profileDirty}>
+              {profileLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save profile
+            </Button>
+          </form>
         </CardContent>
       </Card>
 

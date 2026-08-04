@@ -99,3 +99,70 @@ describe('SettingsPage', () => {
     expect(screen.getByText('Admin')).toBeInTheDocument()
   })
 })
+
+// DEV-525: the optional profile fields, which flow to relying parties as the
+// OIDC `profile` and `phone` claims.
+describe('SettingsPage profile form', () => {
+  it('prefills from the signed-in user', () => {
+    setupAuthUser({ ...mockUser, first_name: 'Ada', last_name: 'Lovelace', phone: '+61 400 000 000' })
+    render(<SettingsPage />)
+
+    expect(screen.getByLabelText('First name')).toHaveValue('Ada')
+    expect(screen.getByLabelText('Last name')).toHaveValue('Lovelace')
+    expect(screen.getByLabelText('Phone')).toHaveValue('+61 400 000 000')
+  })
+
+  it('renders empty fields when nothing is set', () => {
+    render(<SettingsPage />)
+
+    expect(screen.getByLabelText('First name')).toHaveValue('')
+    expect(screen.getByLabelText('Phone')).toHaveValue('')
+  })
+
+  it('keeps save disabled until something changes', async () => {
+    render(<SettingsPage />)
+
+    const save = screen.getByRole('button', { name: /save profile/i })
+    expect(save).toBeDisabled()
+
+    await userEvent.type(screen.getByLabelText('First name'), 'Ada')
+    await waitFor(() => expect(save).toBeEnabled())
+  })
+
+  it('saves trimmed values and puts them in the auth store', async () => {
+    render(<SettingsPage />)
+
+    await userEvent.type(screen.getByLabelText('First name'), '  Ada  ')
+    await userEvent.click(screen.getByRole('button', { name: /save profile/i }))
+
+    await waitFor(() => {
+      expect(useAuthStore.getState().user?.first_name).toBe('Ada')
+    })
+    expect(screen.getByText('Profile saved.')).toBeInTheDocument()
+  })
+
+  it('clears a field rather than storing an empty string', async () => {
+    setupAuthUser({ ...mockUser, first_name: 'Ada' })
+    render(<SettingsPage />)
+
+    await userEvent.clear(screen.getByLabelText('First name'))
+    await userEvent.click(screen.getByRole('button', { name: /save profile/i }))
+
+    // null, not '': "unset" has to stay one state, not two that look alike.
+    await waitFor(() => {
+      expect(useAuthStore.getState().user?.first_name).toBeNull()
+    })
+  })
+
+  it('rejects a value past the 64-character ceiling without calling the API', async () => {
+    render(<SettingsPage />)
+
+    await userEvent.type(screen.getByLabelText('First name'), 'a'.repeat(65))
+    await userEvent.click(screen.getByRole('button', { name: /save profile/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Must be 64 characters or fewer')).toBeInTheDocument()
+    })
+    expect(useAuthStore.getState().user?.first_name).toBeNull()
+  })
+})
