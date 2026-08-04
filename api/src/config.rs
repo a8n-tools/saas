@@ -22,6 +22,12 @@ pub struct Config {
     pub email: EmailConfig,
     /// Cookie domain (e.g., ".yourdomain.com" for production, empty for localhost)
     pub cookie_domain: Option<String>,
+    /// DEV-525: path to an IP2Location LITE `.BIN` (the file the ecosystem
+    /// already deploys for dmarc-reporter). `None` disables the
+    /// new-login-location alert entirely: no lookups, no mail, no column
+    /// writes. Set but unreadable is a startup failure rather than a silent
+    /// downgrade, so "off" and "broken" never look alike to an operator.
+    pub ip2location_db_path: Option<String>,
     /// Auto-ban configuration
     pub auto_ban: AutoBanConfig,
     /// TOTP encryption key (32 bytes) for encrypting TOTP secrets at rest
@@ -488,6 +494,9 @@ impl Config {
         // Cookie domain: must be set explicitly via COOKIE_DOMAIN env var.
         // None means cookies are scoped to the exact hostname (suitable for localhost).
         let cookie_domain = env::var("COOKIE_DOMAIN").ok().filter(|s| !s.is_empty());
+        let ip2location_db_path = env::var("IP2LOCATION_DB_PATH")
+            .ok()
+            .filter(|s| !s.is_empty());
 
         let auto_ban = AutoBanConfig::from_env();
 
@@ -521,6 +530,7 @@ impl Config {
             app_name,
             email,
             cookie_domain,
+            ip2location_db_path,
             auto_ban,
             totp_encryption_key,
             totp_encryption_key_prev,

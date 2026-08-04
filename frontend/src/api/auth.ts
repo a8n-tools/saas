@@ -50,6 +50,10 @@ export const authApi = {
     phone?: string | null
   }): Promise<User> => apiClient.put('/users/me/profile', data),
 
+  // DEV-525: per-user opt-out for the new-login-location alert.
+  updateLoginAlerts: (data: { enabled: boolean }): Promise<User> =>
+    apiClient.put('/users/me/login-alerts', data),
+
   requestEmailChange: (data: { new_email: string; current_password?: string }): Promise<{ message: string; requires_relogin: boolean }> =>
     apiClient.post('/users/me/email', data),
 

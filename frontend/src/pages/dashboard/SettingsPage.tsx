@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { EmailGuardButton } from '@/components/EmailGuardButton'
 import { Badge } from '@/components/ui/badge'
+import { Switch } from '@/components/ui/switch'
 import {
   Dialog,
   DialogContent,
@@ -147,6 +148,23 @@ export function SettingsPage() {
       setProfileError(apiError.error?.message || 'Failed to save profile')
     } finally {
       setProfileLoading(false)
+    }
+  }
+
+  // Login-location alerts (DEV-525)
+  const [alertsSaving, setAlertsSaving] = useState(false)
+  const [alertsError, setAlertsError] = useState<string | null>(null)
+
+  const onToggleLoginAlerts = async (enabled: boolean) => {
+    setAlertsSaving(true)
+    setAlertsError(null)
+    try {
+      setUser(await authApi.updateLoginAlerts({ enabled }))
+    } catch (err) {
+      const apiError = err as { error?: { message?: string } }
+      setAlertsError(apiError.error?.message || 'Failed to update alert preference')
+    } finally {
+      setAlertsSaving(false)
     }
   }
 
@@ -356,6 +374,44 @@ export function SettingsPage() {
               Save profile
             </Button>
           </form>
+        </CardContent>
+      </Card>
+
+      {/* Security alerts (DEV-525) */}
+      <Card className="border-border/50">
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-amber-500">
+              <ShieldCheck className="h-4 w-4 text-white" />
+            </div>
+            <CardTitle>Security Alerts</CardTitle>
+          </div>
+          <CardDescription>
+            Get an email when your account is signed into from a country it has not been signed
+            into before. Often the only warning you get that someone else has your password.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {alertsError && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{alertsError}</AlertDescription>
+            </Alert>
+          )}
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <Label htmlFor="login-location-alerts">New sign-in location alerts</Label>
+              <p className="text-sm text-muted-foreground">
+                Travelling or using a VPN will trigger these.
+              </p>
+            </div>
+            <Switch
+              id="login-location-alerts"
+              checked={user?.login_location_alerts ?? true}
+              disabled={alertsSaving}
+              onCheckedChange={onToggleLoginAlerts}
+            />
+          </div>
         </CardContent>
       </Card>
 

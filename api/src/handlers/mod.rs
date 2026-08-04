@@ -42,7 +42,7 @@ pub use totp::{
 pub use user::{
     change_password, confirm_email_change, confirm_email_verification, delete_account,
     get_current_user, list_sessions, request_email_change, request_email_verification,
-    revoke_session, update_profile,
+    revoke_session, update_login_alerts, update_profile,
 };
 pub use webhook::stripe_webhook;
 

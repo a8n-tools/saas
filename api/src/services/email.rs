@@ -479,6 +479,46 @@ impl EmailService {
         .await
     }
 
+    /// DEV-525: tell the user their account was signed into from a country it
+    /// has not been signed into before.
+    ///
+    /// Carries the country, the address and the user agent because "someone
+    /// signed in" with no detail leaves the reader nothing to judge: the whole
+    /// value of the alert is that the owner can tell at a glance whether it was
+    /// them.
+    pub async fn send_new_login_location(
+        &self,
+        email: &str,
+        country: &str,
+        ip: &str,
+        when: &str,
+        user_agent: &str,
+    ) -> Result<(), AppError> {
+        if !self.config.enabled {
+            tracing::info!(email = %email, country = %country, "New login location email (dev mode - not sending)");
+            return Ok(());
+        }
+
+        let mut context = self.base_context();
+        context.insert("country", country);
+        context.insert("ip_address", ip);
+        context.insert("login_time", when);
+        context.insert("user_agent", user_agent);
+        context.insert(
+            "settings_url",
+            &format!("{}/settings", self.config.base_url),
+        );
+
+        let (html, text) = self.render_template("new_login_location", &context)?;
+        self.send_email(
+            email,
+            &format!("New sign-in to your {} account", self.config.app_name),
+            html,
+            text,
+        )
+        .await
+    }
+
     /// Send welcome email after membership activation
     pub async fn send_welcome(&self, email: &str, price_cents: i32) -> Result<(), AppError> {
         if !self.config.enabled {

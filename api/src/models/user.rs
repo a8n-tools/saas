@@ -60,6 +60,15 @@ pub struct User {
     /// form trims whitespace but otherwise stores verbatim, because a global
     /// phone-number grammar is a bigger commitment than this needs.
     pub phone: Option<String>,
+    /// DEV-525: ISO 3166-1 alpha-2 country of the user's last geolocatable
+    /// login, or `None` until the first one. Compared against the current
+    /// login's country to detect a significant location change. Never surfaced
+    /// in `UserResponse`: it is a security signal, not profile data, and the
+    /// only place it belongs is the alert mail.
+    pub last_login_country: Option<String>,
+    /// DEV-525: per-user opt-out for the new-login-location alert, on by
+    /// default.
+    pub login_location_alerts: bool,
 }
 
 impl User {
@@ -151,6 +160,10 @@ pub struct UserResponse {
     pub last_name: Option<String>,
     /// DEV-525: see [`User::phone`].
     pub phone: Option<String>,
+    /// DEV-525: see [`User::login_location_alerts`]. Surfaced so the settings
+    /// page can render the toggle in the right position without a second
+    /// request. `last_login_country` is deliberately not surfaced.
+    pub login_location_alerts: bool,
 }
 
 impl From<User> for UserResponse {
@@ -174,6 +187,7 @@ impl From<User> for UserResponse {
             first_name: user.first_name,
             last_name: user.last_name,
             phone: user.phone,
+            login_location_alerts: user.login_location_alerts,
         }
     }
 }
@@ -211,6 +225,8 @@ mod tests {
             first_name: None,
             last_name: None,
             phone: None,
+            last_login_country: None,
+            login_location_alerts: true,
         }
     }
 
@@ -292,6 +308,26 @@ mod tests {
         super_admin.role = "admin".to_string();
         super_admin.is_super_admin = true;
         assert!(UserResponse::from(super_admin).is_super_admin);
+    }
+
+    /// DEV-525: the alert opt-out has to reach the settings page, and the
+    /// recorded country must not. `last_login_country` is a security signal
+    /// about where an account has been used; the only place it belongs is the
+    /// alert mail, not a response any signed-in session can read.
+    #[test]
+    fn user_response_exposes_the_opt_out_but_not_the_recorded_country() {
+        let mut user = test_user();
+        user.last_login_country = Some("AU".to_string());
+        user.login_location_alerts = false;
+
+        let response = UserResponse::from(user);
+        assert!(!response.login_location_alerts);
+
+        let json = serde_json::to_value(&response).unwrap();
+        assert!(
+            json.get("last_login_country").is_none(),
+            "last_login_country must never be serialised to a client: {json}"
+        );
     }
 
     // -- SubscriptionTier --

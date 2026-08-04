@@ -179,6 +179,49 @@ impl UserRepository {
         Ok(user)
     }
 
+    /// DEV-525: record the country of the user's most recent geolocatable
+    /// login. Called only after a successful authentication, and only for an
+    /// address that resolved to a real country.
+    pub async fn set_last_login_country<'e, E>(
+        executor: E,
+        user_id: Uuid,
+        country: Option<&str>,
+    ) -> Result<(), AppError>
+    where
+        E: sqlx::Executor<'e, Database = Postgres>,
+    {
+        sqlx::query("UPDATE users SET last_login_country = $2, updated_at = NOW() WHERE id = $1")
+            .bind(user_id)
+            .bind(country)
+            .execute(executor)
+            .await?;
+
+        Ok(())
+    }
+
+    /// DEV-525: set the per-user opt-out for new-login-location alerts.
+    pub async fn set_login_location_alerts(
+        pool: &PgPool,
+        user_id: Uuid,
+        enabled: bool,
+    ) -> Result<User, AppError> {
+        let user = sqlx::query_as::<_, User>(
+            r#"
+            UPDATE users
+            SET login_location_alerts = $2, updated_at = NOW()
+            WHERE id = $1 AND deleted_at IS NULL
+            RETURNING *
+            "#,
+        )
+        .bind(user_id)
+        .bind(enabled)
+        .fetch_optional(pool)
+        .await?
+        .ok_or_else(|| AppError::not_found("User"))?;
+
+        Ok(user)
+    }
+
     /// Update email verified status
     pub async fn set_email_verified(pool: &PgPool, user_id: Uuid) -> Result<(), AppError> {
         sqlx::query(
@@ -959,6 +1002,79 @@ mod profile_tests {
         assert_eq!(row.get::<Option<String>, _>(0), None);
         assert_eq!(row.get::<Option<String>, _>(1), None);
         assert_eq!(row.get::<Option<String>, _>(2), None);
+
+        tx.rollback().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn login_alerts_default_on_and_can_be_turned_off() {
+        let Some(pool) = maybe_pool().await else {
+            return;
+        };
+        let mut tx = pool.begin().await.unwrap();
+
+        let id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO users (id, email, password_hash, role, subscription_status)
+             VALUES ($1, $2, 'x', 'subscriber', 'none')",
+        )
+        .bind(id)
+        .bind(format!("alerts-test-{}@example.com", id))
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+
+        // DEV-525: a security alert nobody opted into is still worth sending,
+        // so the column defaults on rather than off.
+        let row = sqlx::query("SELECT login_location_alerts FROM users WHERE id = $1")
+            .bind(id)
+            .fetch_one(&mut *tx)
+            .await
+            .unwrap();
+        assert!(row.get::<bool, _>(0), "alerts must default on");
+
+        sqlx::query("UPDATE users SET login_location_alerts = FALSE WHERE id = $1")
+            .bind(id)
+            .execute(&mut *tx)
+            .await
+            .unwrap();
+        let row = sqlx::query("SELECT login_location_alerts FROM users WHERE id = $1")
+            .bind(id)
+            .fetch_one(&mut *tx)
+            .await
+            .unwrap();
+        assert!(!row.get::<bool, _>(0));
+
+        tx.rollback().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn records_the_login_country() {
+        let Some(pool) = maybe_pool().await else {
+            return;
+        };
+        let mut tx = pool.begin().await.unwrap();
+
+        let id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO users (id, email, password_hash, role, subscription_status)
+             VALUES ($1, $2, 'x', 'subscriber', 'none')",
+        )
+        .bind(id)
+        .bind(format!("country-test-{}@example.com", id))
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+
+        UserRepository::set_last_login_country(&mut *tx, id, Some("AU"))
+            .await
+            .unwrap();
+        let row = sqlx::query("SELECT last_login_country FROM users WHERE id = $1")
+            .bind(id)
+            .fetch_one(&mut *tx)
+            .await
+            .unwrap();
+        assert_eq!(row.get::<Option<String>, _>(0).as_deref(), Some("AU"));
 
         tx.rollback().await.unwrap();
     }

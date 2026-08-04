@@ -38,6 +38,11 @@ dunite-stripe = { git = "https://dev.a8n.run/psa-systems/dunite", rev = "cc10e83
 # drifted) and nothing in the crate derives FromRow, so a8n's sqlx 0.7 and
 # bunyip's 0.8 can both consume it. Pinned to the branch rev that introduced it.
 dunite-user-core = { git = "https://dev.a8n.run/psa-systems/dunite", rev = "cc10e8358a6f21160544a415a9488c16827af699" }
+# Shared login-location signal (DEV-495 / DEV-525): the offline IP2Location
+# lookup, the non-public-address filter and the record/unchanged/alert branch,
+# shared with bunyip so the "no client IP looks like a country change" trap is
+# solved once. Pinned to the branch rev that introduced it; re-pin after merge.
+dunite-geoip = { git = "https://dev.a8n.run/psa-systems/dunite", rev = "b526535c7c632bd3aa74fd8abb2736f90d389c24" }
 aes-gcm = "0.10"
 data-encoding = "2"
 tera = "1"

@@ -39,6 +39,12 @@ export interface User {
   last_name: string | null
   /** DEV-525: optional phone number, flowed as `phone_number`. */
   phone: string | null
+  /**
+   * DEV-525: whether to email this user when their account is signed into from
+   * a country it has not been signed into before. On by default. The recorded
+   * country itself is never sent to the client.
+   */
+  login_location_alerts: boolean
 }
 
 // Auth types

@@ -138,6 +138,34 @@ pub async fn update_profile(
     Ok(success(UserResponse::from(updated), request_id))
 }
 
+/// DEV-525: request body for the new-login-location alert opt-out.
+#[derive(Debug, Deserialize)]
+pub struct UpdateLoginAlertsRequest {
+    pub enabled: bool,
+}
+
+/// PUT /v1/users/me/login-alerts
+/// Turn the new-login-location alert on or off for the current user (DEV-525).
+pub async fn update_login_alerts(
+    req: HttpRequest,
+    user: AuthenticatedUser,
+    pool: web::Data<PgPool>,
+    body: web::Json<UpdateLoginAlertsRequest>,
+) -> Result<HttpResponse, AppError> {
+    let request_id = get_request_id(&req);
+
+    let updated =
+        UserRepository::set_login_location_alerts(&pool, user.0.sub, body.enabled).await?;
+
+    tracing::info!(
+        user_id = %user.0.sub,
+        enabled = body.enabled,
+        "Login-location alerts preference changed"
+    );
+
+    Ok(success(UserResponse::from(updated), request_id))
+}
+
 /// PUT /v1/users/me/password
 /// Change current user's password
 pub async fn change_password(
