@@ -287,6 +287,7 @@ mod tests {
             trial_ends_at: None,
             lifetime_member: false,
             subscription_override_by: None,
+            is_super_admin: false,
         }
     }
 

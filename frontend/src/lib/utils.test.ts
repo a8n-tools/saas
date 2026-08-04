@@ -119,6 +119,7 @@ describe('hasActiveMembership', () => {
     subscription_tier: 'standard',
     trial_ends_at: null,
     lifetime_member: false,
+    is_super_admin: false,
   }
 
   it('returns false for null user', () => {

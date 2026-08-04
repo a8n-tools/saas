@@ -26,6 +26,13 @@ export interface User {
   subscription_tier: SubscriptionTier
   trial_ends_at: string | null
   lifetime_member: boolean
+  /**
+   * DEV-525: the "first setup account". Only this admin may impersonate, change
+   * roles, reset another account's password or grant lifetime membership. The
+   * API enforces it; the panel reads this to disable the controls rather than
+   * offer a button that will 403.
+   */
+  is_super_admin: boolean
 }
 
 // Auth types

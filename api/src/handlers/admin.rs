@@ -31,6 +31,34 @@ use crate::services::{
 };
 use crate::validation;
 
+/// DEV-525: refuse an action to every admin except the super admin.
+///
+/// `AdminUser` only proves `role == "admin"` from the access-token claims, and
+/// the flag deliberately is not a claim: putting it in the token would mean
+/// every already-issued admin token reads as `false` until its holder signs in
+/// again, which is a silent lockout on deploy. One indexed lookup by primary
+/// key on four low-traffic endpoints is the cheaper trade.
+///
+/// Returns `Forbidden` for an ordinary admin, and also for an admin whose row
+/// has since been deleted - a token outliving its user must not pass a gate
+/// that a live check would refuse.
+async fn require_super_admin(pool: &PgPool, admin_id: uuid::Uuid) -> Result<(), AppError> {
+    let is_super = UserRepository::find_by_id(pool, admin_id)
+        .await?
+        .map(|u| u.is_super_admin)
+        .unwrap_or(false);
+
+    if is_super {
+        Ok(())
+    } else {
+        tracing::warn!(
+            admin_id = %admin_id,
+            "Non-super admin attempted a super-admin-only action"
+        );
+        Err(AppError::Forbidden)
+    }
+}
+
 // =============================================================================
 // User Management
 // =============================================================================
@@ -214,6 +242,10 @@ pub async fn update_user_role(
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
     let user_id = path.into_inner();
+
+    // DEV-525: a role change can strip the last admin or mint a new one, so it
+    // is the super admin's call, not any admin's.
+    require_super_admin(&pool, admin.0.sub).await?;
 
     // Validate role
     let valid_roles = ["subscriber", "admin"];
@@ -877,6 +909,10 @@ pub async fn admin_reset_password(
     let user_id = path.into_inner();
     let admin_user_id = admin.0.sub;
 
+    // DEV-525: an admin-triggered reset mails a live credential-change link for
+    // an account the admin does not own, including another admin's.
+    require_super_admin(&pool, admin_user_id).await?;
+
     // Find the user
     let user = UserRepository::find_by_id(&pool, user_id)
         .await?
@@ -928,6 +964,11 @@ pub async fn impersonate_user(
     let request_id = get_request_id(&req);
     let target_user_id = path.into_inner();
     let admin_user_id = admin.0.sub;
+
+    // DEV-525: impersonation mints a live session as somebody else, including
+    // another admin. It is the single most powerful action in the panel, so it
+    // is gated before anything else here.
+    require_super_admin(&pool, admin_user_id).await?;
 
     // Prevent self-impersonation
     if admin_user_id == target_user_id {
@@ -1386,6 +1427,10 @@ pub async fn grant_lifetime_membership(
 ) -> Result<HttpResponse, AppError> {
     let request_id = get_request_id(&req);
     let user_id = path.into_inner();
+
+    // DEV-525: a lifetime grant is a permanent billing decision with no
+    // self-service reversal, so it stays with the super admin.
+    require_super_admin(&pool, admin.0.sub).await?;
 
     let user = UserRepository::grant_lifetime_membership(&pool, user_id, admin.0.sub).await?;
 

@@ -706,12 +706,22 @@ Routes: src/routes/admin.rs
 6. GET /v1/admin/users/{user_id} — Get user details
 7. DELETE /v1/admin/users/{user_id} — Soft-delete user
 8. PUT /v1/admin/users/{user_id}/status — Activate/deactivate user
-9. PUT /v1/admin/users/{user_id}/role — Update user role
-10. POST /v1/admin/users/{user_id}/reset-password — Trigger password reset email
-11. POST /v1/admin/users/{user_id}/impersonate — Impersonate user
+9. PUT /v1/admin/users/{user_id}/role — Update user role **(super admin only)**
+10. POST /v1/admin/users/{user_id}/reset-password — Trigger password reset email **(super admin only)**
+11. POST /v1/admin/users/{user_id}/impersonate — Impersonate user **(super admin only)**
     - Creates audit log with admin action
     - Generates tokens for target user
-12. POST /v1/admin/users/{user_id}/lifetime — Grant lifetime membership
+12. POST /v1/admin/users/{user_id}/lifetime — Grant lifetime membership **(super admin only)**
+
+> **Super admin (DEV-525).** These four actions are not reversible by the person
+> they are used against: impersonation mints a session as somebody else, a role
+> change can strip the last admin, a password reset locks the owner out, and a
+> lifetime grant is a permanent billing decision. They are restricted to the
+> account holding `users.is_super_admin` — the earliest-created admin, backfilled
+> by migration `20260804000048` and maintained by
+> `UserRepository::ensure_super_admin`. Every other admin gets `403 Forbidden`.
+> `UserResponse.is_super_admin` is surfaced so the panel disables the controls
+> rather than offering a button that will fail.
 
 ### Membership Management
 
