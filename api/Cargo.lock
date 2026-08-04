@@ -1176,7 +1176,7 @@ checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
 [[package]]
 name = "dunite-geoip"
 version = "0.1.0"
-source = "git+https://dev.a8n.run/psa-systems/dunite?rev=6c535f447ef8f6b8216b07ae093e880c84765784#6c535f447ef8f6b8216b07ae093e880c84765784"
+source = "git+https://dev.a8n.run/psa-systems/dunite?rev=302af65f8006079510a32478a688844a0677c97e#302af65f8006079510a32478a688844a0677c97e"
 dependencies = [
  "ip2location",
 ]
@@ -1184,7 +1184,7 @@ dependencies = [
 [[package]]
 name = "dunite-image-upload"
 version = "0.1.0"
-source = "git+https://dev.a8n.run/psa-systems/dunite?rev=6c535f447ef8f6b8216b07ae093e880c84765784#6c535f447ef8f6b8216b07ae093e880c84765784"
+source = "git+https://dev.a8n.run/psa-systems/dunite?rev=302af65f8006079510a32478a688844a0677c97e#302af65f8006079510a32478a688844a0677c97e"
 dependencies = [
  "imagesize",
  "infer 0.16.0",

@@ -41,13 +41,13 @@ dunite-user-core = { git = "https://dev.a8n.run/psa-systems/dunite", rev = "cc10
 # Shared login-location signal (DEV-495 / DEV-525): the offline IP2Location
 # lookup, the non-public-address filter and the record/unchanged/alert branch,
 # shared with bunyip so the "no client IP looks like a country change" trap is
-# solved once. Pinned to the branch rev that introduced it; re-pin after merge.
-dunite-geoip = { git = "https://dev.a8n.run/psa-systems/dunite", rev = "6c535f447ef8f6b8216b07ae093e880c84765784" }
+# solved once. Pinned to the merged dunite main.
+dunite-geoip = { git = "https://dev.a8n.run/psa-systems/dunite", rev = "302af65f8006079510a32478a688844a0677c97e" }
 # Shared upload validation (DEV-495 / DEV-525): magic-byte type sniffing and the
 # header-only dimension guard for avatars, so "validate by content, never by
 # what the request claimed" is implemented once rather than per app. Pinned to
-# the branch rev that introduced it; re-pin after merge.
-dunite-image-upload = { git = "https://dev.a8n.run/psa-systems/dunite", rev = "6c535f447ef8f6b8216b07ae093e880c84765784" }
+# the merged dunite main.
+dunite-image-upload = { git = "https://dev.a8n.run/psa-systems/dunite", rev = "302af65f8006079510a32478a688844a0677c97e" }
 aes-gcm = "0.10"
 data-encoding = "2"
 tera = "1"
