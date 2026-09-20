@@ -367,6 +367,7 @@ impl EmailService {
         context
     }
 
+    #[cfg(test)]
     fn feedback_excerpt(message: &str) -> String {
         let normalized = message.split_whitespace().collect::<Vec<_>>().join(" ");
         let mut chars = normalized.chars();

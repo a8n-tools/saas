@@ -22,13 +22,15 @@ use crate::models::oci::NewCachedBlob;
 use crate::repositories::OciBlobCacheRepository;
 use crate::services::forgejo_registry::{ForgejoRegistryClient, RegistryError};
 
+type Inflight = Arc<Mutex<HashMap<String, Arc<OnceCell<Result<(), String>>>>>>;
+
 #[derive(Clone)]
 pub struct BlobCache {
     client: Arc<ForgejoRegistryClient>,
     cache_dir: PathBuf,
     max_bytes: u64,
     pool: PgPool,
-    inflight: Arc<Mutex<HashMap<String, Arc<OnceCell<Result<(), String>>>>>>,
+    inflight: Inflight,
 }
 
 /// Result handle: either a cache hit (path + row) or a freshly-populated blob.

@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM ghcr.io/niceguyit/rust-builder-glibc:v1.0.0-rust1.94-trixie
+FROM ghcr.io/niceguyit/rust-builder-glibc:v1.2.0-rust1.98.1-trixie
 WORKDIR /app
 
 # Install dependencies needed for cargo-watch and sqlx
