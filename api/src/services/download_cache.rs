@@ -118,10 +118,7 @@ impl DownloadCache {
 
         match result {
             Ok(row) => Ok(row),
-            Err(msg) => Err(DownloadCacheError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                msg,
-            ))),
+            Err(msg) => Err(DownloadCacheError::Io(std::io::Error::other(msg))),
         }
     }
 
@@ -194,9 +191,7 @@ impl DownloadCache {
             .download_asset(&asset.browser_download_url)
             .await?;
         while let Some(chunk) = stream.next().await {
-            let bytes = chunk.map_err(|e| {
-                DownloadCacheError::Io(std::io::Error::new(std::io::ErrorKind::Other, e))
-            })?;
+            let bytes = chunk.map_err(|e| DownloadCacheError::Io(std::io::Error::other(e)))?;
             hasher.update(&bytes);
             file.write_all(&bytes).await?;
             total += bytes.len() as i64;

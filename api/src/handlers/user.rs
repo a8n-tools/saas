@@ -423,6 +423,7 @@ pub async fn confirm_email_verification(
 
 /// DELETE /v1/users/me
 /// Delete current user's account (soft delete)
+#[allow(clippy::too_many_arguments)]
 pub async fn delete_account(
     req: HttpRequest,
     user: AuthenticatedUser,

@@ -35,6 +35,7 @@ impl StripeConfigRepository {
 
     /// Updates only the fields that are `Some`. `None` leaves the existing DB value unchanged.
     /// Secrets are passed as pre-encrypted (ciphertext, nonce) pairs.
+    #[allow(clippy::too_many_arguments)]
     pub async fn update(
         pool: &PgPool,
         secret_key: Option<Vec<u8>>,

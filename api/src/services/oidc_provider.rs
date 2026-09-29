@@ -239,6 +239,7 @@ impl OidcProvider {
     // ── Authorization code ────────────────────────────────────────────────────
 
     /// Issue an authorization code.  Returns the raw opaque code (never stored).
+    #[allow(clippy::too_many_arguments)]
     pub async fn issue_authorization_code(
         &self,
         client: &OAuthClient,
@@ -601,8 +602,8 @@ impl OidcProvider {
 
         // Expiry checks
         let now = Utc::now();
-        let idle_exp: DateTime<Utc> = old.idle_expires_at.into();
-        let abs_exp: DateTime<Utc> = old.absolute_expires_at.into();
+        let idle_exp: DateTime<Utc> = old.idle_expires_at;
+        let abs_exp: DateTime<Utc> = old.absolute_expires_at;
         if now > idle_exp || now > abs_exp {
             return Err(AppError::OidcInvalidGrant("refresh token expired".into()));
         }
@@ -912,6 +913,7 @@ impl OidcProvider {
 
     // ── Private helpers ───────────────────────────────────────────────────────
 
+    #[allow(clippy::too_many_arguments)]
     async fn insert_refresh_token(
         &self,
         client: &OAuthClient,
@@ -1065,7 +1067,7 @@ pub(crate) fn display_name(user: &User) -> Option<String> {
 fn user_has_member_access(user: &User) -> bool {
     user.role == "admin"
         || user.lifetime_member
-        || user.trial_ends_at.map_or(false, |t| t > Utc::now())
+        || user.trial_ends_at.is_some_and(|t| t > Utc::now())
         || user.membership_status == "active"
         || user.membership_status == "grace_period"
 }

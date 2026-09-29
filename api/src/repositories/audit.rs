@@ -42,6 +42,7 @@ impl AuditLogRepository {
     }
 
     /// List audit logs with pagination and filters
+    #[allow(clippy::too_many_arguments)]
     pub async fn list_paginated(
         pool: &PgPool,
         page: i32,
