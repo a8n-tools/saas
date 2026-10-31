@@ -81,7 +81,7 @@ The built-in token will not trigger other workflows as a side effect of creating
 
 ## Runner and Tooling
 
-- Runner: `${{ vars.RUNS_ON_OPENSUSE_BASE_LATEST }}` (consistent with existing workflows)
+- Runner: `${{ vars.RUNS_ON_OPENSUSE_BASE_MEDIUM }}` (consistent with existing workflows)
 - All scripting in Nushell (`shell: nu {0}`)
 - JSON payload construction uses Nushell's native `to json` instead of Python
 

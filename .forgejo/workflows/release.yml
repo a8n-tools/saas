@@ -15,7 +15,7 @@ on:
 jobs:
   release:
     name: Tag and release
-    runs-on: ${{ vars.RUNS_ON_OPENSUSE_BASE_LATEST }}
+    runs-on: ${{ vars.RUNS_ON_OPENSUSE_BASE_MEDIUM }}
     permissions:
       contents: write
 
