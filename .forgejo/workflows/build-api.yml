@@ -12,6 +12,7 @@ on:
       - "v*"
     paths:
       - "api/**"
+      - "oci-build/api/**"
       - "oci-build/get-tags.nu"
       - ".forgejo/workflows/build-api.yml"
   workflow_dispatch:
@@ -28,7 +29,8 @@ on:
 jobs:
   build-and-push-api:
     name: Build and push API image
-    runs-on: ${{ vars.RUNS_ON_OPENSUSE_BASE_LATEST }}
+    # HEAVY: docker buildx build compiles the Rust crate (CI.md "Runner labels").
+    runs-on: ${{ vars.RUNS_ON_OPENSUSE_BASE_HEAVY }}
     permissions:
       contents: read
       packages: write
@@ -51,8 +53,12 @@ jobs:
           docker buildx version
 
       - name: Set up buildx builder
-        run: |
-          docker buildx create --name container-builder --driver docker-container --use
+        uses: https://dev.a8n.run/psa-systems/common/.forgejo/actions/setup-buildx@main
+        with:
+          name: build-api
+
+      - name: Export Actions runtime env for buildx gha cache
+        uses: https://github.com/crazy-max/ghaction-github-runtime@v3
 
       - name: Set environment variables
         shell: nu {0}
@@ -106,9 +112,8 @@ jobs:
           let image = "saas-api"
           let registry = $env.IMAGE_REGISTRY
           let tag_args = [-t $"($registry)/($image):($tag)"]
-          let cache_ref = $"($registry)/($image):buildcache"
-          let cache_from = $"type=registry,ref=($cache_ref)"
-          let cache_to = $"type=registry,ref=($cache_ref),mode=max"
+          let cache_from = $"type=gha,scope=($image)"
+          let cache_to = $"type=gha,scope=($image),mode=max,ignore-error=true"
           let git_commit = (^git rev-parse --short HEAD | str trim)
           let git_tag = (^git describe --tags --always --dirty | str trim)
           let build_date = (date now | format date "%Y-%m-%dT%H:%M:%SZ")

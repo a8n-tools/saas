@@ -3,7 +3,15 @@ FROM oven/bun:alpine AS builder
 
 WORKDIR /app
 
-# Build metadata (passed from CI; vite.config.ts reads these env vars)
+# Copy package files
+COPY package.json bun.lock ./
+
+# Install dependencies
+RUN bun install --frozen-lockfile
+
+# Build metadata (passed from CI; vite.config.ts reads these env vars).
+# Placed after the dependency install above so a new commit does not bust
+# the cached dependency layer.
 ARG GIT_COMMIT=unknown
 ARG GIT_TAG=unknown
 ARG BUILD_DATE=unknown
@@ -13,12 +21,6 @@ ENV GIT_COMMIT=${GIT_COMMIT} \
     BUILD_DATE=${BUILD_DATE} \
     APP_VERSION=${APP_VERSION}
 
-# Copy package files
-COPY package.json bun.lock ./
-
-# Install dependencies
-RUN bun install --frozen-lockfile
-
 # Copy source code
 COPY . .
 
@@ -27,10 +29,6 @@ RUN bun run build
 
 # Production stage - Caddy to serve static files
 FROM alpine:3.21
-
-ARG GIT_COMMIT=unknown
-ARG GIT_TAG=unknown
-ARG BUILD_DATE=unknown
 
 # Copy Caddy binary from official image
 COPY --from=caddy:alpine /usr/bin/caddy /usr/bin/caddy
@@ -45,6 +43,10 @@ COPY --from=builder /app/dist /usr/share/caddy
 RUN adduser -D -u 1001 appuser && \
     chown -R appuser:appuser /usr/share/caddy
 USER appuser
+
+ARG GIT_COMMIT=unknown
+ARG GIT_TAG=unknown
+ARG BUILD_DATE=unknown
 
 LABEL org.opencontainers.image.source=https://dev.a8n.run/a8n-tools/saas \
       org.opencontainers.image.revision=${GIT_COMMIT} \
