@@ -19,5 +19,5 @@ jobs:
     uses: psa-systems/common/.forgejo/workflows/create-release.yml@main
     # Required on the caller: this Forgejo does not resolve the label inside a
     # cross-repo reusable workflow.
-    runs-on: ${{ vars.RUNS_ON_OPENSUSE_BASE_LATEST }}
+    runs-on: ${{ vars.RUNS_ON_OPENSUSE_BASE_MEDIUM }}
     secrets: inherit
