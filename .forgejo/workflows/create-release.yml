@@ -16,8 +16,9 @@ jobs:
     if: >-
       github.event.pull_request.merged == true
       && startsWith(github.event.pull_request.head.ref, 'release/v')
-    uses: psa-systems/common/.forgejo/workflows/create-release.yml@main
-    # Required on the caller: this Forgejo does not resolve the label inside a
-    # cross-repo reusable workflow.
+    uses: https://dev.a8n.run/psa-systems/common/.forgejo/workflows/create-release.yml@main
+    # MEDIUM: this job only makes API calls. Required on the caller because
+    # this Forgejo does not resolve the label inside a cross-repo reusable
+    # workflow.
     runs-on: ${{ vars.RUNS_ON_OPENSUSE_BASE_MEDIUM }}
     secrets: inherit
