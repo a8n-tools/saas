@@ -28,7 +28,6 @@ jobs:
       - name: Secrets scan
         uses: https://dev.a8n.run/psa-systems/common/.forgejo/actions/check-secrets@main
         with:
-          kingfisher_excludes: secrets
           # sk_live/rk_live/rk_test literals: fake Stripe tokens, never real, removed in d296c84.
           # The two MC4CAQ... literals: the dev-2026 Ed25519 private key (two generations of
           # it), committed to secrets/ and removed in d296c84, which rotated it out-of-band and
