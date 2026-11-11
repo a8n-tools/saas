@@ -29,4 +29,11 @@ jobs:
         uses: https://dev.a8n.run/psa-systems/common/.forgejo/actions/check-secrets@main
         with:
           kingfisher_excludes: secrets
-          kingfisher_skip_regex: sk_live_abcdefgh1234|rk_live_abcdefgh1234|rk_test_abcdefgh5678
+          # sk_live/rk_live/rk_test literals: fake Stripe tokens, never real, removed in d296c84.
+          # The two MC4CAQ... literals: the dev-2026 Ed25519 private key (two generations of
+          # it), committed to secrets/ and removed in d296c84, which rotated it out-of-band and
+          # dropped it from the JWKS, so neither key can mint an accepted token anymore.
+          kingfisher_skip_regex: sk_live_abcdefgh1234|rk_live_abcdefgh1234|rk_test_abcdefgh5678|MC4CAQAwBQYDK2VwBCIEIHf1BZb4vaNL7dlwnfF1xDaT67657uQWOIum\+\+au/cPd|MC4CAQAwBQYDK2VwBCIEILxhJYcW9XKkv21Rp/rP8gRSmdQMZNRuPlA6lJAC9rU1
+          # All 16 ids are dev-default or test-fixture credentials in ./.env.example,
+          # compose.dev.yml, docs/*.md and frontend/api test files, not real secrets.
+          noseyparker_findings_exclude: 1e1e952b7f3e4f30e0898d969dcd05d5f51f93b9,97407726c72d7b21d2c50a0a67ed288c0adce767,1ceaea7e26e34daf49feee48ed54fb87b46de941,989a495569eafb845bb2b26582bd0efa4617322b,69b4dbec98f9c20100f4d4b4341cec007278f99e,876d87057187d3664083e9e224431e08e5cf4a16,9f3c418b44c0165ef1aa347c01abf36769f6c25a,499cda096a710aae9c58782c6a618772ac6017cc,84e8df67cc4f71ba617a3c8d5b44e4a872b0bf94,97810e9c1df166982dd87162be6b96127ab89398,abd0114be9da0223dee49c05e33b3e16e5b6be24,a328cfcc59ff8aea8545edb71ad0beb242ed3bbb,6933adc11f1f51f363d64eb86b9580c8554232f2,8338e171045a020f46417458b19399551d2dfecb,e17ca46f77c101ccb80347f36d672b0590f83385,3f4a3c40b9a1d98e48b1e8ced76bb86e306ae51c
