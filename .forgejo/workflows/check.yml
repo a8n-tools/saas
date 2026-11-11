@@ -27,3 +27,6 @@ jobs:
 
       - name: Secrets scan
         uses: https://dev.a8n.run/psa-systems/common/.forgejo/actions/check-secrets@main
+        with:
+          kingfisher_excludes: secrets
+          kingfisher_skip_regex: sk_live_abcdefgh1234|rk_live_abcdefgh1234|rk_test_abcdefgh5678
