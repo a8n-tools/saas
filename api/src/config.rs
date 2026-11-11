@@ -434,8 +434,7 @@ impl OidcConfig {
                 .ok()
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(600)
-                .min(900)
-                .max(60),
+                .clamp(60, 900),
             refresh_token_ttl_secs: env::var("OIDC_REFRESH_TOKEN_TTL_SECONDS")
                 .ok()
                 .and_then(|v| v.parse().ok())

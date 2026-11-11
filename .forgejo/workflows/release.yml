@@ -15,7 +15,9 @@ on:
 jobs:
   release:
     name: Tag and release
-    runs-on: ${{ vars.RUNS_ON_OPENSUSE_BASE_LATEST }}
+    # MEDIUM: this job only does git/API work (tag check, version compare,
+    # Forgejo API call to create the release); no compile/link/docker step.
+    runs-on: ${{ vars.RUNS_ON_OPENSUSE_BASE_MEDIUM }}
     permissions:
       contents: write
 

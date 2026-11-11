@@ -65,7 +65,7 @@ pub async fn list_app_downloads(
     let repo = app.forgejo_repo.as_deref().unwrap();
     let tag = app.pinned_release_tag.as_deref().unwrap();
 
-    let release = fetch_release_or_502(&release_cache, app.id, owner, repo, tag).await?;
+    let release = fetch_release_or_502(release_cache, app.id, owner, repo, tag).await?;
     let assets = release
         .assets
         .iter()
@@ -176,7 +176,7 @@ pub async fn download_asset(
             let owner = app.forgejo_owner.as_deref().unwrap();
             let repo = app.forgejo_repo.as_deref().unwrap();
             let tag = app.pinned_release_tag.as_deref().unwrap();
-            let release = fetch_release_or_502(&release_cache, app.id, owner, repo, tag).await?;
+            let release = fetch_release_or_502(release_cache, app.id, owner, repo, tag).await?;
 
             let asset = release
                 .assets
@@ -353,6 +353,58 @@ async fn fetch_release_or_502(
     })
 }
 
+/// POST /v1/admin/applications/{slug}/downloads/refresh
+pub async fn admin_refresh_release(
+    req: HttpRequest,
+    _admin: AdminUser,
+    pool: web::Data<PgPool>,
+    release_cache: web::Data<Option<Arc<ReleaseCache>>>,
+    path: web::Path<String>,
+) -> Result<HttpResponse, AppError> {
+    let release_cache = release_cache
+        .get_ref()
+        .as_ref()
+        .ok_or_else(|| AppError::not_found("Downloads"))?;
+    let request_id = get_request_id(&req);
+    let slug = path.into_inner();
+    let app = ApplicationRepository::find_by_slug(&pool, &slug)
+        .await?
+        .ok_or(AppError::not_found("Application"))?;
+    if !app.is_downloadable() {
+        return Err(AppError::validation(
+            "application",
+            "Application is not configured for downloads",
+        ));
+    }
+    let tag = app.pinned_release_tag.as_deref().unwrap();
+    release_cache.invalidate(app.id, tag).await;
+    let release = release_cache
+        .get(
+            app.id,
+            app.forgejo_owner.as_deref().unwrap(),
+            app.forgejo_repo.as_deref().unwrap(),
+            tag,
+        )
+        .await
+        .map_err(|e| {
+            tracing::warn!(error = %e, "forgejo refresh failed");
+            AppError::upstream("Forgejo upstream error")
+        })?;
+
+    let assets: Vec<_> = release
+        .assets
+        .iter()
+        .map(|a| to_public_asset(a, &app.slug))
+        .collect();
+    Ok(success(
+        AppDownloadsResponse {
+            release_tag: Some(release.tag_name.clone()),
+            assets,
+        },
+        request_id,
+    ))
+}
+
 #[cfg(test)]
 mod integration_tests {
     //! Full-stack happy path: mock Forgejo + real Postgres via `DATABASE_URL`.
@@ -469,56 +521,4 @@ mod integration_tests {
             .await
             .unwrap();
     }
-}
-
-/// POST /v1/admin/applications/{slug}/downloads/refresh
-pub async fn admin_refresh_release(
-    req: HttpRequest,
-    _admin: AdminUser,
-    pool: web::Data<PgPool>,
-    release_cache: web::Data<Option<Arc<ReleaseCache>>>,
-    path: web::Path<String>,
-) -> Result<HttpResponse, AppError> {
-    let release_cache = release_cache
-        .get_ref()
-        .as_ref()
-        .ok_or_else(|| AppError::not_found("Downloads"))?;
-    let request_id = get_request_id(&req);
-    let slug = path.into_inner();
-    let app = ApplicationRepository::find_by_slug(&pool, &slug)
-        .await?
-        .ok_or(AppError::not_found("Application"))?;
-    if !app.is_downloadable() {
-        return Err(AppError::validation(
-            "application",
-            "Application is not configured for downloads",
-        ));
-    }
-    let tag = app.pinned_release_tag.as_deref().unwrap();
-    release_cache.invalidate(app.id, tag).await;
-    let release = release_cache
-        .get(
-            app.id,
-            app.forgejo_owner.as_deref().unwrap(),
-            app.forgejo_repo.as_deref().unwrap(),
-            tag,
-        )
-        .await
-        .map_err(|e| {
-            tracing::warn!(error = %e, "forgejo refresh failed");
-            AppError::upstream("Forgejo upstream error")
-        })?;
-
-    let assets: Vec<_> = release
-        .assets
-        .iter()
-        .map(|a| to_public_asset(a, &app.slug))
-        .collect();
-    Ok(success(
-        AppDownloadsResponse {
-            release_tag: Some(release.tag_name.clone()),
-            assets,
-        },
-        request_id,
-    ))
 }

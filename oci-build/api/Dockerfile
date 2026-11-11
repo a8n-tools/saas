@@ -1,15 +1,7 @@
 # Build stage
-FROM ghcr.io/niceguyit/rust-builder-musl:v1.0.0-rust1.94-alpine AS builder
+FROM ghcr.io/niceguyit/rust-builder-musl:v1.1.0-rust1.98.1-alpine AS builder
 
 WORKDIR /build
-
-# Build metadata (passed from CI; build.rs reads these env vars)
-ARG GIT_COMMIT=unknown
-ARG GIT_TAG=unknown
-ARG BUILD_DATE=unknown
-ENV GIT_COMMIT=${GIT_COMMIT} \
-    GIT_TAG=${GIT_TAG} \
-    BUILD_DATE=${BUILD_DATE}
 
 # Install build dependencies
 RUN apk add --no-cache musl-dev pkgconfig openssl-dev openssl-libs-static lld
@@ -27,6 +19,16 @@ RUN mkdir src && echo "fn main() {}" > src/main.rs
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     cargo build --release && rm -rf src target/release/deps/a8n_api*
 
+# Build metadata (passed from CI; build.rs reads these env vars). Placed
+# after the dependency-only build above so a new commit does not bust the
+# cached dependency layer.
+ARG GIT_COMMIT=unknown
+ARG GIT_TAG=unknown
+ARG BUILD_DATE=unknown
+ENV GIT_COMMIT=${GIT_COMMIT} \
+    GIT_TAG=${GIT_TAG} \
+    BUILD_DATE=${BUILD_DATE}
+
 # Copy actual source code
 COPY . .
 
@@ -36,10 +38,6 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 
 # Runtime stage
 FROM alpine:3.21
-
-ARG GIT_COMMIT=unknown
-ARG GIT_TAG=unknown
-ARG BUILD_DATE=unknown
 
 WORKDIR /app
 
@@ -60,6 +58,10 @@ COPY --from=builder /build/templates /app/templates
 RUN chown -R appuser:appuser /app
 
 USER appuser
+
+ARG GIT_COMMIT=unknown
+ARG GIT_TAG=unknown
+ARG BUILD_DATE=unknown
 
 LABEL org.opencontainers.image.source=https://dev.a8n.run/a8n-tools/saas \
       org.opencontainers.image.revision=${GIT_COMMIT} \
