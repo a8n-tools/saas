@@ -29,7 +29,7 @@ jobs:
   build-and-push-api:
     name: Build and push API image
     # HEAVY: docker buildx build compiles the Rust crate (CI.md "Runner labels").
-    runs-on: ${{ vars.RUNS_ON_OPENSUSE_BASE_HEAVY }}
+    runs-on: ${{ vars.RUNS_ON_OPENSUSE_HEAVY }}
     permissions:
       contents: read
       packages: write

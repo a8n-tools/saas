@@ -8,7 +8,7 @@ on:
 
 jobs:
   secrets:
-    runs-on: ${{ vars.RUNS_ON_OPENSUSE_BASE_MEDIUM }}
+    runs-on: ${{ vars.RUNS_ON_OPENSUSE_MEDIUM }}
     steps:
       - name: Rename .gitconfig
         # The runner's ~/.gitconfig prevents actions/checkout from working.

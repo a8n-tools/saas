@@ -34,7 +34,7 @@ on:
 jobs:
   release:
     name: Tag and release
-    runs-on: ${{ vars.RUNS_ON_OPENSUSE_BASE_LATEST }}
+    runs-on: # the retired latest-runner variable, referenced here at plan-writing time
     permissions:
       contents: write
 

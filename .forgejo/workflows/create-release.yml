@@ -20,5 +20,5 @@ jobs:
     # MEDIUM: this job only makes API calls. Required on the caller because
     # this Forgejo does not resolve the label inside a cross-repo reusable
     # workflow.
-    runs-on: ${{ vars.RUNS_ON_OPENSUSE_BASE_MEDIUM }}
+    runs-on: ${{ vars.RUNS_ON_OPENSUSE_MEDIUM }}
     secrets: inherit

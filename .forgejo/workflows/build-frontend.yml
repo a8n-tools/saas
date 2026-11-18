@@ -29,7 +29,7 @@ jobs:
   build-and-push-frontend:
     name: Build and push frontend image
     # HEAVY: docker buildx build runs on the runner host (CI.md "Runner labels").
-    runs-on: ${{ vars.RUNS_ON_OPENSUSE_BASE_HEAVY }}
+    runs-on: ${{ vars.RUNS_ON_OPENSUSE_HEAVY }}
     permissions:
       contents: read
       packages: write
